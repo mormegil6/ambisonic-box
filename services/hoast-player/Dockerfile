@@ -5,7 +5,7 @@ FROM nginx:1.30.2-alpine
 
 COPY services/hoast-player/nginx.conf /etc/nginx/conf.d/default.conf
 
-COPY hoast360/index.html /usr/share/nginx/html/index.html
+COPY services/hoast-player/index.html /usr/share/nginx/html/index.html
 COPY hoast360/dist/      /usr/share/nginx/html/dist/
 COPY hoast360/irs/       /usr/share/nginx/html/irs/
 
