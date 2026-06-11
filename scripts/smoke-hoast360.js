@@ -58,7 +58,10 @@ const PORT = 8889;
         }));
         console.log('page loaded:', JSON.stringify(support));
 
-        await page.click('button:has-text("load")');
+        // initialize explicitly against the committed demo media rather than
+        // clicking the "load" button: index.html's init() may point at the
+        // live stack (/dash/...), which doesn't exist in this standalone test
+        await page.evaluate(() => hoast360.initialize('media/hoast_demo_o4/', 'irs/', 4));
         await page.waitForFunction(() => window.hoast360 && hoast360.audioSetupComplete === true, null, { timeout: 30000 });
         console.log('xr initialized, audio graph set up');
 
