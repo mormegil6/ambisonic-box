@@ -74,7 +74,8 @@ git clone https://github.com/mormegil6/hoa-360-stream.git && cd hoa-360-stream
 git submodule update --init
 cp /path/to/demo.mp4 content/demo.mp4   # H.264 + 16-ch AAC; see .env.example
 docker compose up -d --build
-xdg-open http://localhost:8080          # HOAST360 player (Earshot monitor: :8081/webtools)
+# then open http://localhost:8080 in your browser
+# (Earshot monitor: http://localhost:8081/webtools)
 ```
 
 Without `content/demo.mp4` the stack still runs; `loop-source` idles until
