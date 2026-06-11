@@ -150,4 +150,4 @@ Bundled and built components keep their own licenses:
 - [Envelop](https://envelop.us): Earshot, the multichannel RTMP→DASH transcoder
 - pkviet; OBS Studio Music Edition and the PCE-capable FFmpeg fork
 - [Shaka project](https://github.com/shaka-project): Shaka Packager
-- Gdańsk University of Technology, Multimedia Systems Department
+- Gdańsk University of Technology, Department of Multimedia Systems
