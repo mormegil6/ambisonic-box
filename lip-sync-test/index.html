@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOAST360 lip-sync comparison; DASH segment duration variants</title>
+<!--
+  Four-variant lip-sync comparison page.
+
+  Generate the variants and local player assets first:
+      scripts/package-dash-variants.sh content/<master>.webm
+  then serve THIS folder (plain HTTP is fine, no COOP/COEP needed):
+      cd lip-sync-test && python3 -m http.server 9000
+
+  HOAST360 is a singleton (one element id, one AudioContext), so the four
+  tabs drive ONE player instance via reset()/initialize(): which also keeps
+  the comparison fair: identical audio graph for every variant.
+-->
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem auto; max-width: 1000px; padding: 0 1rem; background: #111; color: #eee; }
+  h1 { font-size: 1.2rem; }
+  #tabs { display: flex; gap: .5rem; margin: .75rem 0; }
+  #tabs button { font-size: 1rem; padding: .5rem 1.25rem; cursor: pointer; background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; }
+  #tabs button.active { background: #2a6e2a; border-color: #4a4; }
+  #player-wrap { position: relative; }
+  #timecode { position: absolute; top: .5rem; right: .5rem; z-index: 10; font: 700 1.4rem/1 monospace; background: rgba(0,0,0,.65); color: #0f0; padding: .25rem .5rem; border-radius: 4px; pointer-events: none; }
+  #controls { margin: .75rem 0; display: flex; gap: .75rem; align-items: center; }
+  #snap { font-size: 1rem; padding: .5rem 1.25rem; cursor: pointer; }
+  #log { background: #000; border: 1px solid #444; padding: .5rem; height: 11rem; overflow-y: auto; font: .85rem/1.5 monospace; white-space: pre-wrap; margin: 0; }
+  .note { color: #aaa; font-size: .9rem; border-left: 3px solid #555; padding-left: .75rem; }
+  .video-js { width: 100%; height: 480px; }
+</style>
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<h1>HOAST360 lip-sync comparison; segment durations 0.5 s / 1 s / 2 s / 4 s</h1>
+
+<div id="tabs">
+  <button data-variant="0.5s">0.5s</button>
+  <button data-variant="1s">1s</button>
+  <button data-variant="2s">2s</button>
+  <button data-variant="4s">4s</button>
+</div>
+
+<div id="player-wrap">
+  <div id="timecode">--.---</div>
+  <video-js id="hoast360-player" class="video-js vjs-fluid vjs-big-play-centered" controls preload="auto" crossorigin="anonymous" data-setup="{}">
+    <p class="vjs-no-js">Enable JavaScript to view this player.</p>
+  </video-js>
+</div>
+
+<div id="controls">
+  <button id="snap" disabled>Snap timestamp</button>
+  <span id="status" class="note">Pick a segment-duration tab to load that variant.</span>
+</div>
+
+<pre id="log">snap log; video.currentTime vs AudioContext clock
+</pre>
+
+<p class="note">
+  To measure sync: find a sharp visual+audio transient in the recording
+  (hand clap on camera, pizzicato note). Note the timestamps across all four
+  tabs. For precise offsets, record screen + audio output per tab (REW or a
+  DAW) and measure the A/V offset there; this page's snap log gives the
+  in-browser reference clocks for each take.
+</p>
+
+<script src="./dist/hoast360.bundle.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var AMBISONICS_ORDER = 3;          // 16 channels, must match the master
+  var IR_URL = 'irs/';               // copied here by package-dash-variants.sh
+
+  var hoast360 = new HOAST360();
+  var current = null;
+
+  var tabs = document.getElementById('tabs');
+  var timecodeEl = document.getElementById('timecode');
+  var snapBtn = document.getElementById('snap');
+  var statusEl = document.getElementById('status');
+  var logEl = document.getElementById('log');
+
+  function videoEl() {
+    return document.querySelector('#hoast360-player video');
+  }
+
+  function fmt(t) {
+    return (typeof t === 'number' && isFinite(t)) ? t.toFixed(3) : '--.---';
+  }
+
+  function switchTo(variant) {
+    if (current === variant) return;
+    if (current !== null) hoast360.reset();
+    current = variant;
+
+    Array.prototype.forEach.call(tabs.children, function (b) {
+      b.classList.toggle('active', b.dataset.variant === variant);
+    });
+
+    // mediaUrl contains ".mpd" -> HOAST360 combined audio+video mode
+    hoast360.initialize('./dash_' + variant + '/manifest.mpd', IR_URL, AMBISONICS_ORDER);
+    snapBtn.disabled = false;
+    statusEl.textContent = 'Loaded dash_' + variant + '/manifest.mpd; press play, then snap on a transient.';
+  }
+
+  tabs.addEventListener('click', function (e) {
+    var v = e.target && e.target.dataset && e.target.dataset.variant;
+    if (v) switchTo(v);   // tab click is the user gesture: unlocks audio on first play
+  });
+
+  setInterval(function () {
+    var v = videoEl();
+    timecodeEl.textContent = fmt(v ? v.currentTime : NaN);
+  }, 100);
+
+  snapBtn.addEventListener('click', function () {
+    var v = videoEl();
+    var line = '[' + (current || '?') + '] video=' + fmt(v ? v.currentTime : NaN) + 's' +
+               '  audioCtx=' + fmt(hoast360.context ? hoast360.context.currentTime : NaN) + 's' +
+               '  ctxState=' + (hoast360.context ? hoast360.context.state : 'n/a') +
+               '  wall=' + new Date().toISOString().slice(11, 23);
+    logEl.textContent += line + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  });
+})();
+</script>
+</body>
+</html>

@@ -113,6 +113,7 @@ services:
   shaka:
     image: google/shaka-packager:v3.7.2
     profiles: ["tools"]
+    entrypoint: packager
     volumes:
       - dash-output:/output
       - ./content:/content:ro
