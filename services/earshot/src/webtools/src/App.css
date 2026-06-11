@@ -1,0 +1,113 @@
+.App {
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+.StreamSelectionSidebar {
+  float: left;
+  width: 15%;
+}
+
+.StreamName {
+  cursor: pointer;
+  padding: 10px;
+}
+
+.StreamName.Selected {
+  background-color: #8a8a8a;
+  color: white;
+}
+
+.ServerInfo {
+  padding: 10px;
+}
+
+.DashPlayerContainer {
+  float: right;
+  width: 85%;
+}
+
+.SearchingOrLoadingStreamsContainer {
+  background-color: #8a8a8a;
+  color: black;
+  display: table;
+  float: right;
+  height: 100vh;
+  text-align: center;
+  width: 85%;
+}
+
+.SearchingOrLoadingStreamsText {
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.StreamInfoContainer {
+  background-color: #8a8a8a;
+  color: black;
+  display: block;
+  font-size: calc(8px + 2vmin);
+  overflow: auto;
+}
+
+div.StreamInfoContainer {
+  background-color: #8a8a8a;
+  padding: 10px;
+}
+
+.VideoBox {
+  float: left;
+  padding-right: 10px;
+  width: 45%;
+}
+
+.AudioOnlyBox {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.VideoPlayer {
+  width: 100%;
+}
+
+.VideoControlButton {
+  margin: 0px 10px 0px 10px;
+}
+
+.InfoBox {
+  background: #d3d3d3;
+  float: left;
+  font-size: 20px;
+  padding: 10px;
+  margin-right: 10px;
+}
+
+.SliderBox {
+  width: 20%;
+}
+
+.VideoInfoBox {
+  width: 98%;
+}
+
+.DashSettingsBox {
+  width: 96%;
+}
+
+.StreamInfoBox {
+  float: left;
+  font-size: 18px;
+  width: 20%;
+}
+
+.ButtonBox {
+  text-align: center;
+}
+
+.ErrorBox {
+  clear: both;
+  float: left;
+}

@@ -1,3 +1,8 @@
-output/
+output/*
+!output/.gitkeep
 content/*.mp4
 content/*.wav
+content/*.webm
+!content/.gitkeep
+.env
+node_modules/

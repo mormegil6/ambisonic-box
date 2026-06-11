@@ -1,0 +1,131 @@
+# HOA 360° livestream stack; dev/local compose.
+#
+# Live path:  loop-source (or OBS ME) ──rtmp──▶ rtmp-ingest ──rtmp──▶ earshot
+#             earshot transcodes to 16-ch Opus (+ VP9 by default) and writes
+#             live DASH into the dash-output volume ──▶ hoast-player serves it.
+# shaka is a `tools`-profile utility (VOD/lip-sync packaging), NOT in the live
+# path; it cannot ingest a 16-channel live stream.
+#
+# The RTMP contribution leg is H.264 + 16-ch AAC (PCE) by protocol necessity;
+# VP9/Opus/WebM applies from earshot's transcode onward. See .env.example.
+
+name: hoa360
+
+services:
+
+  earshot:
+    build:
+      context: ./services/earshot/src
+    image: hoa360-earshot:local
+    environment:
+      - HTTP_PORT=80          # must stay 80: upstream on_publish callback is hardcoded port-80
+      - HTTPS_PORT=443
+      - RTMP_PORT=1935
+      - SSL_ENABLED=false
+      # earshot:1935 is not host-published; auth is enforced at rtmp-ingest.
+      # Empty token => earshot's /auth accepts the internal relay.
+      - RTMP_AUTH_TOKEN=
+      - RTMP_AUTH_URL=http://127.0.0.1:80/auth
+      # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
+      # Default: VP9 realtime => all-WebM DASH. Override in .env (see .env.example).
+      # 2 s segments / -g 50 (25 fps) is a placeholder until Phase 5 measurement.
+      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 30 -extra_window_size 10 -max_muxing_queue_size 1024 -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M -g 50 -keyint_min 50 -seg_duration 2 -dash_segment_type webm}
+    volumes:
+      - dash-output:/opt/data/dash
+    ports:
+      - "8081:80"   # dev only: webtools UI, /stat, /dash debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  rtmp-ingest:
+    build:
+      context: ./services/rtmp-ingest
+    environment:
+      - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+    ports:
+      - "1935:1935"   # the only public ingest; OBS ME pushes here
+    depends_on:
+      earshot:
+        condition: service_started   # push relay retries until earshot is up
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  loop-source:
+    # reuses the earshot image: Envelop's PCE-aware ffmpeg guarantees the
+    # 16-ch AAC headers earshot decodes, with the same multi-arch story
+    image: hoa360-earshot:local
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /content/demo.mp4 ]; then
+          echo "[loop-source] /content/demo.mp4 not found; idling."
+          echo "[loop-source] Prepare it once from your master recording (H.264 + 16-ch AAC),"
+          echo "[loop-source] see .env.example for the exact command."
+          exec sleep 2147483647
+        fi
+        echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/live/$${STREAM_KEY}"
+        exec ffmpeg -hide_banner -re -stream_loop -1 -i /content/demo.mp4 \
+          -c copy -f flv "rtmp://rtmp-ingest:1935/live/$${STREAM_KEY}"
+    environment:
+      - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+    volumes:
+      - ./content:/content:ro
+    depends_on:
+      rtmp-ingest:
+        condition: service_healthy
+      earshot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pidof ffmpeg || pidof sleep"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  hoast-player:
+    build:
+      context: .
+      dockerfile: services/hoast-player/Dockerfile
+    volumes:
+      - dash-output:/usr/share/nginx/html/dash:ro
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/index.html"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # VOD/lip-sync packaging utility (Phase 5): NOT in the live path.
+  # Usage: docker compose run --rm shaka <packager args>
+  shaka:
+    image: google/shaka-packager:v3.7.2
+    profiles: ["tools"]
+    volumes:
+      - dash-output:/output
+      - ./content:/content:ro
+      - ./lip-sync-test:/lip-sync-test
+    restart: "no"
+
+volumes:
+  # dev: named volume backed by ./output so the test scripts
+  # can watch segments on the host.
+  # prod (docker-compose.prod.yml, Phase 7) switches this to tmpfs.
+  dash-output:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/output
