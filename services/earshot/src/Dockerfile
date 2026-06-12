@@ -76,6 +76,17 @@ RUN cd /tmp/ && \
   wget https://github.com/EnvelopSound/ffmpeg/archive/${FFMPEG_VERSION}.tar.gz && \
   tar zxf ${FFMPEG_VERSION}.tar.gz && rm ${FFMPEG_VERSION}.tar.gz
 
+# HOAST360 patch: ffmpeg's DASH muxer hardcodes suggestedPresentationDelay to
+# the last segment duration, so live players join right at the edge and
+# gap-jump into not-yet-written segments. No muxer flag controls SPD
+# (-target_latency is force-zeroed unless LL-DASH -streaming/-write_prft,
+# which WebM segments cannot use), so give it a floor at the source.
+ARG DASH_SPD_FLOOR=30
+RUN cd /tmp/FFmpeg-${FFMPEG_VERSION} && \
+  test "$(grep -c 'suggestedPresentationDelay=' libavformat/dashenc.c)" = "1" && \
+  sed -i "/suggestedPresentationDelay=/s|c->last_duration / AV_TIME_BASE|FFMAX(c->last_duration / AV_TIME_BASE, ${DASH_SPD_FLOOR})|" libavformat/dashenc.c && \
+  grep -F "FFMAX(c->last_duration / AV_TIME_BASE, ${DASH_SPD_FLOOR})" libavformat/dashenc.c
+
 # Compile ffmpeg.
 RUN cd /tmp/FFmpeg-${FFMPEG_VERSION} && \
    ./configure \

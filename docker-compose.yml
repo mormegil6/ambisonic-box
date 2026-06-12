@@ -28,8 +28,12 @@ services:
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
       # Default: VP9 realtime => all-WebM DASH. Override in .env (see .env.example).
-      # 2 s segments / -g 50 (25 fps) is a placeholder until Phase 5 measurement.
-      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 30 -extra_window_size 10 -max_muxing_queue_size 1024 -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M -g 50 -keyint_min 50 -seg_duration 2 -dash_segment_type webm}
+      # 2 s segments / -g 60 (29.97/30 fps demo content; use -g 50 for 25 fps:
+      # GOP must equal segment duration or the muxer cuts late, e.g. -g 50 at
+      # 29.97 fps yields 3.34 s segments). Placeholder until Phase 5 measurement.
+      # suggestedPresentationDelay >= 30 s is patched into the muxer itself
+      # (services/earshot/src/Dockerfile, DASH_SPD_FLOOR): no flag controls it.
+      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -extra_window_size 30 -max_muxing_queue_size 1024 -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M -g 60 -keyint_min 60 -seg_duration 2 -dash_segment_type webm}
     volumes:
       - dash-output:/opt/data/dash
     ports:
@@ -43,6 +47,9 @@ services:
     restart: unless-stopped
 
   rtmp-ingest:
+    # NOTE: nginx-rtmp resolves the `push rtmp://earshot...` hostname ONCE at
+    # startup. If earshot is recreated (new container IP), restart this service
+    # too or the relay fails with "Connection refused" while DNS looks fine.
     build:
       context: ./services/rtmp-ingest
     environment:

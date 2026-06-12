@@ -13,6 +13,9 @@ rtmp {
         listen 1935;
         chunk_size 4000;
         notify_method get;
+        # 4K H.264 keyframes routinely exceed nginx-rtmp's 1M default
+        # (demo.mp4 peaks at ~1.2M); "too big message" kills the publisher
+        max_message 10M;
 
         application live {
             live on;
