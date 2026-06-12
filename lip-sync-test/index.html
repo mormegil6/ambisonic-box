@@ -77,6 +77,10 @@
   var hoast360 = new HOAST360();
   var current = null;
 
+  // exposed for the headless measurement harness (scripts/measure-lipsync.js)
+  window.hoast360 = hoast360;
+  window.lipsyncSwitchTo = function (v) { switchTo(v); };
+
   var tabs = document.getElementById('tabs');
   var timecodeEl = document.getElementById('timecode');
   var snapBtn = document.getElementById('snap');

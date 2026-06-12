@@ -21,7 +21,12 @@
 # google/shaka-packager). Player assets (dist/, irs/) are copied into
 # lip-sync-test/ so the page works with `python3 -m http.server` from there.
 #
-# Usage: scripts/package-dash-variants.sh [path/to/master.webm]
+# Usage: scripts/package-dash-variants.sh [path/to/master.webm] [duration]
+#        With a second argument, package only that one duration (use this to
+#        feed each variant its own GOP-matched master, e.g.:
+#          scripts/package-dash-variants.sh content/lipsync_g15.webm 0.5
+#          scripts/package-dash-variants.sh content/lipsync_g30.webm 1
+#          ...)
 
 set -euo pipefail
 
@@ -29,7 +34,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 
 SRC="${1:-content/demo.webm}"
-DURATIONS=("0.5" "1" "2" "4")
+if [ $# -ge 2 ]; then
+    DURATIONS=("$2")
+else
+    DURATIONS=("0.5" "1" "2" "4")
+fi
 PROBE_WINDOW=30   # seconds of the master to scan for keyframes
 TOLERANCE=0.02    # seconds; |k*GOP - segdur| below this counts as aligned
 
@@ -49,8 +58,8 @@ case "$(cd "$(dirname "${SRC}")" && pwd)" in
         exit 1 ;;
 esac
 
-if ! command -v ffprobe >/dev/null 2>&1; then
-    echo "ERROR: ffprobe not found on the host (apt install ffmpeg)." >&2
+if ! command -v ffprobe >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg/ffprobe not found on the host (apt install ffmpeg)." >&2
     exit 1
 fi
 
@@ -73,9 +82,12 @@ fi
 
 # --- 2. measure keyframe cadence ---------------------------------------------
 echo "Measuring keyframe interval over the first ${PROBE_WINDOW}s..."
-KEYFRAME_TIMES=$(ffprobe -v error -select_streams v:0 -skip_frame nokey \
-    -show_entries frame=pts_time -of csv=p=0 \
-    -read_intervals "%+${PROBE_WINDOW}" "${SRC}" | grep -v '^$' || true)
+# NB: use container-level packet flags, not '-skip_frame nokey'; the VP9
+# decoder path reports every frame as a keyframe under nokey skipping.
+KEYFRAME_TIMES=$(ffprobe -v error -select_streams v:0 \
+    -show_entries packet=pts_time,flags -of csv=p=0 \
+    -read_intervals "%+${PROBE_WINDOW}" "${SRC}" \
+    | awk -F, '$2 ~ /K/ {print $1}' || true)
 
 GOP_SECONDS=$(echo "${KEYFRAME_TIMES}" | awk '
     NR > 1 { d = $1 - prev; sum += d; n++ }
@@ -97,6 +109,17 @@ gop_aligned() { # gop_aligned <segdur> -> 0 if keyframes land on segment boundar
     }'
 }
 
+# --- 2b. split into single-track files for shaka ------------------------------
+# shaka's WebM cluster parser rejects ffmpeg's multi-track interleaving
+# ("Got a block with a timecode before the previous block"), so feed it one
+# stream per file. Stream copy: no quality or timestamp change.
+SPLIT_V="content/.pkg-split-video.webm"
+SPLIT_A="content/.pkg-split-audio.webm"
+trap 'rm -f "${REPO_ROOT}/${SPLIT_V}" "${REPO_ROOT}/${SPLIT_A}"' EXIT
+echo "Splitting master into single-track inputs for shaka..."
+ffmpeg -y -v error -i "${SRC}" -map 0:v:0 -c copy "${SPLIT_V}"
+ffmpeg -y -v error -i "${SRC}" -map 0:a:0 -c copy "${SPLIT_A}"
+
 # --- 3. package each variant --------------------------------------------------
 for D in "${DURATIONS[@]}"; do
     OUTDIR="lip-sync-test/dash_${D}s"
@@ -114,8 +137,8 @@ for D in "${DURATIONS[@]}"; do
     docker compose --profile tools run --rm --no-deps \
         --user "$(id -u):$(id -g)" \
         shaka \
-        "in=/content/$(basename "${SRC}"),stream=video,output=/lip-sync-test/dash_${D}s/video.webm" \
-        "in=/content/$(basename "${SRC}"),stream=audio,output=/lip-sync-test/dash_${D}s/audio.webm" \
+        "in=/content/$(basename "${SPLIT_V}"),stream=video,output=/lip-sync-test/dash_${D}s/video.webm" \
+        "in=/content/$(basename "${SPLIT_A}"),stream=audio,output=/lip-sync-test/dash_${D}s/audio.webm" \
         --segment_duration "${D}" \
         --mpd_output "/lip-sync-test/dash_${D}s/manifest.mpd"
 done
