@@ -95,7 +95,7 @@ const PORT = 8889;
         }));
         console.log('A/V clocks advancing:', JSON.stringify(clocks));
 
-        // drag on the three.js canvas → camera change → rotator matrix update
+        // drag on the three.js canvas -> camera change -> rotator matrix update
         const canvas = await page.$('.video-js canvas');
         const box = await canvas.boundingBox();
         const before = await page.evaluate(() => JSON.stringify(hoast360.rotator.rotMtx[1]));
@@ -124,7 +124,7 @@ const PORT = 8889;
             process.exitCode = 1;
         }
     } catch (e) {
-        console.log('SMOKE TEST: FAIL :', e.message);
+        console.log('SMOKE TEST: FAIL -', e.message);
         errors.forEach(er => console.log('  ' + er));
         process.exitCode = 1;
     } finally {

@@ -1,10 +1,10 @@
-# HOA 360° livestream stack; dev/local compose.
+# HOA 360° livestream stack - dev/local compose.
 #
 # Live path:  loop-source (or OBS ME) ──rtmp──▶ rtmp-ingest ──rtmp──▶ earshot
 #             earshot transcodes to 16-ch Opus (+ VP9 by default) and writes
 #             live DASH into the dash-output volume ──▶ hoast-player serves it.
 # shaka is a `tools`-profile utility (VOD/lip-sync packaging), NOT in the live
-# path; it cannot ingest a 16-channel live stream.
+# path - it cannot ingest a 16-channel live stream.
 #
 # The RTMP contribution leg is H.264 + 16-ch AAC (PCE) by protocol necessity;
 # VP9/Opus/WebM applies from earshot's transcode onward. See .env.example.
@@ -28,11 +28,11 @@ services:
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
       # Default: VP9 realtime => all-WebM DASH. Override in .env (see .env.example).
-      # 2 s segments / -g 60 (29.97/30 fps demo content; use -g 50 for 25 fps:
+      # 2 s segments / -g 60 (29.97/30 fps demo content; use -g 50 for 25 fps -
       # GOP must equal segment duration or the muxer cuts late, e.g. -g 50 at
       # 29.97 fps yields 3.34 s segments). Placeholder until Phase 5 measurement.
       # suggestedPresentationDelay >= 30 s is patched into the muxer itself
-      # (services/earshot/src/Dockerfile, DASH_SPD_FLOOR): no flag controls it.
+      # (services/earshot/src/Dockerfile, DASH_SPD_FLOOR) - no flag controls it.
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -extra_window_size 30 -max_muxing_queue_size 1024 -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M -g 60 -keyint_min 60 -seg_duration 2 -dash_segment_type webm}
     volumes:
       - dash-output:/opt/data/dash
@@ -75,7 +75,7 @@ services:
       - -c
       - |
         if [ ! -f /content/demo.mp4 ]; then
-          echo "[loop-source] /content/demo.mp4 not found; idling."
+          echo "[loop-source] /content/demo.mp4 not found - idling."
           echo "[loop-source] Prepare it once from your master recording (H.264 + 16-ch AAC),"
           echo "[loop-source] see .env.example for the exact command."
           exec sleep 2147483647
@@ -115,7 +115,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # VOD/lip-sync packaging utility (Phase 5): NOT in the live path.
+  # VOD/lip-sync packaging utility (Phase 5) - NOT in the live path.
   # Usage: docker compose run --rm shaka <packager args>
   shaka:
     image: google/shaka-packager:v3.7.2

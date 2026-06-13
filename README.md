@@ -1,7 +1,9 @@
-# hoa-360-stream
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)]() [![FFmpeg](https://img.shields.io/badge/FFmpeg-VP9%20%2B%20Opus-007808.svg?logo=ffmpeg&logoColor=white)]() [![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg)]() [![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg)]() [![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white)]() [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Containerised toolchain for live streaming 360° video with third-order
-Ambisonics (16-channel) audio; RTMP in, MPEG-DASH (VP9 + Opus, WebM) out,
+# hoa-360-stream - live 360 video and third-order Ambisonics over MPEG-DASH
+
+Containerised toolchain for live streaming 360 video with third-order
+Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (VP9 + Opus, WebM) out,
 rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player.
 
 **Live demo:** <https://bmroz.eu/projects/360-livestream/>
@@ -70,7 +72,7 @@ transcode onward is VP9 + 16-ch Opus in WebM. Audio is never downmixed:
 ## Quick start
 
 ```bash
-git clone https://github.com/mormegil6/hoa-360-stream.git && cd hoa-360-stream
+git clone https://git.pg.edu.pl/p829296/hoa-360-stream.git && cd hoa-360-stream
 git submodule update --init
 cp /path/to/demo.mp4 content/demo.mp4   # H.264 + 16-ch AAC; see .env.example
 docker compose up -d --build
@@ -91,7 +93,7 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/)
 | Server | `rtmp://<host>:1935/live` |
 | Stream key | `hoast_demo` (or your `STREAM_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
-| Video | H.264, GOP = segment duration × fps |
+| Video | H.264, GOP = segment duration x fps |
 
 The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`.
 
@@ -110,6 +112,7 @@ Copy `.env.example` to `.env` to override either.
 |---|---|
 | `scripts/test-pipeline.sh` | synthetic end-to-end pipeline test (16 sine channels) |
 | `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the lip-sync comparison (`lip-sync-test/index.html`) |
+| `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants |
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
 
 ## Deployment
@@ -124,9 +127,9 @@ and keep `FFMPEG_FLAGS` at the VP9 default.
 
 **Raspberry Pi 5 (ARM64, experimental):** all base images are multi-arch and
 earshot builds from source, so `docker buildx build --platform linux/arm64`
-works; realtime VP9 encoding is the bottleneck. If the Pi can't keep up, set
+works; realtime VP9 encoding is the bottleneck. If the Pi cannot keep up, set
 `FFMPEG_FLAGS` to the `-c:v copy` fallback (video segments become MP4,
-audio stays Opus/WebM): or use a bigger machine; the Pi target is a
+audio stays Opus/WebM), or use a bigger machine; the Pi target is a
 nice-to-have, not a requirement.
 
 ## License
@@ -143,11 +146,15 @@ Bundled and built components keep their own licenses:
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |
 | nginx, Alpine packages | BSD-2-Clause / various |
 
-## Acknowledgements
+## Acknowledgments
 
-- Thomas Deppisch & Nils Meyer-Kahlen; [HOAST360](https://github.com/thomasdeppisch/hoast360),
-  the higher-order Ambisonics 360° player this project patches and serves
-- [Envelop](https://envelop.us): Earshot, the multichannel RTMP→DASH transcoder
-- pkviet; OBS Studio Music Edition and the PCE-capable FFmpeg fork
-- [Shaka project](https://github.com/shaka-project): Shaka Packager
+- Thomas Deppisch and Nils Meyer-Kahlen, [HOAST360](https://github.com/thomasdeppisch/hoast360),
+  the higher-order Ambisonics 360 player this project patches and serves
+- [Envelop](https://envelop.us), Earshot, the multichannel RTMP-to-DASH transcoder
+- pkviet, OBS Studio Music Edition and the PCE-capable FFmpeg fork
+- [Shaka project](https://github.com/shaka-project), Shaka Packager
 - Gdańsk University of Technology, Department of Multimedia Systems
+
+## Contact
+
+Bartłomiej Mróz · bartlomiej.mroz@pg.edu.pl · Department of Multimedia Systems, Gdańsk University of Technology · [bmroz.eu](https://bmroz.eu)

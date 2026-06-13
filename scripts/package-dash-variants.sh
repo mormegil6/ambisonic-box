@@ -3,17 +3,17 @@
 # Segment durations: 0.5 s, 1 s, 2 s, 4 s.
 #
 # Source: a VP9 + 16-channel Opus WebM master (default ./content/demo.webm).
-#         NOTE: this is NOT ./content/demo.mp4; that file is the H.264 +
+#         NOTE: this is NOT ./content/demo.mp4 - that file is the H.264 +
 #         16-ch AAC copy used for the RTMP contribution leg, from which VP9
 #         passthrough is impossible. Both streams are PASSED THROUGH here
 #         (no transcode), so codecs and GOP come from the master.
 #
 # Output: ./lip-sync-test/dash_{0.5s,1s,2s,4s}/manifest.mpd  (+ video.webm,
-#         audio.webm; WebM on-demand profile, same as HOAST360's demo media)
+#         audio.webm - WebM on-demand profile, same as HOAST360's demo media)
 #
 # GOP rule: subsegments must start on keyframes, so the master's keyframe
 # interval must divide every segment duration. A 0.5 s GOP satisfies all four
-# variants (e.g. -g 12 @ 25 fps was unattainable; use -g 12/13 ≈ 0.5 s, or
+# variants (e.g. -g 12 @ 25 fps was unattainable; use -g 12/13 ~ 0.5 s, or
 # re-encode the master with -g = segment_duration * fps). This script
 # measures the real keyframe cadence with ffprobe and warns per variant.
 #
@@ -82,7 +82,7 @@ fi
 
 # Full-range (color_range=pc) VP9 is decoded fine by the headless software
 # decoder but rejected by Chromium's hardware VP9 decoder mid-playback with
-# PIPELINE_ERROR_DECODE (CODE:3 MEDIA_ERR_DECODE): so it passes the headless
+# PIPELINE_ERROR_DECODE (CODE:3 MEDIA_ERR_DECODE) - so it passes the headless
 # harness yet fails in a real GPU browser. The live earshot pipeline emits
 # limited-range (tv) VP9; test masters must match. Re-encode a pc-range source:
 #   ffmpeg -i in.webm -vf scale=in_range=pc:out_range=tv -color_range tv \
@@ -99,7 +99,7 @@ fi
 
 # --- 2. measure keyframe cadence ---------------------------------------------
 echo "Measuring keyframe interval over the first ${PROBE_WINDOW}s..."
-# NB: use container-level packet flags, not '-skip_frame nokey'; the VP9
+# NB: use container-level packet flags, not '-skip_frame nokey' - the VP9
 # decoder path reports every frame as a keyframe under nokey skipping.
 KEYFRAME_TIMES=$(ffprobe -v error -select_streams v:0 \
     -show_entries packet=pts_time,flags -of csv=p=0 \

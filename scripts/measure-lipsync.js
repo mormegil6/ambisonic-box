@@ -8,7 +8,7 @@
  *   - dash.js buffer levels per track and the audio-video buffer delta
  *
  * NOTE on "A/V offset": the variants are combined MPDs, so audio and video
- * play through ONE media element; MSE keeps them locked to the same clock,
+ * play through ONE media element - MSE keeps them locked to the same clock,
  * and the lip-sync offset a viewer experiences is whatever timestamp offset
  * the packaging baked in. That part is measured statically with ffprobe by
  * scripts/package-dash-variants.sh's companion check in the Phase 5 report
@@ -31,7 +31,7 @@ const SAMPLE_SECONDS = 20;
 
 (async () => {
     // python3 http.server on purpose: it is the documented way to serve this
-    // page and it does NOT support Range requests; packaging must therefore
+    // page and it does NOT support Range requests - packaging must therefore
     // use discrete segments (SegmentTemplate), never SegmentBase byte ranges.
     const server = spawn('python3', ['-m', 'http.server', String(PORT)], {
         cwd: ROOT, stdio: 'ignore'
@@ -129,7 +129,7 @@ const SAMPLE_SECONDS = 20;
         errors.slice(0, 10).forEach(e => console.log('  ' + e.slice(0, 160)));
         if (errors.length) process.exitCode = 1;
     } catch (e) {
-        console.log('MEASUREMENT FAIL :', e.message);
+        console.log('MEASUREMENT FAIL -', e.message);
         errors.slice(0, 10).forEach(x => console.log('  ' + x.slice(0, 160)));
         process.exitCode = 1;
     } finally {

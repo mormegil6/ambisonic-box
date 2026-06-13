@@ -1,9 +1,9 @@
-# earshot; vendored Envelop Earshot
+# earshot - vendored Envelop Earshot
 
 `src/` is a vendored subset of [EnvelopSound/Earshot](https://github.com/EnvelopSound/Earshot)
 at commit `a9b351facfd3097bd4cd1c260ed5fe05a7babd7a` (master, 2022-08-25), GPL
 licensed (see `src/LICENSE`). Only what the Docker image needs is vendored:
-`Dockerfile`, `nginx-transcoder/`, `webtools/`; the upstream `tester/`,
+`Dockerfile`, `nginx-transcoder/`, `webtools/` - the upstream `tester/`,
 CloudFormation templates and Git-LFS binaries are not required for the image
 and are omitted.
 
@@ -47,7 +47,7 @@ ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
 ```
 
 16-channel Opus is hardcoded upstream; the video codec policy comes from the
-`FFMPEG_FLAGS` env var (see `.env.example` at the repo root; VP9 realtime by
+`FFMPEG_FLAGS` env var (see `.env.example` at the repo root - VP9 realtime by
 default, `-c:v copy` fallback documented). The live MPEG-DASH segmentation
 happens *here*, not in the shaka service (shaka cannot ingest a 16-channel
 live stream and is a `tools`-profile utility for VOD packaging only).

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HOAST360 lip-sync comparison; DASH segment duration variants</title>
+<title>HOAST360 lip-sync comparison - DASH segment duration variants</title>
 <!--
   Four-variant lip-sync comparison page.
 
@@ -13,7 +13,7 @@
       cd lip-sync-test && python3 -m http.server 9000
 
   HOAST360 is a singleton (one element id, one AudioContext), so the four
-  tabs drive ONE player instance via reset()/initialize(): which also keeps
+  tabs drive ONE player instance via reset()/initialize() - which also keeps
   the comparison fair: identical audio graph for every variant.
 -->
 <style>
@@ -34,13 +34,14 @@
 </head>
 <body>
 
-<h1>HOAST360 lip-sync comparison; segment durations 0.5 s / 1 s / 2 s / 4 s</h1>
+<h1>HOAST360 lip-sync comparison - segment durations 0.5 s / 1 s / 2 s / 4 s</h1>
 
 <div id="tabs">
   <button data-variant="0.5s">0.5s</button>
   <button data-variant="1s">1s</button>
   <button data-variant="2s">2s</button>
   <button data-variant="4s">4s</button>
+  <button data-variant="1h06" title="90 s from 1:06:20 (2 s segments) - real A/V transient to judge sync by eye/ear">1h06m (scene)</button>
 </div>
 
 <div id="player-wrap">
@@ -55,7 +56,7 @@
   <span id="status" class="note">Pick a segment-duration tab to load that variant.</span>
 </div>
 
-<pre id="log">snap log; video.currentTime vs AudioContext clock
+<pre id="log">snap log - video.currentTime vs AudioContext clock
 </pre>
 
 <p class="note">
@@ -107,7 +108,7 @@
     // mediaUrl contains ".mpd" -> HOAST360 combined audio+video mode
     hoast360.initialize('./dash_' + variant + '/manifest.mpd', IR_URL, AMBISONICS_ORDER);
     snapBtn.disabled = false;
-    statusEl.textContent = 'Loaded dash_' + variant + '/manifest.mpd; press play, then snap on a transient.';
+    statusEl.textContent = 'Loaded dash_' + variant + '/manifest.mpd - press play, then snap on a transient.';
   }
 
   tabs.addEventListener('click', function (e) {
@@ -120,11 +121,23 @@
     timecodeEl.textContent = fmt(v ? v.currentTime : NaN);
   }, 100);
 
+  function latMs(v) {
+    return (typeof v === 'number' && isFinite(v)) ? (v * 1000).toFixed(1) : '?';
+  }
+
   snapBtn.addEventListener('click', function () {
     var v = videoEl();
+    var ctx = hoast360.context;
+    // Audio is routed videoElement -> MediaElementAudioSourceNode -> HOA graph
+    // -> speakers, so it trails the picture by ~outputLatency (plus the HRIR
+    // convolver's small group delay). This is the constant "video slightly
+    // ahead of audio" residual; it is audio-late, the forgiving direction
+    // (tolerated to ~125 ms vs ~45 ms for audio-early). Read it here per device.
     var line = '[' + (current || '?') + '] video=' + fmt(v ? v.currentTime : NaN) + 's' +
-               '  audioCtx=' + fmt(hoast360.context ? hoast360.context.currentTime : NaN) + 's' +
-               '  ctxState=' + (hoast360.context ? hoast360.context.state : 'n/a') +
+               '  audioCtx=' + fmt(ctx ? ctx.currentTime : NaN) + 's' +
+               '  ctxState=' + (ctx ? ctx.state : 'n/a') +
+               '  audioLate~=' + latMs(ctx ? ctx.outputLatency : NaN) + 'ms' +
+               '  (base=' + latMs(ctx ? ctx.baseLatency : NaN) + 'ms)' +
                '  wall=' + new Date().toISOString().slice(11, 23);
     logEl.textContent += line + '\n';
     logEl.scrollTop = logEl.scrollHeight;
