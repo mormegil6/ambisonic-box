@@ -86,18 +86,26 @@ i.e. fill granularity, not drift.
   `--generate_static_live_mpd`), which any static file server can serve;
   `scripts/measure-lipsync.js` deliberately serves with python3 to keep this
   regression covered.
-- **Full-range VP9 breaks Chromium's hardware decoder.** The first excerpt
+- **Full-range VP9 breaks the dash.js/MSE playback path.** The first excerpt
   masters inherited `color_range=pc` (full range) from `demo_4k.webm`. They
-  decoded fine in the headless harness (software VP9 decoder, 0 errors) but a
-  real GPU browser threw `PIPELINE_ERROR_DECODE` / `CODE:3 MEDIA_ERR_DECODE`
-  on a loop; dash.js kept resetting the MediaSource and never advanced. The
-  live earshot pipeline emits limited-range (tv) VP9, so the test masters were
-  wrong, not the player. Fixed by re-encoding the excerpts with a range
+  played in the headless harness (0 errors) but a real GPU browser threw
+  `PIPELINE_ERROR_DECODE` / `CODE:3 MEDIA_ERR_DECODE` on a loop; dash.js kept
+  resetting the MediaSource and never advanced. The audio is byte-identical
+  across the pc and tv packagings (stream-copied, OpusHead 48 kHz both), so the
+  video range flag is the sole differentiator; the fix is proven by that
+  controlled difference. The live earshot pipeline emits limited-range (tv) VP9,
+  so the masters were wrong, not the player. Fixed by re-encoding with a range
   conversion (`-vf scale=in_range=pc:out_range=tv -color_range tv`); the MPD
-  codec string changed from `vp09.…01.01` to `vp09.…01.00` (trailing `.00` =
-  limited-range flag). `package-dash-variants.sh` now hard-fails on a pc-range
-  source so this cannot silently recur, and it is a reminder that the headless
-  harness's software decoder cannot catch hardware-decode bugs.
+  codec string changed `vp09.…01.01` → `vp09.…01.00` (trailing `.00` =
+  limited-range flag), and `package-dash-variants.sh` now hard-fails on a
+  pc-range source.
+  - Diagnosis caveat: this is specific to the MSE/dash.js path. `chrome://media-internals`
+    showed `D3D11VideoDecoder` decoding the *same* full-range bitstream fine in
+    plain single-file playback; so "just open the .webm directly" does NOT
+    reproduce it (and a bare `<video>` of the 16-ch master can fail for an
+    unrelated reason: an audio-renderer config-change at a video keyframe). The
+    headless software path can't see it either. Trust the packaged-variant test
+    in the real player, not shortcuts.
 - Human verification (by ear/eye, clap transient) on a GPU browser is still
   worthwhile: serve this folder (`python3 -m http.server 9000`) and use the
   four tabs + snap log. The headless harness cannot judge perceived sync,
