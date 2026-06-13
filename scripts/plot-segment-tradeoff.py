@@ -53,6 +53,8 @@ fig.text(0.5, 0.005,
          ha="center", fontsize=8, style="italic")
 
 fig.tight_layout(rect=(0, 0.03, 1, 1))
-out = "lip-sync-test/segment-tradeoff.png"
-fig.savefig(out, dpi=160)
-print("wrote", out)
+# PNG for inline markdown / quick view; SVG (vector) for the website and print.
+for ext, kw in (("png", {"dpi": 160}), ("svg", {})):
+    out = f"lip-sync-test/segment-tradeoff.{ext}"
+    fig.savefig(out, **kw)
+    print("wrote", out)

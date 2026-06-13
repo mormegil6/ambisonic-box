@@ -52,6 +52,12 @@ i.e. fill granularity, not drift.
 | 2 s   |  87 MB | ~7.5 Mbps | 1 | 9-12 s |
 | 4 s   |  69 MB | ~5.8 Mbps | 1 | 15-20 s |
 
+![Segment-duration trade-off: bitrate and buffer depth vs segment duration](segment-tradeoff.png)
+
+*Bitrate and buffer depth vs segment duration (`scripts/plot-segment-tradeoff.py`;
+PNG + SVG). Buffer is a min-max band, not error bars; A/V offset is a structural
+0 ms at every duration, so it is noted rather than plotted.*
+
 - **0.5 s is not viable at 4K**: a keyframe every 15 frames forces libvpx far
   past the 4 Mbps target (~6x bitrate at its quality floor), and the playback
   buffer hovers under 1 s - it was the only variant with repeated stalls.
