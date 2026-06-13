@@ -1,6 +1,7 @@
 output/*
 !output/.gitkeep
 content/*.mp4
+content/*.mov
 content/*.wav
 content/*.webm
 !content/.gitkeep
