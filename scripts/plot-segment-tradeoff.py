@@ -24,9 +24,6 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 6), sharex=True)
 ax1.plot(seg, bitrate, "o-", color="#c0392b", lw=2, ms=7)
 ax1.set_ylabel("Effective video bitrate (Mbps)")
 ax1.set_title("DASH segment-duration trade-off (4K VP9, combined-MPD)")
-for x, y in zip(seg, bitrate):
-    ax1.annotate(f"{y:g}", (x, y), textcoords="offset points",
-                 xytext=(0, 8), ha="center", fontsize=9)
 ax1.grid(True, alpha=0.3)
 
 ax2.fill_between(seg, buf_lo, buf_hi, color="#2980b9", alpha=0.25)
