@@ -80,6 +80,23 @@ if [ "${ACHANNELS}" != "16" ]; then
     echo "WARNING: expected 16 audio channels (3rd-order Ambisonics), found ${ACHANNELS}." >&2
 fi
 
+# Full-range (color_range=pc) VP9 is decoded fine by the headless software
+# decoder but rejected by Chromium's hardware VP9 decoder mid-playback with
+# PIPELINE_ERROR_DECODE (CODE:3 MEDIA_ERR_DECODE): so it passes the headless
+# harness yet fails in a real GPU browser. The live earshot pipeline emits
+# limited-range (tv) VP9; test masters must match. Re-encode a pc-range source:
+#   ffmpeg -i in.webm -vf scale=in_range=pc:out_range=tv -color_range tv \
+#          -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M \
+#          -g <GOP> -keyint_min <GOP> -c:a copy out.webm
+VRANGE=$(ffprobe -v error -select_streams v:0 -show_entries stream=color_range -of csv=p=0 "${SRC}")
+if [ "${VRANGE}" = "pc" ]; then
+    echo "ERROR: source is full-range VP9 (color_range=pc). Chromium's hardware" >&2
+    echo "decoder rejects this mid-playback with PIPELINE_ERROR_DECODE; the live" >&2
+    echo "pipeline is limited-range (tv). Re-encode with a range conversion first" >&2
+    echo "(see the ffmpeg recipe in the comment above this check)." >&2
+    exit 1
+fi
+
 # --- 2. measure keyframe cadence ---------------------------------------------
 echo "Measuring keyframe interval over the first ${PROBE_WINDOW}s..."
 # NB: use container-level packet flags, not '-skip_frame nokey'; the VP9
@@ -134,12 +151,19 @@ for D in "${DURATIONS[@]}"; do
     rm -rf "${OUTDIR}"
     mkdir -p "${OUTDIR}"
 
+    # Discrete segment files + static SegmentTemplate MPD (same structure as
+    # the live stack), NOT the on-demand profile: SegmentBase byte-range
+    # addressing requires a Range-capable server, and the documented
+    # `python3 -m http.server` ignores Range headers (returns 200 + full
+    # file), which crashes dash.js's WebM Cues parser with
+    # "required tag not found".
     docker compose --profile tools run --rm --no-deps \
         --user "$(id -u):$(id -g)" \
         shaka \
-        "in=/content/$(basename "${SPLIT_V}"),stream=video,output=/lip-sync-test/dash_${D}s/video.webm" \
-        "in=/content/$(basename "${SPLIT_A}"),stream=audio,output=/lip-sync-test/dash_${D}s/audio.webm" \
+        "in=/content/$(basename "${SPLIT_V}"),stream=video,init_segment=/lip-sync-test/dash_${D}s/video_init.webm,segment_template=/lip-sync-test/dash_${D}s/video_\$Number\$.webm" \
+        "in=/content/$(basename "${SPLIT_A}"),stream=audio,init_segment=/lip-sync-test/dash_${D}s/audio_init.webm,segment_template=/lip-sync-test/dash_${D}s/audio_\$Number\$.webm" \
         --segment_duration "${D}" \
+        --generate_static_live_mpd \
         --mpd_output "/lip-sync-test/dash_${D}s/manifest.mpd"
 done
 

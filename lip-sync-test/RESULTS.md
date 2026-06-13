@@ -1,18 +1,23 @@
 # Phase 5; lip-sync / segment-duration measurement results
 
-**Date:** 2026-06-12 · **Host:** the encode host (WSL2, 32 cores) · **Master:** `content/demo_4k.webm`
-(VP9 3840×1920 @ 29.97 fps, 16-ch Opus, 95 min) · **Decision: 2 s segments.**
+**Date:** 2026-06-12 (color-range fix 2026-06-13) · **Host:** the encode host (WSL2, 32 cores)
+· **Master:** `content/demo_4k.webm` (VP9 3840×1920 @ 29.97 fps, 16-ch Opus, 95 min)
+· **Decision: 2 s segments.**
 
 ## Method
 
 1. A 90 s excerpt (calm 0–17 s + high-bitrate section past 17 s) was re-encoded
    four times from the master with identical settings except GOP, per the
    GOP-per-segment rule at 29.97 fps: `-g 15 / 30 / 60 / 120` for 0.5 / 1 / 2 / 4 s
-   segments. Audio was **stream-copied**, so audio timestamps are bit-identical
-   across variants; video GOP is the only variable.
+   segments. All four also carry a uniform full→limited range conversion
+   (`-vf scale=in_range=pc:out_range=tv -color_range tv`) so the bitstream
+   matches the live pipeline and survives hardware decode (see Caveats). Audio
+   was **stream-copied**, so audio timestamps are bit-identical across variants
+; video GOP is the only variable between variants.
 2. Each variant was packaged from its GOP-matched master with
    `scripts/package-dash-variants.sh <master> <duration>` (Shaka Packager
-   v3.7.2, WebM on-demand profile, 16 channels preserved).
+   v3.7.2, discrete segments + static SegmentTemplate MPD; same structure
+   as the live stack; 16 channels preserved).
 3. Static analysis: ffprobe start/first-pts of the packaged `video.webm` /
    `audio.webm` per variant, plus MPD inspection.
 4. Dynamic analysis: `scripts/measure-lipsync.js`; headless Chromium, fresh
@@ -73,9 +78,30 @@ i.e. fill granularity, not drift.
 - Shaka's WebM parser rejects ffmpeg multi-track muxing ("block with a
   timecode before the previous block"); `package-dash-variants.sh` now splits
   the master into single-track inputs automatically.
+- Do NOT package with the on-demand profile (`output=` single file):
+  SegmentBase byte-range addressing needs a Range-capable server, and the
+  documented `python3 -m http.server` ignores Range headers (200 + full file),
+  crashing dash.js's WebM Cues parser with "required tag not found".
+  The script now emits discrete segments (`segment_template=` +
+  `--generate_static_live_mpd`), which any static file server can serve;
+  `scripts/measure-lipsync.js` deliberately serves with python3 to keep this
+  regression covered.
+- **Full-range VP9 breaks Chromium's hardware decoder.** The first excerpt
+  masters inherited `color_range=pc` (full range) from `demo_4k.webm`. They
+  decoded fine in the headless harness (software VP9 decoder, 0 errors) but a
+  real GPU browser threw `PIPELINE_ERROR_DECODE` / `CODE:3 MEDIA_ERR_DECODE`
+  on a loop; dash.js kept resetting the MediaSource and never advanced. The
+  live earshot pipeline emits limited-range (tv) VP9, so the test masters were
+  wrong, not the player. Fixed by re-encoding the excerpts with a range
+  conversion (`-vf scale=in_range=pc:out_range=tv -color_range tv`); the MPD
+  codec string changed from `vp09.…01.01` to `vp09.…01.00` (trailing `.00` =
+  limited-range flag). `package-dash-variants.sh` now hard-fails on a pc-range
+  source so this cannot silently recur, and it is a reminder that the headless
+  harness's software decoder cannot catch hardware-decode bugs.
 - Human verification (by ear/eye, clap transient) on a GPU browser is still
   worthwhile: serve this folder (`python3 -m http.server 9000`) and use the
   four tabs + snap log. The headless harness cannot judge perceived sync,
   only clocks and packaging.
 - Per-GOP excerpt masters kept in `content/lipsync_g{15,30,60,120}.webm`
-  (gitignored) for re-runs.
+  (limited range, gitignored) for re-runs; the original full-range encodes are
+  preserved alongside as `content/lipsync_g*_pcrange.webm` for reference.

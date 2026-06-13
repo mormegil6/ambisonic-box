@@ -30,7 +30,10 @@ const VARIANTS = ['0.5s', '1s', '2s', '4s'];
 const SAMPLE_SECONDS = 20;
 
 (async () => {
-    const server = spawn('npx', ['http-server', ROOT, '-p', String(PORT), '-s', '--cors'], {
+    // python3 http.server on purpose: it is the documented way to serve this
+    // page and it does NOT support Range requests; packaging must therefore
+    // use discrete segments (SegmentTemplate), never SegmentBase byte ranges.
+    const server = spawn('python3', ['-m', 'http.server', String(PORT)], {
         cwd: ROOT, stdio: 'ignore'
     });
     await new Promise(r => setTimeout(r, 2000));
