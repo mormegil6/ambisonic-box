@@ -1,6 +1,6 @@
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white) ![FFmpeg](https://img.shields.io/badge/FFmpeg-VP9%20%2B%20Opus-007808.svg?logo=ffmpeg&logoColor=white) ![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg) ![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg) ![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white) [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-# hoa-360-stream; live 360 video and third-order Ambisonics over MPEG-DASH
+# hoa-360-stream: live 360 video and third-order Ambisonics over MPEG-DASH
 
 Containerised toolchain for live streaming 360 video with third-order
 Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (VP9 + Opus, WebM) out,
@@ -68,7 +68,7 @@ docker compose up -d --build
 ```
 
 Without `content/demo.mp4` the stack still runs and you can push to it live
-(next section). `loop-source` checks for the file once at startup; if you
+(next section). `loop-source` checks for the file once at startup. If you
 add `demo.mp4` later, run `docker compose restart loop-source`.
 
 ## Stream your own content
@@ -97,14 +97,14 @@ stream key, edit `services/hoast-player/index.html` or open the MPD directly.
 Copy `.env.example` to `.env` to override either.
 
 Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus,
-hardcoded upstream in Earshot) and the live-edge distance; the earshot image
+hardcoded upstream in Earshot) and the live-edge distance. The earshot image
 build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at
 30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge
 by design. That is the price of gap-free playback of a 16-channel live stream.
 
 ## Measurements: DASH segment duration
 
-Does segment duration affect lip sync? Measured answer: **no**; the A/V
+Does segment duration affect lip sync? Measured answer: **no**. The A/V
 start offset is structurally 0 ms across 0.5/1/2/4 s variants (audio
 stream-copied, video GOP the only variable; details in
 [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md)). Segment duration is
@@ -129,7 +129,7 @@ time-shift granularity for no gain. **2 s is the default** (`-g 60
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
 
 `package-dash-variants.sh` drives Shaka Packager through the compose `tools`
-profile; the pattern for manual runs is `docker compose run --rm shaka
+profile. The pattern for manual runs is `docker compose run --rm shaka
 <packager args>`.
 
 ## Troubleshooting
@@ -184,7 +184,7 @@ Bundled and built components keep their own licenses:
 ## Citation
 
 This repository is the containerised successor of the toolchain described in
-the paper below; if you use this work in research, please cite it:
+the paper below. If you use this work in research, please cite it:
 
 ```bibtex
 @inproceedings{mroz2023toolchain,

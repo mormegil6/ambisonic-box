@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Synthetic end-to-end pipeline test.
 #
-# Pushes a synthetic contribution stream; 16 sine channels (200..1700 Hz, one
+# Pushes a synthetic contribution stream: 16 sine channels (200..1700 Hz, one
 # per channel, hexadecagonal layout) + testsrc2 video, H.264 + 16-ch AAC (PCE)
-# in FLV, encoded by the earshot image's PCE-aware ffmpeg; through
+# in FLV, encoded by the earshot image's PCE-aware ffmpeg, through
 # rtmp-ingest's token auth into earshot, then asserts live DASH appears in
 # ./output/:
 #   - <stream>.mpd manifest: valid XML, 16-ch Opus audio
