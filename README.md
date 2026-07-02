@@ -121,6 +121,7 @@ time-shift granularity for no gain. **2 s is the default** (`-g 60
 
 | Script | Purpose |
 |---|---|
+| `scripts/test-pipeline.sh` | synthetic end-to-end test: 16 sine channels + test video pushed through ingest auth, asserts live 16-ch Opus/VP9 DASH appears; PASS/FAIL |
 | `scripts/make-lipsync-scene.sh` | cut a GOP-matched, tv-range transient excerpt for by-ear lip-sync judging |
 | `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the comparison page (`lip-sync-test/index.html`) |
 | `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants |
