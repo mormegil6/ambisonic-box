@@ -9,7 +9,7 @@ and are omitted.
 
 ## Local modifications
 
-Two deviations from upstream:
+Three deviations from upstream:
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -34,6 +34,15 @@ Upstream wipes `/opt/data` at startup, which fails on a busy mountpoint when a
 Docker volume is mounted at `/opt/data/dash` (the `&&` chain then breaks and
 nginx starts unconfigured). The patched version clears stale segments without
 removing the mountpoint itself.
+
+### 3. `src/Dockerfile`: `suggestedPresentationDelay` floor patched into ffmpeg
+
+A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's
+`suggestedPresentationDelay` at `DASH_SPD_FLOOR` seconds (build arg, default
+30). No ffmpeg flag can set SPD for WebM DASH (`-target_latency` is
+force-zeroed outside LL-DASH mode) and upstream hardcodes it to the last
+segment duration, which makes players join right at the live edge and
+gap-jump.
 
 ## What this service does in the stack
 

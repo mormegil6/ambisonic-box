@@ -1,6 +1,6 @@
-[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)]() [![FFmpeg](https://img.shields.io/badge/FFmpeg-VP9%20%2B%20Opus-007808.svg?logo=ffmpeg&logoColor=white)]() [![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg)]() [![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg)]() [![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white)]() [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white) ![FFmpeg](https://img.shields.io/badge/FFmpeg-VP9%20%2B%20Opus-007808.svg?logo=ffmpeg&logoColor=white) ![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg) ![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg) ![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white) [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-# hoa-360-stream - live 360 video and third-order Ambisonics over MPEG-DASH
+# hoa-360-stream; live 360 video and third-order Ambisonics over MPEG-DASH
 
 Containerised toolchain for live streaming 360 video with third-order
 Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (VP9 + Opus, WebM) out,
@@ -8,52 +8,29 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 
 **Live demo:** <https://bmroz.eu/projects/360-livestream/>
 
-## Citation
-
-This repository is the containerised successor of the toolchain described in:
-
-```bibtex
-@inproceedings{mroz2023toolchain,
-  title     = {A Commonly-Accessible Toolchain for Live Streaming Music Events
-               with Higher-Order Ambisonic Audio and 4K 360 Vision},
-  author    = {Mr{\'o}z, Bart{\l}omiej and Odya, Piotr and Danowski,
-               Przemys{\l}aw and Kabaci{\'n}ski, Marek},
-  booktitle = {Proceedings of the AES International Conference on Spatial and
-               Immersive Audio},
-  publisher = {Audio Engineering Society},
-  month     = aug,
-  year      = {2023},
-  url       = {https://www.aes.org/e-lib/browse.cfm?elib=22204}
-}
-```
-
 ## Architecture
 
-```
- OBS Music Edition                    ┌─────────────────────────────────────┐
- (or loop-source:                     │ docker compose                      │
-  ffmpeg loop of                      │                                     │
-  content/demo.mp4)                   │  ┌─────────────┐    ┌────────────┐  │
-        │                             │  │ rtmp-ingest │    │  earshot   │  │
-        │  RTMP :1935                 │  │ nginx-rtmp  │───▶│ nginx-rtmp │  │
-        └────────────────────────────────▶ stream-key  │RTMP│ + ffmpeg   │  │
-           H.264 + 16-ch AAC (PCE)    │  │ auth, relay │    │ (PCE fork) │  │
-                                      │  └─────────────┘    └─────┬──────┘  │
-                                      │                           │ 16-ch   │
-                                      │                           │ Opus +  │
-                                      │                           │ VP9     │
-                                      │                           ▼ DASH    │
-                                      │  ┌──────────────┐   ╔════════════╗  │
-   viewer ◀───────────────────────────│──│ hoast-player │◀──║ dash-output║  │
-   browser     HTTP :8080             │  │ nginx +      │   ║ volume     ║  │
-   (HOAST360, binaural HOA)           │  │ HOAST360     │   ╚════════════╝  │
-                                      │  └──────────────┘         ▲         │
-                                      │  ┌──────────────┐         │         │
-                                      │  │ shaka        │─────────┘         │
-                                      │  │ (profile:    │  VOD / lip-sync   │
-                                      │  │  tools only) │  packaging        │
-                                      │  └──────────────┘                   │
-                                      └─────────────────────────────────────┘
+```mermaid
+flowchart LR
+    OBS["OBS Music Edition<br/>H.264 + 16-ch AAC (PCE)"]
+    VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
+
+    subgraph COMPOSE["docker compose"]
+        LOOP["loop-source<br/>ffmpeg loop of content/demo.mp4"]
+        INGEST["rtmp-ingest<br/>nginx-rtmp: stream-key auth, relay"]
+        EARSHOT["earshot<br/>nginx-rtmp + ffmpeg (PCE fork)"]
+        VOL[("dash-output<br/>volume")]
+        PLAYER["hoast-player<br/>nginx + HOAST360"]
+        SHAKA["shaka<br/>packager (profile: tools)"]
+    end
+
+    OBS -- "RTMP :1935" --> INGEST
+    LOOP -- "RTMP (internal)" --> INGEST
+    INGEST -- "RTMP relay, authenticated" --> EARSHOT
+    EARSHOT -- "live DASH: VP9 +<br/>16-ch Opus (WebM)" --> VOL
+    VOL --> PLAYER
+    SHAKA -. "VOD / lip-sync packaging" .-> VOL
+    PLAYER -- "HTTP :8080" --> VIEWER
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
@@ -61,13 +38,23 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
 transcode onward is VP9 + 16-ch Opus in WebM. Audio is never downmixed:
 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
+| Service | Role | Host port |
+|---|---|---|
+| `rtmp-ingest` | public RTMP ingest; stream-key auth, relay to earshot | 1935 |
+| `earshot` | transcode to 16-ch Opus + VP9, live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
+| `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
+| `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
+| `shaka` | Shaka Packager for VOD / lip-sync packaging; compose profile `tools`, manual runs only | - |
+
 ## Requirements
 
 - Docker Engine with the compose plugin (`docker compose`), buildx for
   multi-arch builds
-- ffmpeg/ffprobe on the host (only for the test and measurement scripts)
 - ~2 GB of image builds on first `compose build` (earshot compiles its
   nginx-rtmp and ffmpeg fork from source)
+- Only for the test and measurement scripts: host `ffmpeg`/`ffprobe`;
+  Node.js (`npm ci`, then `npx playwright install chromium` for the two
+  headless-browser scripts); `python3` + matplotlib for the trade-off plot
 
 ## Quick start
 
@@ -80,8 +67,9 @@ docker compose up -d --build
 # (Earshot monitor: http://localhost:8081/webtools)
 ```
 
-Without `content/demo.mp4` the stack still runs; `loop-source` idles until
-the file exists, and you can push to it live instead (next section).
+Without `content/demo.mp4` the stack still runs and you can push to it live
+(next section). `loop-source` checks for the file once at startup; if you
+add `demo.mp4` later, run `docker compose restart loop-source`.
 
 ## Stream your own content
 
@@ -93,9 +81,11 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/)
 | Server | `rtmp://<host>:1935/live` |
 | Stream key | `hoast_demo` (or your `STREAM_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
-| Video | H.264, GOP = segment duration x fps |
+| Video | H.264, GOP = segment duration × fps (e.g. `-g 60` at 29.97/30 fps for 2 s segments) |
 
-The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`.
+The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`. Note that
+the bundled player page is hardcoded to `/dash/hoast_demo.mpd`; with a custom
+stream key, edit `services/hoast-player/index.html` or open the MPD directly.
 
 ## Configuration
 
@@ -106,14 +96,50 @@ The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`.
 
 Copy `.env.example` to `.env` to override either.
 
+Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus,
+hardcoded upstream in Earshot) and the live-edge distance; the earshot image
+build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at
+30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge
+by design. That is the price of gap-free playback of a 16-channel live stream.
+
+## Measurements: DASH segment duration
+
+Does segment duration affect lip sync? Measured answer: **no**; the A/V
+start offset is structurally 0 ms across 0.5/1/2/4 s variants (audio
+stream-copied, video GOP the only variable; details in
+[lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md)). Segment duration is
+instead a bitrate/latency trade-off:
+
+![Bitrate and buffer depth vs segment duration](lip-sync-test/segment-tradeoff.svg)
+
+0.5 s segments force a keyframe every 15 frames and push realtime VP9 ~6×
+past its bitrate target (with visible stalls); 4 s segments halve the
+time-shift granularity for no gain. **2 s is the default** (`-g 60
+-seg_duration 2` at 29.97/30 fps).
+
 ## Test and measurement scripts
 
 | Script | Purpose |
 |---|---|
-| `scripts/test-pipeline.sh` | synthetic end-to-end pipeline test (16 sine channels) |
-| `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the lip-sync comparison (`lip-sync-test/index.html`) |
+| `scripts/make-lipsync-scene.sh` | cut a GOP-matched, tv-range transient excerpt for by-ear lip-sync judging |
+| `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the comparison page (`lip-sync-test/index.html`) |
 | `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants |
+| `scripts/plot-segment-tradeoff.py` | regenerate the segment-duration trade-off figure |
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
+
+`package-dash-variants.sh` drives Shaka Packager through the compose `tools`
+profile; the pattern for manual runs is `docker compose run --rm shaka
+<packager args>`.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Relay `Connection refused` after recreating earshot | rtmp-ingest resolves earshot's address once, at startup | `docker compose restart rtmp-ingest` |
+| Segments longer than `-seg_duration` (e.g. 3.34 s) | GOP not aligned with segment duration | set `-g` = segment duration × fps (`-g 60` @ 29.97/30, `-g 50` @ 25) |
+| Browser loops `PIPELINE_ERROR_DECODE` | full-range (pc) VP9 source breaks the dash.js/MSE path | re-encode to limited range: `-vf scale=in_range=pc:out_range=tv -color_range tv` |
+| `loop-source` idle although `demo.mp4` exists | file presence is checked once at startup | `docker compose restart loop-source` |
+| Publisher dies seconds into a 4K push | RTMP message limit smaller than 4K keyframes | keep `max_message 10M` in the nginx-rtmp configs (already set here) |
 
 ## Deployment
 
@@ -132,6 +158,14 @@ works; realtime VP9 encoding is the bottleneck. If the Pi cannot keep up, set
 audio stays Opus/WebM), or use a bigger machine; the Pi target is a
 nice-to-have, not a requirement.
 
+## Documentation
+
+- [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
+- [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): full segment-duration / lip-sync study
+- [docs/NDI.md](docs/NDI.md): Quest 3 / Twinkle NDI output extension (design only)
+- [docs/NDI-TEST.md](docs/NDI-TEST.md): hands-on NDI/Twinkle validation runbook
+- [.env.example](.env.example): configuration reference, including how to prepare `content/demo.mp4`
+
 ## License
 
 Compose files, service configs and scripts in this repository: **Apache 2.0**.
@@ -140,11 +174,31 @@ Bundled and built components keep their own licenses:
 | Component | License |
 |---|---|
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
-| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, two documented patches) | GPL |
+| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, three documented patches) | GPL |
 | Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl --enable-nonfree`; treat the built earshot image as non-redistributable and build it yourself) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |
 | nginx, Alpine packages | BSD-2-Clause / various |
+
+## Citation
+
+This repository is the containerised successor of the toolchain described in
+the paper below; if you use this work in research, please cite it:
+
+```bibtex
+@inproceedings{mroz2023toolchain,
+  title     = {A Commonly-Accessible Toolchain for Live Streaming Music Events
+               with Higher-Order Ambisonic Audio and 4K 360 Vision},
+  author    = {Mr{\'o}z, Bart{\l}omiej and Odya, Piotr and Danowski,
+               Przemys{\l}aw and Kabaci{\'n}ski, Marek},
+  booktitle = {Proceedings of the AES International Conference on Spatial and
+               Immersive Audio},
+  publisher = {Audio Engineering Society},
+  month     = aug,
+  year      = {2023},
+  url       = {https://www.aes.org/e-lib/browse.cfm?elib=22204}
+}
+```
 
 ## Acknowledgments
 
