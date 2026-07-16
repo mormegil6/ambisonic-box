@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below (preferred), or the software directly."
+title: "HOA 360 Stream: containerised Higher-Order Ambisonics + 4K 360 livestream toolchain"
+abstract: >-
+  A freely-accessible, containerised toolchain for live streaming music events
+  with Higher-Order Ambisonics audio (3rd order, 16 channels, ACN/SN3D) and 4K
+  360 video over MPEG-DASH, rendered binaurally in the browser.
+type: software
+authors:
+  - family-names: "Mróz"
+    given-names: "Bartłomiej"
+    email: "bartlomiej.mroz@pg.edu.pl"
+    affiliation: "Department of Multimedia Systems, Gdańsk University of Technology"
+repository-code: "https://git.pg.edu.pl/p829296/hoa-360-stream"
+url: "https://bmroz.eu/projects/360-livestream/"
+license: "Apache-2.0"
+keywords:
+  - "Higher-Order Ambisonics"
+  - "spatial audio"
+  - "360 video"
+  - "MPEG-DASH"
+  - "live streaming"
+  - "binaural rendering"
+preferred-citation:
+  type: conference-paper
+  title: "A Commonly-Accessible Toolchain for Live Streaming Music Events with Higher-Order Ambisonic Audio and 4K 360 Vision"
+  authors:
+    - family-names: "Mróz"
+      given-names: "Bartłomiej"
+    - family-names: "Odya"
+      given-names: "Piotr"
+    - family-names: "Danowski"
+      given-names: "Przemysław"
+    - family-names: "Kabaciński"
+      given-names: "Marek"
+  collection-title: "Proceedings of the AES International Conference on Spatial and Immersive Audio"
+  publisher:
+    name: "Audio Engineering Society"
+  year: 2023
+  month: 8
+  url: "https://www.aes.org/e-lib/browse.cfm?elib=22204"
