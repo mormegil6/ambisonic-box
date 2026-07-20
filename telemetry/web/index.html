@@ -45,6 +45,8 @@
   .kv div .v{font-size:15px;margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:6px}
   .bar > i{display:block;height:100%;border-radius:3px}
+  /* the span every plot in this panel is computed over, stated once */
+  .hist-win{text-transform:none;letter-spacing:0;opacity:.7;font-weight:400}
   .spark{display:flex;gap:22px;flex-wrap:wrap}
   .spark figure{margin:0}
   .spark figcaption{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
@@ -97,7 +99,7 @@
   </section>
 
   <section>
-    <h2>History</h2>
+    <h2>History <span class="hist-win" id="histWindow"></span></h2>
     <div class="spark">
       <figure><figcaption>Viewers</figcaption><svg id="spViewers" width="320" height="52"></svg></figure>
       <figure><figcaption>CPU temp</figcaption><svg id="spTemp" width="320" height="52"></svg></figure>
@@ -287,6 +289,17 @@ async function tick(){
   sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
   sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
   dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'));
+  // "live 92%" and "max 98" are unreadable without knowing the span they cover.
+  // Stated once for the panel rather than repeated on every plot, and measured
+  // from the actual first and last timestamps: a telemetry outage leaves gaps,
+  // so rows times interval would overstate how recent the window is.
+  if(h.length > 1){
+    const t0 = Date.parse(h[0].t), t1 = Date.parse(h[h.length-1].t);
+    $('histWindow').textContent = (isFinite(t0) && isFinite(t1) && t1 > t0)
+      ? "last " + shortDur((t1 - t0) / 1000) : "";
+  } else {
+    $('histWindow').textContent = "";
+  }
 }
 tick(); setInterval(tick, 10000);
 </script>
