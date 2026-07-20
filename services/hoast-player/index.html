@@ -80,8 +80,10 @@
       pre.bib{margin:10px 0 0;background:#1f2430;color:#e6edf3;border-radius:8px;padding:14px 16px;
               overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
       .bibwrap{position:relative}
-      .bibcopy{position:absolute;top:8px;right:8px;font:inherit;font-size:11px;padding:3px 9px;border-radius:5px;
-               border:1px solid var(--line);background:var(--card);color:var(--accent);cursor:pointer;opacity:.85}
+      .bibcopy{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;justify-content:center;
+               padding:5px 6px;border-radius:5px;border:1px solid var(--line);background:var(--card);
+               color:var(--accent);cursor:pointer;opacity:.85}
+      .bibcopy svg{display:block}
       .bibcopy:hover{opacity:1;border-color:var(--accent)}
 
       footer{border-top:1px solid var(--line);margin-top:10px;padding:28px 0 48px;color:var(--body);font-size:13.5px}
@@ -229,11 +231,14 @@
           if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
           if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
+          if (b.favicon) { var ic = document.querySelector('link[rel="icon"]'); if (ic) ic.setAttribute('href', b.favicon); }
         })
         .catch(function () {});
 
       // Add a Copy button to each BibTeX block. navigator.clipboard needs a
       // secure context, so fall back to execCommand for plain-http (Tailscale).
+      var ICON_COPY = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+      var ICON_DONE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
       function addBibCopy(root) {
         (root || document).querySelectorAll('pre.bib').forEach(function (pre) {
           if (pre.dataset.copyReady) return;
@@ -243,10 +248,12 @@
           pre.parentNode.insertBefore(wrap, pre);
           wrap.appendChild(pre);
           var btn = document.createElement('button');
-          btn.type = 'button'; btn.className = 'bibcopy'; btn.textContent = 'Copy';
+          btn.type = 'button'; btn.className = 'bibcopy';
+          btn.title = 'Copy BibTeX'; btn.setAttribute('aria-label', 'Copy BibTeX');
+          btn.innerHTML = ICON_COPY;
           btn.addEventListener('click', function () {
             var text = pre.textContent, mark = function () {
-              btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+              btn.innerHTML = ICON_DONE; setTimeout(function () { btn.innerHTML = ICON_COPY; }, 1500);
             };
             if (navigator.clipboard && navigator.clipboard.writeText)
               navigator.clipboard.writeText(text).then(mark, function () { bibFallback(text); mark(); });
