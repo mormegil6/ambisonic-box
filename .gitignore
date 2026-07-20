@@ -15,3 +15,10 @@ lip-sync-test/dash_*/
 lip-sync-test/dist/
 lip-sync-test/irs/
 .DS_Store
+
+# python bytecode (telemetry collector)
+__pycache__/
+*.pyc
+
+# local-only working notes (audits, scratch analysis); not part of the published repo
+docs/local/

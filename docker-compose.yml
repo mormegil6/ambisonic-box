@@ -27,17 +27,33 @@ services:
       - RTMP_AUTH_TOKEN=
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
-      # Default: VP9 realtime => all-WebM DASH. Override in .env (see .env.example).
-      # 2 s segments / -g 60 (29.97/30 fps demo content; use -g 50 for 25 fps -
-      # GOP must equal segment duration or the muxer cuts late, e.g. -g 50 at
-      # 29.97 fps yields 3.34 s segments). Placeholder until Phase 5 measurement.
+      # Default: video passthrough. This is the configuration the deployment
+      # actually runs and the one the thermal numbers were measured on (39 %
+      # CPU / 57.7 C; docs/PAPER-NOTES.md). Video segments are then .m4s/.mp4
+      # while audio stays Opus/WebM; hoast-player already serves both
+      # (services/hoast-player/nginx.conf) and telemetry globs both.
+      # Two consequences of the shorter flag list, both deliberate: with no
+      # -g at this stage the GOP is whatever the contribution encoder sends,
+      # and with no -seg_duration the muxer falls back to its 5 s default,
+      # cut at the next contribution keyframe. Add -seg_duration 2 back if you
+      # need the 2 s cadence the VP9 default used.
+      # Realtime VP9 remains supported and is kept as a documented alternative
+      # in .env.example. It is not the default because the only VP9 config ever
+      # measured cost 310 % CPU / 90.3 C at half resolution, and the unscaled
+      # 4K variant has never been run outside the small synthetic test source.
+      # For the VP9 line, keep -g at segment duration x fps (-g 60 at 29.97/30,
+      # -g 50 at 25) or the muxer cuts at the next keyframe past the target.
       # suggestedPresentationDelay >= 30 s is patched into the muxer itself
       # (services/earshot/src/Dockerfile, DASH_SPD_FLOOR) - no flag controls it.
-      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -extra_window_size 30 -max_muxing_queue_size 1024 -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v 4M -g 60 -keyint_min 60 -seg_duration 2 -dash_segment_type webm}
+      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -max_muxing_queue_size 1000 -c:v copy}
     volumes:
       - dash-output:/opt/data/dash
     ports:
-      - "8081:80"   # dev only: webtools UI, /stat, /dash debug
+      # Loopback only: docs/ENDPOINTS.md marks this private, and /stat discloses
+      # publisher and client IPs. Compose MERGES `ports` lists instead of
+      # replacing them, so this has to be narrowed here; an override cannot
+      # remove a base mapping.
+      - "127.0.0.1:8081:80"   # dev only: webtools UI, /stat, /dash debug
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
       interval: 10s
@@ -132,8 +148,16 @@ services:
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:-}   # so it can report resolution/bitrate
       - BOT_TOKEN=${BOT_TOKEN:-}         # optional: Telegram alerts (unset = disabled)
       - CHAT_ID=${CHAT_ID:-}
+      # On-demand source: stop the loop after this many minutes with nobody
+      # watching; a visitor restarts it from the player. 0 disables idling and
+      # keeps the stream running around the clock.
+      - TEL_IDLE_STOP_MIN=${TEL_IDLE_STOP_MIN:-10}
+      # Seconds of manifest a player needs before it can start. Must exceed the
+      # player's live delay (30 s), or dash.js fails on the short timeline.
+      - TEL_READY_S=${TEL_READY_S:-35}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # read container health/logs
+      # read health/logs, and start/stop the loop source for on-demand idling
+      - /var/run/docker.sock:/var/run/docker.sock
       - telemetry-data:/data                            # private dashboard + history
       - status-public:/pub                              # curated public status.json
       - dash-output:/dash:ro                            # segment freshness

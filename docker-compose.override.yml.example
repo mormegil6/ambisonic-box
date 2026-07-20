@@ -26,9 +26,18 @@ services:
       # publish :8090 to 0.0.0.0. Replace with this host's 100.x Tailscale IP:
       - "100.64.0.1:8090:8090"
 
-  hoast-player:
-    volumes:
-      # Deployment landing page: the baked-in image page is generic (no author
-      # attribution). This bind-mount swaps in the branded page (Reference/BibTeX
-      # + author copyright). It must fetch /status/status.json (see nginx.conf).
-      - ./custom/index.html:/usr/share/nginx/html/index.html:ro
+  # Deployment landing page: the baked-in image page is generic (no author
+  # attribution). A bind-mount can swap in a branded page (Reference/BibTeX +
+  # author copyright); it must fetch /status/status.json (see nginx.conf).
+  #
+  # Commented out deliberately. ./custom/index.html is gitignored and nothing
+  # creates it, so on a fresh host Docker silently creates an empty DIRECTORY at
+  # that path: nginx then answers / with 403 and the image healthcheck fails
+  # permanently, with no error naming the cause. Create the file FIRST, then
+  # uncomment the three lines below:
+  #   mkdir -p custom
+  #   docker compose cp hoast-player:/usr/share/nginx/html/index.html custom/index.html
+  #
+  # hoast-player:
+  #   volumes:
+  #     - ./custom/index.html:/usr/share/nginx/html/index.html:ro
