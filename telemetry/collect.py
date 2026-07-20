@@ -378,12 +378,43 @@ def live_probe():
             "starting": now - _last_start[0] < 120}
 
 
+def idle_state(**set_):
+    """Read, and optionally update, the persisted idle bookkeeping.
+
+    Persisted rather than held in memory because the counter used to live in a
+    module global: every telemetry restart silently restarted the countdown, so
+    a few redeploys could keep the box encoding indefinitely with nobody
+    watching, and the operator had no way to see how far along the timer was.
+    """
+    try:
+        st = json.loads(STATE.read_text())
+    except Exception:
+        st = {}
+    if set_:
+        for k, v in set_.items():
+            st["_" + k] = v
+        try:
+            STATE.write_text(json.dumps(st))
+        except Exception:
+            pass
+    return st.get("_last_viewer"), st.get("_idle_accum", 0.0)
+
+
 def auto_idle(strm, watchers):
     """Stop the source after IDLE_STOP_MIN with nobody watching. Long hysteresis
     on purpose: a short timer plus a 30 s cold start would flap as viewers come
-    and go, and each cycle costs every waiting visitor that startup wait."""
+    and go, and each cycle costs every waiting visitor that startup wait.
+
+    The decision runs on accumulated confirmed-idle seconds rather than wall
+    clock, so a failed probe neither counts as idleness nor resets progress.
+    last_viewer is tracked separately, purely so the dashboard can say how long
+    it has been since anyone watched.
+    """
+    now = time.time()
+    if watchers is not None and watchers > 0:
+        idle_state(last_viewer=now, idle_accum=0.0)
+        return
     if IDLE_STOP_MIN <= 0 or not strm["publishing"]:
-        _idle_cycles[0] = 0
         return
     if watchers is None:
         # The viewer probe failed, so "nobody is watching" is unproven. Freeze the
@@ -394,13 +425,16 @@ def auto_idle(strm, watchers):
         # stream. Not reset either, so a flapping probe cannot hold the box in a
         # permanent encode.
         return
-    if watchers > 0 or time.time() - _last_start[0] < START_GRACE_S:
-        _idle_cycles[0] = 0
+    if now - _last_start[0] < START_GRACE_S:
+        idle_state(idle_accum=0.0)
         return
-    _idle_cycles[0] += 1
-    if _idle_cycles[0] * INTERVAL >= IDLE_STOP_MIN * 60:
-        _idle_cycles[0] = 0
+    _, accum = idle_state()
+    accum += INTERVAL
+    if accum >= IDLE_STOP_MIN * 60:
+        idle_state(idle_accum=0.0)
         source_stop("idle")
+    else:
+        idle_state(idle_accum=accum)
 
 
 def stream_format():
@@ -611,6 +645,12 @@ def collect_once():
     s["source_running"] = bool(container_named(ps, SOURCE_SVC))
     s["alerts_active"] = evaluate_alerts(s)
     auto_idle(strm, vw.get("any", vw["now"]))
+    # Read back after the decision so the panel shows the current countdown
+    # rather than last cycle's.
+    last_seen, accum = idle_state()
+    s["last_viewer_s"] = round(time.time() - last_seen) if last_seen else None
+    s["idle_stops_in_s"] = (max(0, round(IDLE_STOP_MIN * 60 - accum))
+                            if IDLE_STOP_MIN > 0 and strm["publishing"] else None)
     cc = ";".join(f"{k}:{v}" for k, v in s["viewers"].get("countries", {}).items())
     with open(CSV, "a") as f:
         f.write(f"{s['ts']},{s['viewers']['now']},{s['system']['temp_c']},{1 if strm['live'] else 0},{cc}\n")

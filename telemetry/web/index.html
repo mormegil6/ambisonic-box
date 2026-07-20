@@ -119,6 +119,16 @@ function dur(sec){
   const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
   return (d?d+"d ":"") + (h?h+"h ":"") + m + "m";
 }
+// dur() floors to whole minutes and would read "0m" for anything under one.
+// The idle countdown is watched at second resolution near the end, so it needs
+// its own format. Mirrors dur_short() in collect.py.
+function shortDur(sec){
+  if(sec==null) return "—";
+  sec = Math.max(0, Math.round(sec));
+  if(sec < 60) return sec+"s";
+  if(sec < 3600) return Math.floor(sec/60)+"m";
+  return Math.floor(sec/3600)+"h"+String(Math.floor(sec%3600/60)).padStart(2,"0")+"m";
+}
 function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?col('--amb') : col('--grn'); }
 
 function sparkline(svg, vals, color){
@@ -182,9 +192,23 @@ async function tick(){
   // viewers
   $('viewers').textContent = s.viewers ? s.viewers.now : "—";
   const cc = s.viewers && s.viewers.countries ? Object.entries(s.viewers.countries) : [];
-  $('viewersSub').textContent = cc.length
-    ? cc.map(([k,v])=>k+" "+v).join(" · ")
-    : (s.viewers ? "in last "+s.viewers.window_s+"s" : " ");
+  // With nobody watching, "in last 90s" says nothing useful. How long the box
+  // has been unwatched, and how long until it idles the encoder, both do.
+  let vsub;
+  if (cc.length) {
+    vsub = cc.map(([k,v])=>k+" "+v).join(" · ");
+  } else if (s.viewers && s.viewers.now === 0) {
+    // null means no viewer has been recorded since this state file was created,
+    // which is not the same as a long time ago and should not be shown as one.
+    vsub = s.last_viewer_s != null
+      ? "last seen " + shortDur(s.last_viewer_s) + " ago"
+      : "no viewer recorded yet";
+    if (s.idle_stops_in_s != null && s.source_running)
+      vsub += " · stops in " + shortDur(s.idle_stops_in_s);
+  } else {
+    vsub = s.viewers ? "in last "+s.viewers.window_s+"s" : " ";
+  }
+  $('viewersSub').textContent = vsub;
 
   // temp
   const t = s.system ? s.system.temp_c : null;
