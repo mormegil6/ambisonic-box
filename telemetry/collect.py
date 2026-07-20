@@ -722,7 +722,20 @@ def main():
     # dashboard.html is baked into the image at /app/web/index.html; expose it in DATA
     src = Path("/app/web/index.html")
     if src.exists():
-        (DATA/"index.html").write_text(src.read_text())
+        html = src.read_text()
+        # Optional deployment favicon: the same brand.json the player uses, mounted
+        # here read-only. Absent means the committed generic icon stays, so reusers
+        # get the default without editing a tracked file.
+        try:
+            bp = Path(os.environ.get("TEL_BRAND", "/app/brand.json"))
+            if bp.exists():
+                fav = json.loads(bp.read_text()).get("favicon")
+                if fav:
+                    html = re.sub(r'(<link rel="icon" href=")[^"]*(">)',
+                                  lambda m: m.group(1) + fav + m.group(2), html, count=1)
+        except Exception:
+            pass
+        (DATA/"index.html").write_text(html)
     threading.Thread(target=serve, daemon=True).start()
     while True:
         try:

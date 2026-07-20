@@ -21,6 +21,9 @@ services:
       # mounting /sys/class/thermal would only give a dangling symlink).
       - /:/host/root:ro                        # disk usage of the HOST root (df /)
       - /proc/uptime:/host/uptime:ro           # host uptime (not the container's)
+      # Deployment favicon for the dashboard, from the same brand.json the player
+      # uses. Optional; the committed generic icon shows when this is absent.
+      - ./custom/brand.json:/app/brand.json:ro
     ports:
       # Expose the PRIVATE dashboard only on the Tailscale interface, never
       # publish :8090 to 0.0.0.0. Replace with this host's 100.x Tailscale IP:
