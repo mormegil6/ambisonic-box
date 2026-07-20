@@ -22,6 +22,7 @@ flowchart LR
         VOL[("dash-output<br/>volume")]
         PLAYER["hoast-player<br/>nginx + HOAST360"]
         SHAKA["shaka<br/>packager (profile: tools)"]
+        TELEM["telemetry<br/>dashboard :8090 + alerts"]
     end
 
     OBS -- "RTMP :1935" --> INGEST
@@ -31,6 +32,8 @@ flowchart LR
     VOL --> PLAYER
     SHAKA -. "VOD / lip-sync packaging" .-> VOL
     PLAYER -- "HTTP :8080" --> VIEWER
+    VOL -. "segment freshness" .-> TELEM
+    TELEM -. "curated status.json" .-> PLAYER
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
@@ -44,6 +47,7 @@ transcode onward is VP9 + 16-ch Opus in WebM. Audio is never downmixed:
 | `earshot` | transcode to 16-ch Opus + VP9, live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
+| `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
 | `shaka` | Shaka Packager for VOD / lip-sync packaging; compose profile `tools`, manual runs only | - |
 
 ## Requirements
@@ -159,8 +163,18 @@ works; realtime VP9 encoding is the bottleneck. If the Pi cannot keep up, set
 audio stays Opus/WebM), or use a bigger machine; the Pi target is a
 nice-to-have, not a requirement.
 
+**Per-host overrides:** deployment-specific settings (bind the telemetry
+dashboard to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry
+service, Telegram tokens, a branded landing page) go in
+`docker-compose.override.yml`, which Compose loads automatically and which is
+gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example)
+and adjust. The base stack runs without it.
+
 ## Documentation
 
+- [docs/PAPER-NOTES.md](docs/PAPER-NOTES.md): measured results from the live path (transcode thermals, codec constraints, 360 complexity, AV1 viability)
+- [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
+- [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): full segment-duration / lip-sync study
 - [docs/NDI.md](docs/NDI.md): Quest 3 / Twinkle NDI output extension (design only)
