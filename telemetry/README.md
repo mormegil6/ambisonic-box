@@ -19,7 +19,9 @@ deployment gets it for free. Three outputs from one small stdlib collector:
 ## How it reads the stack
 
 - **container health** and the **player access log** — via the mounted docker
-  socket (`docker ps --format json`, `docker logs`, `docker exec`). Read-only.
+  socket. Read-write, not read-only: besides `docker ps --format json`,
+  `docker logs` and `docker exec`, on-demand idling runs `docker start` and
+  `docker stop` on the loop source.
 - **stream liveness** — earshot's `/stat` (`<publishing/>`, `<nclients>`) plus
   the freshness of the newest segment in the `dash-output` volume.
 - **viewers + countries** — unique public client IPs on `/dash/` in the last
@@ -44,7 +46,11 @@ deployment gets it for free. Three outputs from one small stdlib collector:
 
 ## Volumes
 
-- `/var/run/docker.sock:ro` — container health/logs (read-only)
+- `/var/run/docker.sock` — container health/logs, plus `docker start` /
+  `docker stop` of the loop source for on-demand idling, so it is mounted
+  read-write. This grants the collector full docker API access, i.e. root on the
+  host; adding a `:ro` suffix would not change that, since it applies to the
+  socket inode and not to the requests sent through it
 - `telemetry-data` → `/data` — dashboard html + `stats.json` + `viewers.csv`
   history + alert state (private; only this service mounts it)
 - `status-public` → `/pub` — the one curated `status.json`, shared read-only into

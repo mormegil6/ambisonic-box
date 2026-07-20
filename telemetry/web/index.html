@@ -36,6 +36,8 @@
         border-radius:7px;padding:6px 11px;font-size:13px;font-family:var(--mono)}
   .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
   .kv div .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  /* nclients counts RTMP connections, not viewers, and reads 2 whenever healthy */
+  .kv div .k .hint{text-transform:none;letter-spacing:0;opacity:.65}
   .kv div .v{font-size:15px;margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:6px}
   .bar > i{display:block;height:100%;border-radius:3px}
@@ -73,8 +75,9 @@
     <h2>Stream detail</h2>
     <div class="kv">
       <div><div class="k">Resolution</div><div class="v" id="res">—</div></div>
-      <div><div class="k">Bitrate</div><div class="v" id="br">—</div></div>
-      <div><div class="k">RTMP clients</div><div class="v" id="nclients">—</div></div>
+      <div><div class="k">Bitrate / viewer</div><div class="v" id="br">—</div></div>
+      <div><div class="k">Egress (all viewers)</div><div class="v" id="eg">—</div></div>
+      <div><div class="k">RTMP links <span class="hint">(publisher + transcoder, expect 2)</span></div><div class="v" id="nclients">—</div></div>
       <div><div class="k">Segment age</div><div class="v" id="segage">—</div></div>
     </div>
   </section>
@@ -82,7 +85,7 @@
   <section>
     <h2>System</h2>
     <div class="kv">
-      <div><div class="k">Load (1m)</div><div class="v" id="load">—</div></div>
+      <div><div class="k">Load (1m) <span class="hint">(runnable procs / cores; &lt; cores is healthy)</span></div><div class="v" id="load">—</div></div>
       <div><div class="k">Memory</div><div class="v" id="mem">—</div><div class="bar"><i id="memBar"></i></div></div>
       <div><div class="k">Disk</div><div class="v" id="disk">—</div><div class="bar"><i id="diskBar"></i></div></div>
       <div><div class="k">Uptime</div><div class="v" id="uptime">—</div></div>
@@ -204,6 +207,7 @@ async function tick(){
   // stream detail
   $('res').textContent = s.resolution||"—";
   $('br').textContent  = s.bitrate||"—";
+  $('eg').textContent  = s.egress||"—";
   $('nclients').textContent = s.stream ? s.stream.nclients : "—";
   const age = s.stream ? s.stream.segment_age_s : null;
   $('segage').textContent = age==null ? "—" : age+"s";

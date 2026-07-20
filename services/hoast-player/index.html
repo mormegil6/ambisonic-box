@@ -52,7 +52,7 @@
               color:var(--accent);font-weight:700;margin-bottom:11px;font-family:var(--sans)}
       .byline{margin:9px 0 0;font-size:14px;color:var(--body)} .byline a{font-weight:500}
 
-      .player{margin:8px 0 30px;border-radius:8px;overflow:hidden;background:#000;box-shadow:var(--shadow)}
+      .player{position:relative;margin:8px 0 30px;border-radius:8px;overflow:hidden;background:#000;box-shadow:var(--shadow);min-height:220px}
       .video-js{width:100%}
       .hint{color:var(--body);font-size:13.5px;margin:-20px 0 34px;opacity:.85}
 
@@ -91,7 +91,31 @@
       details.status>summary::-webkit-details-marker{display:none}
       details.status>summary::before{content:"\25B8";color:var(--body);font-size:12px}
       details.status[open]>summary::before{content:"\25BE"}
-      details.status>summary .live-dot{width:9px;height:9px;border-radius:50%;background:#b9bfc7;margin-left:auto}
+      details.status>summary .live-dot{width:9px;height:9px;border-radius:50%;background:#b9bfc7}
+
+      /* videojs-xr sets background-size on the big play button but leaves
+         background-repeat at its default, so the square 360 glyph tiles twice
+         across the wider button and renders as two icons. */
+      .vjs-big-vr-play-button.vjs-big-play-button{background-repeat:no-repeat;background-position:center}
+
+      /* On-demand gate: shown in place of the player while the source is idle or
+         still spinning up. */
+      .gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+             justify-content:center;gap:14px;text-align:center;padding:24px;background:#000;color:#fff}
+      /* display:flex above outranks the UA rule for [hidden], so without this the
+         overlay stays painted over the player after the gate is dismissed. */
+      .gate[hidden]{display:none}
+      .gate p{margin:0;max-width:42ch;font-size:15px;line-height:1.5;color:#d7dbe0}
+      .gate .sub{font-size:13px;color:#9aa3ad}
+      .gate button{font:inherit;font-weight:600;cursor:pointer;padding:11px 22px;border-radius:8px;
+             border:1px solid var(--accent);background:var(--accent);color:#06231f}
+      .gate button:hover{filter:brightness(1.08)}
+      .gate button[disabled]{opacity:.6;cursor:default}
+      .dots span{animation:blink 1.4s infinite both}
+      .dots span:nth-child(2){animation-delay:.2s}
+      .dots span:nth-child(3){animation-delay:.4s}
+      @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){.dots span{animation:none;opacity:1}}
       .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:2px 0 26px}
       .status-grid .cell{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 15px;box-shadow:var(--shadow)}
       .status-grid .cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--body)}
@@ -110,7 +134,7 @@
       <div id="overlay">
         <div id="topfill"></div>
         <div id="headers">
-          <span class="kicker">Live 360&deg; &middot; 3rd-order Ambisonics</span>
+          <span class="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order Ambisonics</span></span>
           <h1><span id="h1">HOA 360&deg; Livestream</span></h1>
           <p id="hoast-text">A spatial-audio 360&deg; video stream: third-order Ambisonic sound (16 channels)
              rotated to follow your view and binauralized in real time, delivered live over MPEG-DASH.</p>
@@ -124,21 +148,27 @@
               <a href='https://videojs.com/html5-video-support/' target='_blank' rel="noopener">supports HTML5 video</a>.
             </p>
         </video-js>
-      </div>
-      <p class="hint">Drag to look around; use headphones for the spatial audio. If the stream is offline the player waits for the next broadcast.</p>
-
-      <section>
-        <h2>About</h2>
-        <p class="lead">A Docker toolchain for end-to-end immersive broadcasting: live 360&deg; video with
-           Higher-Order Ambisonic audio, built on Envelop Earshot, Shaka Packager and the HOAST360 player.</p>
-        <div class="specs">
-          <div class="card"><div class="k">Spatial audio</div><div class="v">3rd-order Ambisonics <small>16 ch &middot; ACN/SN3D</small></div></div>
-          <div class="card"><div class="k">Video</div><div class="v">360&deg; VP9 <small>equirectangular</small></div></div>
-          <div class="card"><div class="k">Audio codec</div><div class="v">Opus <small>16-channel</small></div></div>
-          <div class="card"><div class="k">Delivery</div><div class="v">MPEG-DASH <small>live, WebM</small></div></div>
-          <div class="card"><div class="k">Deployment</div><div class="v">Docker <small>containerised toolchain</small></div></div>
+        <div class="gate" id="gate" hidden>
+          <div id="gateIdle" hidden>
+            <p>The stream is idle. It stops automatically when nobody is watching, so the server
+               is not encoding around the clock.</p>
+            <p><button id="gateStart" type="button">Start the stream</button></p>
+          </div>
+          <div id="gateWait" hidden>
+            <p>Starting the stream<span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+            <p class="sub" id="gateWaitSub">This usually takes about 45 seconds.</p>
+          </div>
+          <div id="gateReady" hidden>
+            <p>The stream is ready.</p>
+            <p><button id="gateWatch" type="button">Watch now</button></p>
+          </div>
+          <div id="gateErr" hidden>
+            <p id="gateErrMsg">The stream could not be started. It may already be shutting down; try again shortly.</p>
+            <p><button id="gateRetry" type="button">Try again</button></p>
+          </div>
         </div>
-      </section>
+      </div>
+      <p class="hint">Drag to look around; use headphones for the spatial audio.</p>
 
       <details class="status">
         <summary>Server status <span class="live-dot" id="stDot"></span></summary>
@@ -150,6 +180,20 @@
           <div class="cell"><div class="k">Server uptime</div><div class="v" id="stUp">&hellip;</div></div>
         </div>
       </details>
+
+      <section>
+        <h2>About</h2>
+        <p class="lead">A Docker toolchain for end-to-end immersive broadcasting: live 360&deg; video with
+           Higher-Order Ambisonic audio, built on Envelop Earshot, Shaka Packager and the HOAST360 player.</p>
+        <div class="specs">
+          <div class="card"><div class="k">Spatial audio</div><div class="v"><span id="stSpatial">3rd-order Ambisonics</span> <small><span id="stCh">16</span> ch<span id="stConv"> &middot; ACN/SN3D</span></small></div></div>
+          <div class="card"><div class="k">Video</div><div class="v"><span id="stCodec">360&deg;</span> <small>equirectangular</small></div></div>
+          <div class="card"><div class="k">Audio codec</div><div class="v"><span id="stACodec">Opus</span> <small><span id="stCh2">16</span>-channel</small></div></div>
+          <div class="card"><div class="k">Delivery</div><div class="v">MPEG-DASH <small>live, WebM</small></div></div>
+          <div class="card"><div class="k">Deployment</div><div class="v">Docker <small>containerised toolchain</small></div></div>
+        </div>
+      </section>
+
     </div>
 
     <footer><div class="wrap">
@@ -162,8 +206,176 @@
     <script src="./dist/hoast360.bundle.js"></script>
     <script>
         var hoast360 = new HOAST360();
-        function init() {
+
+        // The player is initialised only once the manifest advertises enough
+        // media. dash.js is pinned to a 30 s live delay and throws
+        // "Cannot read properties of null (reading 'range')" on a shorter
+        // timeline, never recovering. Measured on a cold start: fresh segments
+        // at t+6 s, but playable only from ~t+43 s. So we gate on /api/live's
+        // `ready`, which also covers a visitor arriving while the stream is down.
+        var gateStarted = false, gateTimer = null, probeOk = false;
+        // Consecutive /api/live failures tolerated before the page acts on them.
+        // A rolling restart of telemetry produces a 502 window of a few seconds.
+        var probeFails = 0, PROBE_FALLBACK = 3;
+
+        // The badge and dot are driven from this probe rather than the 60 s
+        // status file: on-demand makes the stream's state change in seconds, and
+        // a minute of lag would show LIVE over an idle player.
+        function setBadge(p) {
+            probeOk = true;
+            var badge = document.getElementById('stLive'), dot = document.getElementById('stDot');
+            var starting = p.live || p.source_running || p.starting;
+            if (badge) {
+                badge.textContent = p.ready ? 'LIVE' : (starting ? 'starting' : 'idle');
+                badge.className = 'stat-badge ' + (p.ready ? 'sb-live' : 'sb-off');
+            }
+            if (dot) {
+                dot.style.background = p.ready
+                    ? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+                    : '#b9bfc7';
+            }
+        }
+
+        function schedule(ms) {
+            if (gateTimer) clearInterval(gateTimer);
+            gateTimer = setInterval(pollGate, ms);
+        }
+
+        function show(id) {
+            ['gateIdle', 'gateWait', 'gateReady', 'gateErr'].forEach(function (k) {
+                var e = document.getElementById(k); if (e) e.hidden = (k !== id);
+            });
+            var g = document.getElementById('gate'); if (g) g.hidden = false;
+        }
+
+        // The server's countdown drops in ~5 s steps, because the manifest grows
+        // one audio segment at a time. Shown raw it looks frozen, so the value is
+        // interpolated locally between polls and only resynced when the server's
+        // estimate is lower than where we have ticked to.
+        var waitLeft = null, waitTicker = null, waitStartedAt = 0;
+
+        function tickWait() {
+            var sub = document.getElementById('gateWaitSub');
+            if (!sub) return;
+            if (waitLeft == null) { sub.textContent = 'This usually takes about 45 seconds.'; return; }
+            waitLeft = Math.max(0, waitLeft - 1);
+            sub.textContent = waitLeft > 0
+                ? 'About ' + waitLeft + ' second' + (waitLeft === 1 ? '' : 's') + ' to go.'
+                : 'Almost there.';
+        }
+
+        function startWaiting() {
+            if (waitTicker) return;
+            waitStartedAt = Date.now();
+            waitTicker = setInterval(tickWait, 1000);
+        }
+
+        function stopWaiting() {
+            if (waitTicker) { clearInterval(waitTicker); waitTicker = null; }
+            waitLeft = null;
+        }
+
+        function beginPlayback() {
+            if (gateStarted) return;
+            gateStarted = true;
+            stopWaiting();
+            schedule(10000);        // keep probing, slower: the badge must stay honest
+            var g = document.getElementById('gate'); if (g) g.hidden = true;
             hoast360.initialize("/dash/hoast_demo.mpd", "/irs/", 3);
+        }
+
+        function pollGate() {
+            fetch('/api/live', { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (p) {
+                    setBadge(p);
+                    if (gateStarted) return;
+                    if (p.ready) {
+                        stopWaiting();
+                        // Hand off on a fresh click rather than auto-starting. After a
+                        // 40 s wait the browser may no longer honour play(), and a
+                        // silently black player reads as a failure.
+                        if (waitStartedAt) { show('gateReady'); return; }
+                        return beginPlayback();     // already live on arrival: no wait, no extra click
+                    }
+                    if (p.live || p.source_running || p.starting) {
+                        show('gateWait');
+                        startWaiting();
+                        if (p.ready_in_s != null && (waitLeft == null || p.ready_in_s < waitLeft))
+                            waitLeft = p.ready_in_s;
+                        // Genuinely stuck: segments should appear within ~15 s of a start.
+                        if (Date.now() - waitStartedAt > 150000) {
+                            stopWaiting();
+                            var msg = document.getElementById('gateErrMsg');
+                            if (msg) msg.textContent = 'The stream is taking much longer than usual to start. It may have failed to come up.';
+                            show('gateErr');
+                        }
+                    } else {
+                        stopWaiting();
+                        show(p.on_demand ? 'gateIdle' : 'gateErr');
+                    }
+                })
+                .catch(function () {
+                    if (gateStarted) return;
+                    // Tolerate one dropped poll before reacting; a single blip is
+                    // not worth a panel change at a 3 s interval.
+                    window.gateProbeFails = (window.gateProbeFails || 0) + 1;
+                    if (window.gateProbeFails < 2) return;
+                    if (probeOk) {
+                        // It answered before, so telemetry is down rather than absent.
+                        // Starting playback here would hide the gate, and with it the
+                        // only control that can bring an idle stream back up, leaving
+                        // the visitor pointed at a 404 manifest with no way out.
+                        var m = document.getElementById('gateErrMsg');
+                        if (m) m.textContent = 'The server status service is not responding, so the stream cannot be started from here just now. It usually comes back within a minute.';
+                        stopWaiting();
+                        show('gateErr');
+                        return;
+                    }
+                    // Never answered at all: most likely the stack is running without
+                    // telemetry, so fall back to unconditional playback as before.
+                    beginPlayback();
+                });
+        }
+
+        function requestStart(btn) {
+            if (btn) btn.disabled = true;
+            show('gateWait');
+            startWaiting();
+            fetch('/api/start', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (r) { if (!r.ok) show('gateErr'); })
+                .catch(function () { show('gateErr'); })
+                .then(function () { if (btn) btn.disabled = false; });
+        }
+
+        function init() {
+            // Probed in the HOAST360 constructor, before anything is fetched. Acting
+            // on it here rather than inside initialize() is the point: /api/start sits
+            // behind the gate, so a visitor who can never decode the stream would
+            // otherwise ask the server for a real encode and wait 45 s to find out.
+            if (!hoast360.opusSupport) {
+                var msg = document.getElementById('gateErrMsg');
+                if (msg) msg.textContent = 'This browser cannot play the stream. It needs 16-channel Opus over Media Source Extensions, which no browser on iOS or iPadOS provides; they all share WebKit, so switching browsers there will not help. Use Firefox or a Chromium-based browser on desktop or Android.';
+                // Nothing to retry: the limitation is the engine, not the stream.
+                var retryBtn = document.getElementById('gateRetry');
+                if (retryBtn && retryBtn.parentNode) retryBtn.parentNode.hidden = true;
+                show('gateErr');
+                return;
+            }
+
+            var start = document.getElementById('gateStart');
+            if (start) start.addEventListener('click', function () { requestStart(start); });
+
+            var retry = document.getElementById('gateRetry');
+            if (retry) retry.addEventListener('click', function () { requestStart(retry); });
+
+            // Fresh user gesture, so play() is honoured however long the wait was.
+            var watch = document.getElementById('gateWatch');
+            if (watch) watch.addEventListener('click', function () { beginPlayback(); });
+
+            pollGate();
+            schedule(3000);
         }
         try { document.getElementById('yr').textContent = new Date().getFullYear(); } catch(e){}
     </script>
@@ -173,13 +385,29 @@
         function set(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
         function poll(){
           fetch("/status/status.json?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
-            var live=!!s.live, badge=document.getElementById('stLive');
-            badge.textContent = live?"LIVE":(s.publishing?"connecting":"offline");
-            badge.className = "stat-badge "+(live?"sb-live":"sb-off");
-            document.getElementById('stDot').style.background = live?getComputedStyle(document.documentElement).getPropertyValue('--accent').trim():"#b9bfc7";
+            // Badge and dot come from /api/live when that probe is reachable; this
+            // is only the fallback for a deployment running without telemetry.
+            if(!window.probeOk){
+              var live=!!s.live, badge=document.getElementById('stLive');
+              badge.textContent = live?"LIVE":(s.publishing?"connecting":"offline");
+              badge.className = "stat-badge "+(live?"sb-live":"sb-off");
+              document.getElementById('stDot').style.background = live?getComputedStyle(document.documentElement).getPropertyValue('--accent').trim():"#b9bfc7";
+            }
             var cc=s.countries||{}, ccs=Object.keys(cc).map(function(k){return k+" "+cc[k];}).join(" · ");
             set('stViewers',(s.viewers||0)+(ccs?"  ("+ccs+")":""));
             set('stRes',s.resolution||"-"); set('stBr',s.bitrate||"-"); set('stUp',dur(s.uptime_s));
+            // Spec tiles track the manifest, so a stream of a different ambisonic
+            // order or codec pointed at this server describes itself correctly.
+            if(s.video_codec) set('stCodec',"360° "+s.video_codec);
+            if(s.audio_codec) set('stACodec',s.audio_codec);
+            if(s.audio_channels){
+              set('stCh',s.audio_channels); set('stCh2',s.audio_channels);
+              // Only a perfect-square channel count is a full ambisonic set, so
+              // anything else drops the order claim and the ACN/SN3D note.
+              set('stSpatial', s.spatial_audio || "Channel-based");
+              set('stConv', s.spatial_audio ? " · ACN/SN3D" : "");
+              set('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
+            }
           }).catch(function(){ set('stViewers',"unavailable"); });
         }
         poll(); setInterval(poll, 15000);
