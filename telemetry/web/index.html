@@ -58,6 +58,13 @@
   svg{display:block}
   footer{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:18px;text-align:center}
   .stale{color:var(--amb)!important}
+  .ctl{display:flex;align-items:center;gap:10px;margin:12px 0;flex-wrap:wrap}
+  .ctl-lbl{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.7px}
+  .btn{font:600 13px var(--sans);cursor:pointer;padding:6px 16px;border-radius:7px;
+       border:1px solid var(--line);background:var(--panel2);color:var(--txt)}
+  .btn:hover{border-color:var(--grn)} .btn:disabled{opacity:.5;cursor:default}
+  .btn-stop:hover{border-color:var(--red)}
+  .ctl-msg{color:var(--dim);font-size:12px;font-family:var(--mono)}
 </style>
 </head>
 <body>
@@ -69,6 +76,17 @@
   </header>
 
   <div class="alertbar" id="alertbar"></div>
+
+  <!-- Loop-source control. This page is bound to localhost/VPN only, so a
+       destructive control is safe here; it must never appear on the public
+       player. Use Stop before publishing from OBS so the demo loop does not
+       collide with your stream. -->
+  <div class="ctl">
+    <span class="ctl-lbl">Loop source</span>
+    <button id="btnStart" class="btn">Start</button>
+    <button id="btnStop" class="btn btn-stop">Stop</button>
+    <span class="ctl-msg" id="ctlMsg"></span>
+  </div>
 
   <div class="grid">
     <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
@@ -312,6 +330,21 @@ async function tick(){
   $('pkTemp').textContent    = sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
   $('pkLive').textContent    = dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'), win);
 }
+// Loop-source control. POSTs to the private endpoints on this port; /api/stop
+// is only reachable here, never proxied to the public player.
+function wireCtl(id, path, verb){
+  var b = $(id); if(!b) return;
+  b.addEventListener('click', function(){
+    b.disabled = true; $('ctlMsg').textContent = verb + '...';
+    fetch(path, {method:'POST'}).then(r=>r.json())
+      .then(r=>{ $('ctlMsg').textContent = r.ok!==false ? (verb+': '+(r.state||'ok')) : (verb+' failed: '+(r.error||'')); tick(); })
+      .catch(e=>{ $('ctlMsg').textContent = verb+' failed: '+e.message; })
+      .then(()=>{ setTimeout(function(){ b.disabled=false; }, 1500); });
+  });
+}
+wireCtl('btnStart', '/api/start', 'start');
+wireCtl('btnStop', '/api/stop', 'stop');
+
 tick(); setInterval(tick, 10000);
 </script>
 </body>
