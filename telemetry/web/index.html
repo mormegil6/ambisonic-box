@@ -50,6 +50,9 @@
   .spark{display:flex;gap:22px;flex-wrap:wrap}
   .spark figure{margin:0}
   .spark figcaption{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+  /* peak/summary readout lives on the caption row, never inside the plot where
+     the trace can rise over it and hide it */
+  .spark figcaption .pk{text-transform:none;letter-spacing:0;font-family:var(--mono);opacity:.85}
   svg{display:block}
   footer{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:18px;text-align:center}
   .stale{color:var(--amb)!important}
@@ -101,9 +104,9 @@
   <section>
     <h2>History <span class="hist-win" id="histWindow"></span></h2>
     <div class="spark">
-      <figure><figcaption>Viewers</figcaption><svg id="spViewers" width="320" height="52"></svg></figure>
-      <figure><figcaption>CPU temp</figcaption><svg id="spTemp" width="320" height="52"></svg></figure>
-      <figure><figcaption>Stream live</figcaption><svg id="spLive" width="320" height="52"></svg></figure>
+      <figure><figcaption>Viewers <span class="pk" id="pkViewers"></span></figcaption><svg id="spViewers" width="320" height="52"></svg></figure>
+      <figure><figcaption>CPU temp <span class="pk" id="pkTemp"></span></figcaption><svg id="spTemp" width="320" height="52"></svg></figure>
+      <figure><figcaption>Stream live <span class="pk" id="pkLive"></span></figcaption><svg id="spLive" width="320" height="52"></svg></figure>
     </div>
   </section>
 
@@ -136,6 +139,18 @@ function shortDur(sec){
   if(sec < 3600) return Math.floor(sec/60)+"m";
   return Math.floor(sec/3600)+"h"+String(Math.floor(sec%3600/60)).padStart(2,"0")+"m";
 }
+// A human-facing window: rounded to a clean value ("3h", not "2h58m", which
+// reads as spuriously precise and prompts "why not 3h") but still derived from
+// the measured span, so a telemetry outage that stretches the window shows its
+// real length rather than a fixed label that would then be a lie.
+function friendlyWindow(sec){
+  if(sec==null) return "";
+  const q = Math.max(1, Math.round(sec/900)) * 900;   // nearest 15 min
+  const h = Math.floor(q/3600), m = Math.round(q%3600/60);
+  if(h && !m) return h+"h";
+  if(!h) return m+"m";
+  return h+"h "+m+"m";
+}
 function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?col('--amb') : col('--grn'); }
 
 // A 0/1 series drawn as a line, labelled "max 1", says nothing. As blocks it
@@ -153,27 +168,22 @@ function dutyPlot(svg, vals, color, ofWindow){
     known++; if(!v) return;
     on++;
     const r=document.createElementNS(ns,"rect");
-    // top band left clear so the percentage label does not sit on the blocks,
-    // matching where the other two plots put theirs
-    r.setAttribute("x",(P+i*bw).toFixed(2)); r.setAttribute("y",P+12);
-    r.setAttribute("width",Math.max(bw,0.8).toFixed(2)); r.setAttribute("height",H-2*P-12);
+    // full height now that the percentage moved to the caption row
+    r.setAttribute("x",(P+i*bw).toFixed(2)); r.setAttribute("y",P);
+    r.setAttribute("width",Math.max(bw,0.8).toFixed(2)); r.setAttribute("height",H-2*P);
     r.setAttribute("fill",color); r.setAttribute("opacity","0.5");
     svg.append(r);
   });
-  const label=document.createElementNS(ns,"text");
-  label.setAttribute("x", W-P); label.setAttribute("y", 12); label.setAttribute("text-anchor","end");
-  label.setAttribute("fill", col('--dim')); label.setAttribute("font-size","10");
-  label.setAttribute("font-family", col('--mono'));
-  label.textContent = known
-    ? "live " + Math.round(on*100/known) + "%" + (ofWindow ? " of " + ofWindow : "")
-    : "no data";
-  svg.append(label);
+  // returned to the caller for the caption row, not drawn in the plot. The
+  // window is already stated in the panel heading, so the caption need not
+  // repeat it; ofWindow is kept as an argument in case the heading is dropped.
+  return known ? "live " + Math.round(on*100/known) + "%" : "no data";
 }
 
 function sparkline(svg, vals, color){
   svg.innerHTML="";
   const pts = vals.filter(v=>v!=null);
-  if(pts.length<2) return;
+  if(pts.length<2) return "";
   const W=+svg.getAttribute("width"), H=+svg.getAttribute("height"), P=4;
   let lo=Math.min(...pts), hi=Math.max(...pts); if(hi===lo){hi=lo+1;}
   const n=vals.length;
@@ -194,12 +204,8 @@ function sparkline(svg, vals, color){
   if(last!=null){ const c=document.createElementNS(ns,"circle");
     c.setAttribute("cx",x(n-1)); c.setAttribute("cy",y(last)); c.setAttribute("r","2.4");
     c.setAttribute("fill",color); svg.append(c);
-    const label=document.createElementNS(ns,"text");
-    label.setAttribute("x", W-P); label.setAttribute("y", 12); label.setAttribute("text-anchor","end");
-    label.setAttribute("fill", col('--dim')); label.setAttribute("font-size","10");
-    label.setAttribute("font-family", col('--mono')); label.textContent = "max "+Math.round(hi);
-    svg.append(label);
   }
+  return "max "+Math.round(hi);   // for the caption row, not the plot
 }
 
 async function tick(){
@@ -295,14 +301,14 @@ async function tick(){
   let win = "";
   if(h.length > 1){
     const t0 = Date.parse(h[0].t), t1 = Date.parse(h[h.length-1].t);
-    if(isFinite(t0) && isFinite(t1) && t1 > t0) win = shortDur((t1 - t0)/1000);
+    if(isFinite(t0) && isFinite(t1) && t1 > t0) win = friendlyWindow((t1 - t0)/1000);
   }
   $('histWindow').textContent = win ? "last " + win : "";
-  sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
-  sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
-  // The percentage carries its own denominator. "live 3%" next to a heading that
-  // happens to say 2h58m still leaves the reader to connect the two.
-  dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'), win);
+  // Each plotter returns its summary; it goes on the caption row so the trace
+  // can never rise over it, which is what buried "max 54" inside the temp plot.
+  $('pkViewers').textContent = sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
+  $('pkTemp').textContent    = sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
+  $('pkLive').textContent    = dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'), win);
 }
 tick(); setInterval(tick, 10000);
 </script>
