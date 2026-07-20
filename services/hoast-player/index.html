@@ -3,6 +3,7 @@
 
 <head>
     <title>HOA 360&deg; Livestream</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23008277'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M16 1a15 15 0 0 1 0 30' fill='none' stroke='%23fff' stroke-width='2' opacity='.5'/%3E%3C/svg%3E">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -78,6 +79,10 @@
       details.cite[open]>summary::before{content:"\25BE "}
       pre.bib{margin:10px 0 0;background:#1f2430;color:#e6edf3;border-radius:8px;padding:14px 16px;
               overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+      .bibwrap{position:relative}
+      .bibcopy{position:absolute;top:8px;right:8px;font:inherit;font-size:11px;padding:3px 9px;border-radius:5px;
+               border:1px solid var(--line);background:var(--card);color:var(--accent);cursor:pointer;opacity:.85}
+      .bibcopy:hover{opacity:1;border-color:var(--accent)}
 
       footer{border-top:1px solid var(--line);margin-top:10px;padding:28px 0 48px;color:var(--body);font-size:13.5px}
       footer a{color:var(--accent);text-decoration:none} footer a:hover{text-decoration:underline}
@@ -221,13 +226,45 @@
           var lead = document.getElementById('aboutLead');
           if (b.lead && lead) lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
-          if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; }
+          if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
           if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
         })
         .catch(function () {});
+
+      // Add a Copy button to each BibTeX block. navigator.clipboard needs a
+      // secure context, so fall back to execCommand for plain-http (Tailscale).
+      function addBibCopy(root) {
+        (root || document).querySelectorAll('pre.bib').forEach(function (pre) {
+          if (pre.dataset.copyReady) return;
+          pre.dataset.copyReady = '1';
+          var wrap = document.createElement('div');
+          wrap.className = 'bibwrap';
+          pre.parentNode.insertBefore(wrap, pre);
+          wrap.appendChild(pre);
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'bibcopy'; btn.textContent = 'Copy';
+          btn.addEventListener('click', function () {
+            var text = pre.textContent, mark = function () {
+              btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText)
+              navigator.clipboard.writeText(text).then(mark, function () { bibFallback(text); mark(); });
+            else { bibFallback(text); mark(); }
+          });
+          wrap.appendChild(btn);
+        });
+      }
+      function bibFallback(text) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch (e) {}
+      }
     </script>
-    <script src="./dist/hoast360.bundle.js?v=rf4"></script>
+    <script src="./dist/hoast360.bundle.js?v=rf5"></script>
     <script>
         var hoast360 = new HOAST360();
 
