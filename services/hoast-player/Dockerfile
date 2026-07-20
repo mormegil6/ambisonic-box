@@ -3,13 +3,21 @@
 #   docker build -f services/hoast-player/Dockerfile .
 FROM nginx:1.30.2-alpine
 
-COPY services/hoast-player/nginx.conf /etc/nginx/conf.d/default.conf
+# 00-logformat.conf defines the `cf` log_format (real viewer IP + country from
+# Cloudflare headers) that nginx.conf's access_log references; it must load first
+# (conf.d is included alphabetically), hence the 00- prefix.
+COPY services/hoast-player/00-logformat.conf /etc/nginx/conf.d/00-logformat.conf
+COPY services/hoast-player/nginx.conf         /etc/nginx/conf.d/default.conf
 
 COPY services/hoast-player/index.html /usr/share/nginx/html/index.html
+COPY services/hoast-player/fonts/     /usr/share/nginx/html/fonts/
 COPY hoast360/dist/      /usr/share/nginx/html/dist/
 COPY hoast360/irs/       /usr/share/nginx/html/irs/
 
-# /usr/share/nginx/html/dash is the shared dash-output volume (see docker-compose.yml)
+# /usr/share/nginx/html/dash   is the shared dash-output volume (live segments)
+# /usr/share/nginx/html/status is the shared status-public volume (telemetry
+#   writes status.json there; the page fetches /status/status.json). Both are
+#   declared in docker-compose.yml.
 
 EXPOSE 80
 
