@@ -52,7 +52,11 @@
               color:var(--accent);font-weight:700;margin-bottom:11px;font-family:var(--sans)}
       .byline{margin:9px 0 0;font-size:14px;color:var(--body)} .byline a{font-weight:500}
 
-      .player{position:relative;margin:8px 0 30px;border-radius:8px;overflow:hidden;background:#000;box-shadow:var(--shadow);min-height:220px}
+      .player{position:relative;margin:8px 0 30px;border-radius:8px;overflow:hidden;background:#000;box-shadow:var(--shadow)}
+      /* Reserve gate height only while the idle/starting gate is visible. A fixed
+         min-height letterboxes the 2:1 video with a black bar under the controls
+         on narrow phone viewports, where the fluid video is shorter than 220px. */
+      .player:has(#gate:not([hidden])){min-height:220px}
       .video-js{width:100%}
       .hint{color:var(--body);font-size:13.5px;margin:-20px 0 34px;opacity:.85}
 
@@ -199,7 +203,7 @@
            Orchestrated as a containerised <a href="https://www.docker.com/" target="_blank" rel="noopener">Docker</a> stack.</div>
     </div></footer>
 
-    <script src="./dist/hoast360.bundle.js?v=rf3"></script>
+    <script src="./dist/hoast360.bundle.js?v=rf4"></script>
     <script>
         var hoast360 = new HOAST360();
 

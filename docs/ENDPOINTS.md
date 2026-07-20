@@ -38,6 +38,15 @@ the source needs it. What keeps that safe is this route list, not the mount: if
 you add a third `/api` route here, it must not pass any request-controlled
 string into a docker invocation.
 
+### Player diagnostic flag (`?dbg`)
+
+Appending `?dbg` to the player URL (`<player-public-url>/?dbg`) shows a small
+on-page diagnostic badge: the build tag, live delay, the video element / drawing
+buffer / decoded video-frame dimensions, aspect, and `gl.MAX_TEXTURE_SIZE`. It is
+a read-only overlay for debugging render and sizing issues, and because it needs
+no dev console it is the way to read that state on a phone. It does not affect
+playback and is off by default.
+
 ## What telemetry itself polls (the monitoring inputs)
 
 - `earshot /stat` → `<publishing/>`, `<nclients>` — is a stream live?
