@@ -36,8 +36,12 @@
         border-radius:7px;padding:6px 11px;font-size:13px;font-family:var(--mono)}
   .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
   .kv div .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
-  /* nclients counts RTMP connections, not viewers, and reads 2 whenever healthy */
-  .kv div .k .hint{text-transform:none;letter-spacing:0;opacity:.65}
+  /* Hints explain a figure whose label alone misleads (nclients counts RTMP
+     connections rather than viewers; load only means something against the core
+     count). Own line so the label stays scannable, and a reserved min-height on
+     every label so hinted and unhinted tiles keep their values aligned. */
+  .kv div .k{min-height:2.6em}
+  .kv div .k .hint{display:block;text-transform:none;letter-spacing:0;opacity:.65;font-size:10.5px}
   .kv div .v{font-size:15px;margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:6px}
   .bar > i{display:block;height:100%;border-radius:3px}
@@ -97,6 +101,7 @@
     <div class="spark">
       <figure><figcaption>Viewers</figcaption><svg id="spViewers" width="320" height="52"></svg></figure>
       <figure><figcaption>CPU temp</figcaption><svg id="spTemp" width="320" height="52"></svg></figure>
+      <figure><figcaption>Stream live</figcaption><svg id="spLive" width="320" height="52"></svg></figure>
     </div>
   </section>
 
@@ -130,6 +135,36 @@ function shortDur(sec){
   return Math.floor(sec/3600)+"h"+String(Math.floor(sec%3600/60)).padStart(2,"0")+"m";
 }
 function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?col('--amb') : col('--grn'); }
+
+// A 0/1 series drawn as a line, labelled "max 1", says nothing. As blocks it
+// answers the question on-demand idling created: what fraction of the window
+// was the box actually encoding. Deliberately not an egress plot, which would
+// be viewers times a near-constant bitrate and so a copy of the plot above it.
+function dutyPlot(svg, vals, color){
+  svg.innerHTML="";
+  const n=vals.length; if(!n) return;
+  const W=+svg.getAttribute("width"), H=+svg.getAttribute("height"), P=4;
+  const ns="http://www.w3.org/2000/svg", bw=(W-2*P)/n;
+  let on=0, known=0;
+  vals.forEach((v,i)=>{
+    if(v==null) return;
+    known++; if(!v) return;
+    on++;
+    const r=document.createElementNS(ns,"rect");
+    // top band left clear so the percentage label does not sit on the blocks,
+    // matching where the other two plots put theirs
+    r.setAttribute("x",(P+i*bw).toFixed(2)); r.setAttribute("y",P+12);
+    r.setAttribute("width",Math.max(bw,0.8).toFixed(2)); r.setAttribute("height",H-2*P-12);
+    r.setAttribute("fill",color); r.setAttribute("opacity","0.5");
+    svg.append(r);
+  });
+  const label=document.createElementNS(ns,"text");
+  label.setAttribute("x", W-P); label.setAttribute("y", 12); label.setAttribute("text-anchor","end");
+  label.setAttribute("fill", col('--dim')); label.setAttribute("font-size","10");
+  label.setAttribute("font-family", col('--mono'));
+  label.textContent = known ? "live "+Math.round(on*100/known)+"%" : "no data";
+  svg.append(label);
+}
 
 function sparkline(svg, vals, color){
   svg.innerHTML="";
@@ -251,6 +286,7 @@ async function tick(){
   const h = s.history||[];
   sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
   sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
+  dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'));
 }
 tick(); setInterval(tick, 10000);
 </script>

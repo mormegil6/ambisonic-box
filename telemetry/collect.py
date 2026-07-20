@@ -615,7 +615,11 @@ def history():
                             # raise and the outer except would drop the entire
                             # history, not just the one row.
                             "v": (int(p[1]) if p[1] not in ("", "None") else None),
-                            "temp": (float(p[2]) if p[2] not in ("", "None") else None)})
+                            "temp": (float(p[2]) if p[2] not in ("", "None") else None),
+                            # field 4 has always been written and never read.
+                            # With on-demand idling it answers the new question:
+                            # what fraction of the window was the box encoding?
+                            "live": (int(p[3]) if len(p) > 3 and p[3] in ("0", "1") else None)})
     except Exception:
         pass
     return out
