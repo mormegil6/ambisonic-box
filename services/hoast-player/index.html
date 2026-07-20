@@ -158,10 +158,6 @@
             <p>Starting the stream<span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
             <p class="sub" id="gateWaitSub">This usually takes about 45 seconds.</p>
           </div>
-          <div id="gateReady" hidden>
-            <p>The stream is ready.</p>
-            <p><button id="gateWatch" type="button">Watch now</button></p>
-          </div>
           <div id="gateErr" hidden>
             <p id="gateErrMsg">The stream could not be started. It may already be shutting down; try again shortly.</p>
             <p><button id="gateRetry" type="button">Try again</button></p>
@@ -242,7 +238,7 @@
         }
 
         function show(id) {
-            ['gateIdle', 'gateWait', 'gateReady', 'gateErr'].forEach(function (k) {
+            ['gateIdle', 'gateWait', 'gateErr'].forEach(function (k) {
                 var e = document.getElementById(k); if (e) e.hidden = (k !== id);
             });
             var g = document.getElementById('gate'); if (g) g.hidden = false;
@@ -292,11 +288,13 @@
                     if (gateStarted) return;
                     if (p.ready) {
                         stopWaiting();
-                        // Hand off on a fresh click rather than auto-starting. After a
-                        // 40 s wait the browser may no longer honour play(), and a
-                        // silently black player reads as a failure.
-                        if (waitStartedAt) { show('gateReady'); return; }
-                        return beginPlayback();     // already live on arrival: no wait, no extra click
+                        // Straight into playback, no second button. Clicking "Start the
+                        // stream" grants the document a sticky user activation, so play()
+                        // is still honoured when the wait ends. Where it is not (Safari
+                        // expires activation), video.js's own play button is already
+                        // sitting there as the fallback, which is one familiar control
+                        // rather than a second bespoke one.
+                        return beginPlayback();
                     }
                     if (p.live || p.source_running || p.starting) {
                         show('gateWait');
@@ -369,10 +367,6 @@
 
             var retry = document.getElementById('gateRetry');
             if (retry) retry.addEventListener('click', function () { requestStart(retry); });
-
-            // Fresh user gesture, so play() is honoured however long the wait was.
-            var watch = document.getElementById('gateWatch');
-            if (watch) watch.addEventListener('click', function () { beginPlayback(); });
 
             pollGate();
             schedule(3000);

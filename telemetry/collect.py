@@ -678,6 +678,15 @@ def serve():
         def __init__(self, *a, **k): super().__init__(*a, directory=str(DATA), **k)
         def log_message(self, *a): pass
 
+        def end_headers(self):
+            # The dashboard is redeployed often and the browser was holding onto
+            # an old copy, so changes appeared not to have shipped. stats.json is
+            # already fetched with a cache-buster; the HTML was not.
+            p = self.path.split("?")[0]
+            if p.endswith("/") or p.endswith(".html"):
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
+            super().end_headers()
+
         def _json(self, code, obj):
             b = json.dumps(obj).encode()
             self.send_response(code)
