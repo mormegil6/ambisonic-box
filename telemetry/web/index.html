@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>example-host · telemetry</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3140;
+    --txt:#e6edf3; --dim:#8b98a9; --grn:#3fb950; --amb:#d29922; --red:#f85149;
+    --blu:#58a6ff; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:20px;max-width:1100px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
+  .host{font-family:var(--mono);color:var(--dim);font-size:13px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;vertical-align:middle}
+  .updated{margin-left:auto;color:var(--dim);font-size:12px;font-family:var(--mono)}
+  .alertbar{background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);
+            color:#ffb3ae;border-radius:8px;padding:9px 13px;margin:12px 0;font-size:13px;display:none}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));margin:14px 0}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .tile .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.7px}
+  .tile .v{font-size:27px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.1}
+  .tile .s{color:var(--dim);font-size:12px;margin-top:3px;font-family:var(--mono)}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:650;margin-top:2px}
+  .b-live{background:rgba(63,185,80,.16);color:var(--grn)}
+  .b-off{background:rgba(139,152,169,.14);color:var(--dim)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0}
+  section h2{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 12px}
+  .svc{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
+        border-radius:7px;padding:6px 11px;font-size:13px;font-family:var(--mono)}
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+  .kv div .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .kv div .v{font-size:15px;margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:6px}
+  .bar > i{display:block;height:100%;border-radius:3px}
+  .spark{display:flex;gap:22px;flex-wrap:wrap}
+  .spark figure{margin:0}
+  .spark figcaption{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+  svg{display:block}
+  footer{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:18px;text-align:center}
+  .stale{color:var(--amb)!important}
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="statusDot" style="background:var(--dim)"></span>
+    <h1>HOA stream telemetry</h1>
+    <span class="host" id="host">—</span>
+    <span class="updated" id="updated">connecting…</span>
+  </header>
+
+  <div class="alertbar" id="alertbar"></div>
+
+  <div class="grid">
+    <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
+    <div class="tile"><div class="k">Viewers now</div><div class="v" id="viewers">—</div><div class="s" id="viewersSub">&nbsp;</div></div>
+    <div class="tile"><div class="k">CPU temp</div><div class="v" id="temp">—</div><div class="s" id="tempSub">&nbsp;</div></div>
+    <div class="tile"><div class="k">Encoder</div><div class="v" id="encoder">—</div><div class="s" id="encoderSub">&nbsp;</div></div>
+  </div>
+
+  <section>
+    <h2>Services</h2>
+    <div class="svc" id="services"><span class="chip">…</span></div>
+  </section>
+
+  <section>
+    <h2>Stream detail</h2>
+    <div class="kv">
+      <div><div class="k">Resolution</div><div class="v" id="res">—</div></div>
+      <div><div class="k">Bitrate</div><div class="v" id="br">—</div></div>
+      <div><div class="k">RTMP clients</div><div class="v" id="nclients">—</div></div>
+      <div><div class="k">Segment age</div><div class="v" id="segage">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>System</h2>
+    <div class="kv">
+      <div><div class="k">Load (1m)</div><div class="v" id="load">—</div></div>
+      <div><div class="k">Memory</div><div class="v" id="mem">—</div><div class="bar"><i id="memBar"></i></div></div>
+      <div><div class="k">Disk</div><div class="v" id="disk">—</div><div class="bar"><i id="diskBar"></i></div></div>
+      <div><div class="k">Uptime</div><div class="v" id="uptime">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>History</h2>
+    <div class="spark">
+      <figure><figcaption>Viewers</figcaption><svg id="spViewers" width="320" height="52"></svg></figure>
+      <figure><figcaption>CPU temp</figcaption><svg id="spTemp" width="320" height="52"></svg></figure>
+    </div>
+  </section>
+
+  <footer>auto-refreshes every 10 s · served on the box, reached over Tailscale · Telegram carries the breakage alerts</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const C = getComputedStyle(document.documentElement);
+const col = n => C.getPropertyValue(n).trim();
+
+function rel(iso){
+  if(!iso) return "—";
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/1000));
+  if(s < 60) return s + "s ago";
+  if(s < 3600) return Math.round(s/60) + "m ago";
+  return Math.round(s/3600) + "h ago";
+}
+function dur(sec){
+  if(sec==null) return "—";
+  const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+  return (d?d+"d ":"") + (h?h+"h ":"") + m + "m";
+}
+function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?col('--amb') : col('--grn'); }
+
+function sparkline(svg, vals, color){
+  svg.innerHTML="";
+  const pts = vals.filter(v=>v!=null);
+  if(pts.length<2) return;
+  const W=+svg.getAttribute("width"), H=+svg.getAttribute("height"), P=4;
+  let lo=Math.min(...pts), hi=Math.max(...pts); if(hi===lo){hi=lo+1;}
+  const n=vals.length;
+  const x=i=>P + i*(W-2*P)/(n-1);
+  const y=v=>H-P - (v-lo)*(H-2*P)/(hi-lo);
+  let d="", started=false;
+  vals.forEach((v,i)=>{ if(v==null){started=false;return;} d += (started?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)+" "; started=true; });
+  const ns="http://www.w3.org/2000/svg";
+  const area=document.createElementNS(ns,"path");
+  area.setAttribute("d", d + `L ${x(n-1).toFixed(1)} ${H-P} L ${x(0).toFixed(1)} ${H-P} Z`);
+  area.setAttribute("fill", color); area.setAttribute("opacity","0.13");
+  const line=document.createElementNS(ns,"path");
+  line.setAttribute("d", d); line.setAttribute("fill","none");
+  line.setAttribute("stroke", color); line.setAttribute("stroke-width","1.6");
+  line.setAttribute("stroke-linejoin","round"); line.setAttribute("stroke-linecap","round");
+  svg.append(area, line);
+  const last=vals[n-1];
+  if(last!=null){ const c=document.createElementNS(ns,"circle");
+    c.setAttribute("cx",x(n-1)); c.setAttribute("cy",y(last)); c.setAttribute("r","2.4");
+    c.setAttribute("fill",color); svg.append(c);
+    const label=document.createElementNS(ns,"text");
+    label.setAttribute("x", W-P); label.setAttribute("y", 12); label.setAttribute("text-anchor","end");
+    label.setAttribute("fill", col('--dim')); label.setAttribute("font-size","10");
+    label.setAttribute("font-family", col('--mono')); label.textContent = "max "+Math.round(hi);
+    svg.append(label);
+  }
+}
+
+async function tick(){
+  let s;
+  try{ s = await (await fetch("stats.json?_="+Date.now(),{cache:"no-store"})).json(); }
+  catch(e){ $('updated').textContent = "unreachable"; $('updated').className="updated stale";
+            $('statusDot').style.background=col('--dim'); return; }
+
+  const healthy = s.all_healthy && (!s.alerts_active || s.alerts_active.length===0);
+  $('statusDot').style.background = healthy ? col('--grn') : col('--red');
+  $('host').textContent = s.host || "";
+  const stale = (Date.now()-new Date(s.ts).getTime())/1000 > 150;
+  $('updated').textContent = "updated " + rel(s.ts);
+  $('updated').className = "updated" + (stale?" stale":"");
+
+  // alerts
+  const ab=$('alertbar');
+  if(s.alerts_active && s.alerts_active.length){
+    ab.style.display="block"; ab.textContent = "⚠ active: " + s.alerts_active.join(", ").replace(/_/g," ");
+  } else ab.style.display="none";
+
+  // stream tile
+  const live = s.stream && s.stream.live;
+  const sb=$('streamBadge');
+  sb.textContent = live ? "LIVE" : (s.stream&&s.stream.publishing ? "STALLED" : "OFFLINE");
+  sb.className = "badge " + (live ? "b-live" : "b-off");
+  $('streamSub').textContent = s.resolution ? (s.resolution + (s.bitrate?" @ "+s.bitrate:"")) : " ";
+
+  // viewers
+  $('viewers').textContent = s.viewers ? s.viewers.now : "—";
+  const cc = s.viewers && s.viewers.countries ? Object.entries(s.viewers.countries) : [];
+  $('viewersSub').textContent = cc.length
+    ? cc.map(([k,v])=>k+" "+v).join(" · ")
+    : (s.viewers ? "in last "+s.viewers.window_s+"s" : " ");
+
+  // temp
+  const t = s.system ? s.system.temp_c : null;
+  $('temp').textContent = t!=null ? t+"°C" : "—";
+  $('temp').style.color = tempColor(t);
+  $('tempSub').textContent = t==null?" " : t>=98?"critical" : t>=88?"hot (encoding)" : "cool";
+
+  // encoder
+  const e = s.encoder||{};
+  $('encoder').textContent = e.speed!=null ? e.speed.toFixed(2)+"×" : (live?"—":"idle");
+  $('encoder').style.color = e.behind ? col('--red') : (e.speed!=null?col('--grn'):col('--dim'));
+  $('encoderSub').textContent = e.speed==null ? " " : (e.behind ? "behind realtime" : "keeping up");
+
+  // services
+  $('services').innerHTML = (s.services||[]).map(sv=>{
+    const c = sv.healthy ? col('--grn') : col('--red');
+    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}<span style="color:${col('--dim')}">${sv.state||""}</span></span>`;
+  }).join("") || '<span class="chip">no services</span>';
+
+  // stream detail
+  $('res').textContent = s.resolution||"—";
+  $('br').textContent  = s.bitrate||"—";
+  $('nclients').textContent = s.stream ? s.stream.nclients : "—";
+  const age = s.stream ? s.stream.segment_age_s : null;
+  $('segage').textContent = age==null ? "—" : age+"s";
+  $('segage').className = "v" + (age!=null && age>15 ? " stale":"");
+
+  // system
+  const sy=s.system||{};
+  $('load').textContent = sy.load1!=null ? sy.load1.toFixed(2)+(sy.cores?" / "+sy.cores:"") : "—";
+  const mp=sy.mem_used_pct, dp=sy.disk_used_pct;
+  $('mem').textContent = mp!=null?mp+"%":"—";
+  $('memBar').style.width=(mp||0)+"%"; $('memBar').style.background = mp>=90?col('--red'):col('--blu');
+  $('disk').textContent = dp!=null?dp+"%":"—";
+  $('diskBar').style.width=(dp||0)+"%"; $('diskBar').style.background = dp>=90?col('--red'):dp>=75?col('--amb'):col('--grn');
+  $('uptime').textContent = dur(sy.uptime_s);
+
+  // sparklines
+  const h = s.history||[];
+  sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
+  sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
+}
+tick(); setInterval(tick, 10000);
+</script>
+</body>
+</html>

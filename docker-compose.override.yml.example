@@ -1,0 +1,34 @@
+# docker-compose.override.yml  —  deployment-specific settings (EXAMPLE).
+#
+# Copy to `docker-compose.override.yml` on the deployment host; Compose loads it
+# automatically on top of docker-compose.yml, and it is gitignored. Nothing here
+# is required — the base stack runs standalone. These are production niceties for
+# a Linux host (this is how `example-host` is wired); adjust paths/IPs to yours.
+
+services:
+
+  telemetry:
+    environment:
+      - TEL_HOST=example-host          # name shown on the dashboard + in alerts
+      # Telegram breakage alerts (optional). Prefer putting these in .env (also
+      # gitignored) so they are not duplicated across services:
+      # - BOT_TOKEN=123456:AA...
+      # - CHAT_ID=987654321
+    volumes:
+      # Linux host metrics (optional; absent -> those fields simply read null).
+      # CPU temp needs NO mount: the container already sees the host sysfs, so the
+      # collector reads /sys/class/thermal/thermal_zone0/temp directly (bind-
+      # mounting /sys/class/thermal would only give a dangling symlink).
+      - /:/host/root:ro                        # disk usage of the HOST root (df /)
+      - /proc/uptime:/host/uptime:ro           # host uptime (not the container's)
+    ports:
+      # Expose the PRIVATE dashboard only on the Tailscale interface — never
+      # publish :8090 to 0.0.0.0. Replace with this host's 100.x Tailscale IP:
+      - "100.64.0.1:8090:8090"
+
+  hoast-player:
+    volumes:
+      # Deployment landing page: the baked-in image page is generic (no author
+      # attribution). This bind-mount swaps in the branded page (Reference/BibTeX
+      # + author copyright). It must fetch /status/status.json (see nginx.conf).
+      - ./custom/index.html:/usr/share/nginx/html/index.html:ro

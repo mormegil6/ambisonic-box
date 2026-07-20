@@ -106,6 +106,7 @@ services:
       dockerfile: services/hoast-player/Dockerfile
     volumes:
       - dash-output:/usr/share/nginx/html/dash:ro
+      - status-public:/usr/share/nginx/html/status:ro   # curated telemetry (status.json)
     ports:
       - "8080:80"
     healthcheck:
@@ -113,6 +114,35 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    restart: unless-stopped
+
+  # Operations telemetry: private dashboard (:8090) + breakage-only Telegram
+  # alerts + a curated public status.json for the player's status panel. Reads
+  # container health/logs via the mounted docker socket; stream liveness from the
+  # dash-output volume + earshot's /stat. Ships with the stack so any reuser gets
+  # monitoring for free. CPU-temp/disk (Linux host) come from optional mounts in
+  # docker-compose.override.yml; without them those fields simply read null.
+  telemetry:
+    build:
+      context: ./telemetry
+    image: hoa360-telemetry:local
+    environment:
+      - COMPOSE_PROJECT_NAME=hoa360
+      - TEL_HOST=${TEL_HOST:-hoa360}
+      - FFMPEG_FLAGS=${FFMPEG_FLAGS:-}   # so it can report resolution/bitrate
+      - BOT_TOKEN=${BOT_TOKEN:-}         # optional: Telegram alerts (unset = disabled)
+      - CHAT_ID=${CHAT_ID:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # read container health/logs
+      - telemetry-data:/data                            # private dashboard + history
+      - status-public:/pub                              # curated public status.json
+      - dash-output:/dash:ro                            # segment freshness
+    ports:
+      # localhost-only by default (never LAN-wide); a deployment adds a
+      # private/Tailscale bind in docker-compose.override.yml.
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      - hoast-player
     restart: unless-stopped
 
   # VOD/lip-sync packaging utility (Phase 5) - NOT in the live path.
@@ -137,3 +167,7 @@ volumes:
       type: none
       o: bind
       device: ${PWD}/output
+  # telemetry dashboard + history (private; only the telemetry service mounts it)
+  telemetry-data:
+  # curated public status.json, shared telemetry -> hoast-player (no box internals)
+  status-public:
