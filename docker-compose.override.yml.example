@@ -28,7 +28,7 @@ services:
 
   hoast-player:
     volumes:
-      # Deployment landing page: the baked-in image page is generic (no author
-      # attribution). This bind-mount swaps in the branded page (Reference/BibTeX
-      # + author copyright). It must fetch /status/status.json (see nginx.conf).
-      - ./custom/index.html:/usr/share/nginx/html/index.html:ro
+      # Deployment branding: the committed page is generic; this mounts a small
+      # brand.json (About text, a citation, a copyright line) that the page loads
+      # at startup. Keys are documented in services/hoast-player/brand.example.json.
+      - ./custom/brand.json:/usr/share/nginx/html/brand.json:ro

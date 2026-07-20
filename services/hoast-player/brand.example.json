@@ -1,0 +1,6 @@
+{
+  "_comment": "Optional per-deployment branding for the HOAST player landing page. Mount your filled copy at /brand.json (see docker-compose.override.yml.example). Every key is optional; when the file is absent the page stays generic. Values are HTML.",
+  "lead": "Describe this deployment: what the source is, and whether it is genuinely live or a replayed recording.",
+  "reference": "<h2>Reference</h2><cite>A. Author, B. Author, &ldquo;Paper Title,&rdquo; in <em>Proc. Venue</em>, Year. <a href=\"https://example.org\" target=\"_blank\" rel=\"noopener\">Link</a>.</cite>",
+  "copyright": "&copy; 2026 Your Name &middot; Your Institution."
+}

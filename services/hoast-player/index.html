@@ -183,7 +183,7 @@
 
       <section>
         <h2>About</h2>
-        <p class="lead">A Docker toolchain for end-to-end immersive broadcasting: live 360&deg; video with
+        <p class="lead" id="aboutLead">A Docker toolchain for end-to-end immersive broadcasting: live 360&deg; video with
            Higher-Order Ambisonic audio, built on Envelop Earshot, Shaka Packager and the HOAST360 player.</p>
         <div class="specs">
           <div class="card"><div class="k">Spatial audio</div><div class="v"><span id="stSpatial">3rd-order Ambisonics</span> <small><span id="stCh">16</span> ch<span id="stConv"> &middot; ACN/SN3D</span></small></div></div>
@@ -194,6 +194,10 @@
         </div>
       </section>
 
+      <!-- Optional deployment branding (e.g. a paper citation), filled from
+           /brand.json when a deployment provides it; generic when absent. -->
+      <section id="brandRef" hidden></section>
+
     </div>
 
     <footer><div class="wrap">
@@ -201,8 +205,28 @@
            Envelop <a href="https://github.com/EnvelopSound/EnvelopForLive" target="_blank" rel="noopener">Earshot</a> transcode &amp; DASH segmentation,
            and <a href="https://github.com/shaka-project/shaka-packager" target="_blank" rel="noopener">Shaka&nbsp;Packager</a> for VOD.
            Orchestrated as a containerised <a href="https://www.docker.com/" target="_blank" rel="noopener">Docker</a> stack.</div>
+      <div class="row" id="brandCopyright" hidden></div>
     </div></footer>
 
+    <script>
+      // Optional per-deployment branding, kept out of this committed page so it
+      // stays the single source and cannot drift. A deployment mounts /brand.json
+      // (see docker-compose.override.yml.example); without it the page is generic.
+      // Keys: lead (About paragraph HTML), reference (Reference section body),
+      // copyright (a footer row HTML).
+      fetch('/brand.json', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (b) {
+          if (!b) return;
+          var lead = document.getElementById('aboutLead');
+          if (b.lead && lead) lead.innerHTML = b.lead;
+          var ref = document.getElementById('brandRef');
+          if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; }
+          var cp = document.getElementById('brandCopyright');
+          if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
+        })
+        .catch(function () {});
+    </script>
     <script src="./dist/hoast360.bundle.js?v=rf4"></script>
     <script>
         var hoast360 = new HOAST360();
