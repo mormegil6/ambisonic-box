@@ -142,7 +142,7 @@ function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?
 // answers the question on-demand idling created: what fraction of the window
 // was the box actually encoding. Deliberately not an egress plot, which would
 // be viewers times a near-constant bitrate and so a copy of the plot above it.
-function dutyPlot(svg, vals, color){
+function dutyPlot(svg, vals, color, ofWindow){
   svg.innerHTML="";
   const n=vals.length; if(!n) return;
   const W=+svg.getAttribute("width"), H=+svg.getAttribute("height"), P=4;
@@ -164,7 +164,9 @@ function dutyPlot(svg, vals, color){
   label.setAttribute("x", W-P); label.setAttribute("y", 12); label.setAttribute("text-anchor","end");
   label.setAttribute("fill", col('--dim')); label.setAttribute("font-size","10");
   label.setAttribute("font-family", col('--mono'));
-  label.textContent = known ? "live "+Math.round(on*100/known)+"%" : "no data";
+  label.textContent = known
+    ? "live " + Math.round(on*100/known) + "%" + (ofWindow ? " of " + ofWindow : "")
+    : "no data";
   svg.append(label);
 }
 
@@ -286,20 +288,21 @@ async function tick(){
 
   // sparklines
   const h = s.history||[];
-  sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
-  sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
-  dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'));
-  // "live 92%" and "max 98" are unreadable without knowing the span they cover.
-  // Stated once for the panel rather than repeated on every plot, and measured
-  // from the actual first and last timestamps: a telemetry outage leaves gaps,
-  // so rows times interval would overstate how recent the window is.
+  // The span every plot here is computed over. Measured from the first and last
+  // timestamps rather than rows times interval: cycles run slightly long, and
+  // after a telemetry outage the rows would span far more wall time than a
+  // multiplication would suggest.
+  let win = "";
   if(h.length > 1){
     const t0 = Date.parse(h[0].t), t1 = Date.parse(h[h.length-1].t);
-    $('histWindow').textContent = (isFinite(t0) && isFinite(t1) && t1 > t0)
-      ? "last " + shortDur((t1 - t0) / 1000) : "";
-  } else {
-    $('histWindow').textContent = "";
+    if(isFinite(t0) && isFinite(t1) && t1 > t0) win = shortDur((t1 - t0)/1000);
   }
+  $('histWindow').textContent = win ? "last " + win : "";
+  sparkline($('spViewers'), h.map(p=>p.v), col('--blu'));
+  sparkline($('spTemp'), h.map(p=>p.temp), col('--amb'));
+  // The percentage carries its own denominator. "live 3%" next to a heading that
+  // happens to say 2h58m still leaves the reader to connect the two.
+  dutyPlot($('spLive'), h.map(p=>p.live), col('--grn'), win);
 }
 tick(); setInterval(tick, 10000);
 </script>
