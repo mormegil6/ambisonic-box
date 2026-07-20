@@ -28,7 +28,7 @@ flowchart LR
     OBS -- "RTMP :1935" --> INGEST
     LOOP -- "RTMP (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT
-    EARSHOT -- "live DASH: VP9 +<br/>16-ch Opus (WebM)" --> VOL
+    EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
     VOL --> PLAYER
     SHAKA -. "VOD / lip-sync packaging" .-> VOL
     PLAYER -- "HTTP :8080" --> VIEWER
@@ -85,7 +85,7 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/)
 | Server | `rtmp://<host>:1935/live` |
 | Stream key | `hoast_demo` (or your `STREAM_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
-| Video | H.264, GOP = segment duration × fps (e.g. `-g 60` at 29.97/30 fps for 2 s segments) |
+| Video | H.264, keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate) |
 
 The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`. Note that
 the bundled player page is hardcoded to `/dash/hoast_demo.mpd`; with a custom
@@ -141,7 +141,7 @@ profile. The pattern for manual runs is `docker compose run --rm shaka
 | Symptom | Cause | Fix |
 |---|---|---|
 | Relay `Connection refused` after recreating earshot | rtmp-ingest resolves earshot's address once, at startup | `docker compose restart rtmp-ingest` |
-| Segments longer than `-seg_duration` (e.g. 3.34 s) | GOP not aligned with segment duration | set `-g` = segment duration × fps (`-g 60` @ 29.97/30, `-g 50` @ 25) |
+| Segments longer than `-seg_duration` (e.g. 3.34 s) | GOP duration does not divide the segment target, so no keyframe lands on the boundary and the muxer closes at the next one (`-g 50` at 29.97 fps is a 1.668 s GOP, so the first keyframe at or after 2 s falls at 3.336 s) | set `-g` so the segment duration is an integer multiple of the GOP (`-g 60` @ 29.97/30, `-g 50` @ 25); equality is the preferred default for the live encode |
 | Browser loops `PIPELINE_ERROR_DECODE` | full-range (pc) VP9 source breaks the dash.js/MSE path | re-encode to limited range: `-vf scale=in_range=pc:out_range=tv -color_range tv` |
 | `loop-source` idle although `demo.mp4` exists | file presence is checked once at startup | `docker compose restart loop-source` |
 | Publisher dies seconds into a 4K push | RTMP message limit smaller than 4K keyframes | keep `max_message 10M` in the nginx-rtmp configs (already set here) |

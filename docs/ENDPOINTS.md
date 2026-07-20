@@ -10,13 +10,33 @@ and (for anything public) a reverse proxy or tunnel.
 | Port | Service | Serves | Exposure intent |
 |---|---|---|---|
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
-| 8080 | `hoast-player` | player `/`, DASH `/dash/<key>.mpd`, public status `/status/status.json` | **public** (front with TLS / a tunnel) |
-| 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private** — debug only, bind LAN/localhost |
+| 8080 | `hoast-player` | player `/`, DASH `/dash/<key>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
+| 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` publishes `8081:80` on all interfaces; Compose appends port entries, so an override cannot narrow it. Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private** — bind localhost/VPN only, never `0.0.0.0` |
 
 Internal-only, never published: earshot's RTMP relay + `on_publish` callback
 (1935 / 8000 inside the network), rtmp-ingest's health port (8080 internal),
 and the `dash-output` / `status-public` volumes.
+
+### Control routes proxied on 8080
+
+`hoast-player` reverse-proxies exactly two telemetry routes to the public port,
+both as exact-match `location =` blocks, so nothing else on 8090 is reachable
+from outside:
+
+| Route | Method | Proxies to | Notes |
+|---|---|---|---|
+| `/api/live` | GET | `telemetry:8090/api/live` | readiness poll while a visitor waits out a cold start |
+| `/api/start` | POST | `telemetry:8090/api/start` | starts the loop source; `limit_req` zone `startreq`, 6r/m, burst 3 |
+
+`/api/stop` is deliberately **not** proxied: stopping the source is the one verb
+a visitor could use to spoil the demo for everyone else, so it stays on
+telemetry's own 127.0.0.1-bound port.
+
+The docker socket telemetry mounts is read-write, because starting and stopping
+the source needs it. What keeps that safe is this route list, not the mount: if
+you add a third `/api` route here, it must not pass any request-controlled
+string into a docker invocation.
 
 ## What telemetry itself polls (the monitoring inputs)
 
