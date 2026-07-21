@@ -38,14 +38,23 @@ the source needs it. What keeps that safe is this route list, not the mount: if
 you add a third `/api` route here, it must not pass any request-controlled
 string into a docker invocation.
 
-### Player diagnostic flag (`?dbg`)
+### Player URL flags
 
-Appending `?dbg` to the player URL (`<player-public-url>/?dbg`) shows a small
-on-page diagnostic badge: the build tag, live delay, the video element / drawing
-buffer / decoded video-frame dimensions, aspect, and `gl.MAX_TEXTURE_SIZE`. It is
-a read-only overlay for debugging render and sizing issues, and because it needs
-no dev console it is the way to read that state on a phone. It does not affect
-playback and is off by default.
+`?dbg` shows a small on-page diagnostic badge: the build tag, live delay, the
+video element / drawing buffer / decoded video-frame dimensions, aspect, and
+`gl.MAX_TEXTURE_SIZE`. It is a read-only overlay for debugging render and sizing
+issues, and because it needs no dev console it is the way to read that state on a
+phone. It does not affect playback and is off by default.
+
+Audio-path flags (see `docs/PAPER-NOTES.md` §12 for the mechanism). The player
+compensates for a video edit list Chromium's MSE ignores by driving the audio
+itself (the SegmentAudioFeed), on **desktop Chromium** only; Firefox and mobile
+use the legacy element audio.
+
+- `?audiofeed` forces the segment-audio feed ON where it is off by default, i.e.
+  on mobile Chromium, for testing the decode/sync there before it is enabled.
+- `?legacyaudio` forces the old element-audio wiring ON anywhere (Firefox-style),
+  for A/B comparison against the feed.
 
 ## What telemetry itself polls (the monitoring inputs)
 
