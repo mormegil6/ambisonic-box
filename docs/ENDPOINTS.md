@@ -10,7 +10,7 @@ and (for anything public) a reverse proxy or tunnel.
 | Port | Service | Serves | Exposure intent |
 |---|---|---|---|
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
-| 8080 | `hoast-player` | player `/`, DASH `/dash/<key>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
+| 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
 | 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` publishes `8081:80` on all interfaces; Compose appends port entries, so an override cannot narrow it. Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private** — bind localhost/VPN only, never `0.0.0.0` |
 
@@ -69,7 +69,7 @@ use the legacy element audio.
 |---|---|
 | `GET <player-public-url>/` | 200 |
 | `GET <player-public-url>/status/status.json` | 200; `live:true` while streaming |
-| `GET <player-public-url>/dash/<key>.mpd` | 200 while streaming |
+| `GET <player-public-url>/dash/<DASH_NAME>.mpd` | 200 while streaming |
 | telemetry dashboard | reachable **only** on your private/VPN address |
 | tunnel / edge (if used) | active |
 

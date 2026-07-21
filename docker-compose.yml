@@ -26,6 +26,14 @@ services:
       # Empty token => earshot's /auth accepts the internal relay.
       - RTMP_AUTH_TOKEN=
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
+      # Public DASH manifest filename. Fixed on purpose and decoupled from
+      # STREAM_KEY: the publish name used to name this file, and any client on
+      # the public :1935 port chooses the publish name, so an interpolated name
+      # was an arbitrary-path write inside earshot. Defaulted to the literal the
+      # player is hardcoded to (services/hoast-player/index.html), NOT to
+      # ${STREAM_KEY}, so the key becomes a rotatable secret without moving the
+      # manifest URL. Validated against [A-Za-z0-9_-]+ in the earshot entrypoint.
+      - DASH_NAME=${DASH_NAME:-hoast_demo}
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
       # Default: video passthrough. This is the configuration the deployment
       # actually runs and the one the thermal numbers were measured on (39 %

@@ -22,6 +22,13 @@
 # stopped for the duration of the test and restarted afterwards. The stack's
 # prior state (running / stopped / absent) is restored on exit.
 #
+# The DASH manifest is named after DASH_NAME (default hoast_demo), NOT the
+# publish name: earshot no longer interpolates the attacker-controllable publish
+# name into the output path. This test still publishes as "pipeline-test" (to
+# exercise token auth) but asserts on $DASH_NAME.mpd. Its cleanup therefore
+# transiently removes the production manifest name, which loop-source
+# regenerates within a segment or two of the restart this script performs.
+#
 # Usage: ./scripts/test-pipeline.sh
 # Exit codes: 0 PASS, 1 FAIL, 2 precondition error.
 
@@ -48,6 +55,11 @@ if [ -z "${STREAM_KEY:-}" ] && [ -f .env ]; then STREAM_KEY=$(env_get STREAM_KEY
 if [ -z "${FFMPEG_FLAGS:-}" ] && [ -f .env ]; then FFMPEG_FLAGS=$(env_get FFMPEG_FLAGS); fi
 STREAM_KEY="${STREAM_KEY:-hoast_demo}"
 FFMPEG_FLAGS="${FFMPEG_FLAGS:-}"
+if [ -z "${DASH_NAME:-}" ] && [ -f .env ]; then DASH_NAME=$(env_get DASH_NAME); fi
+DASH_NAME="${DASH_NAME:-hoast_demo}"
+# earshot names the manifest after DASH_NAME, not the publish name. TEST_STREAM
+# stays the publish name so the ?token= path is still exercised.
+TEST_MPD="$OUTPUT_DIR/$DASH_NAME.mpd"
 case "$FFMPEG_FLAGS" in
     *"-c:v copy"*) VIDEO_CODEC=avc1 ;;   # H.264 passthrough fallback
     *)             VIDEO_CODEC=vp09 ;;   # default policy
@@ -88,7 +100,7 @@ cleanup() {
         # remove only what this run produced
         find "$OUTPUT_DIR" -maxdepth 1 \( -name 'chunk-stream*' -o -name 'init-stream*' \) \
             -newer "$marker" -delete 2>/dev/null || true
-        rm -f "$OUTPUT_DIR/$TEST_STREAM.mpd" "$marker"
+        rm -f "$TEST_MPD" "$marker"
     fi
     if [ "$restart_loop_source" = 1 ]; then
         log "restarting loop-source"
@@ -176,7 +188,7 @@ fi
 
 # ------------------------------------------------------------- push ---------
 marker=$(mktemp "$OUTPUT_DIR/.test-pipeline.XXXXXX")
-rm -f "$OUTPUT_DIR/$TEST_STREAM.mpd"
+rm -f "$TEST_MPD"
 docker rm -f "$PUSH_CONTAINER" >/dev/null 2>&1 || true   # stale from a crashed run
 
 # One lavfi graph exposing two output pads: testsrc2 video and a 16-channel
@@ -207,7 +219,7 @@ push_pid=$!
 # ------------------------------------------- first-segment deadline ---------
 t_first=
 while :; do
-    if [ -s "$OUTPUT_DIR/$TEST_STREAM.mpd" ] && \
+    if [ -s "$TEST_MPD" ] && \
        [ -n "$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream*' -newer "$marker" -print -quit)" ]; then
         t_first=$(( $(date +%s) - push_start ))
         log "manifest + first chunk after ${t_first}s"
@@ -225,7 +237,7 @@ push_pid=
 [ "$push_rc" -eq 0 ] || fail "synthetic push exited with status $push_rc"
 
 # ------------------------------------------------------------ asserts -------
-mpd="$OUTPUT_DIR/$TEST_STREAM.mpd"
+mpd="$TEST_MPD"
 [ -s "$mpd" ] || fail "manifest $mpd missing after push"
 
 if command -v xmllint >/dev/null; then

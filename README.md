@@ -87,15 +87,19 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/)
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
 | Video | H.264, keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate) |
 
-The stream appears at `http://<host>:8080/dash/<stream-key>.mpd`. Note that
-the bundled player page is hardcoded to `/dash/hoast_demo.mpd`; with a custom
-stream key, edit `services/hoast-player/index.html` or open the MPD directly.
+The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default
+`hoast_demo`), which is exactly what the bundled player page requests. The
+manifest name is `DASH_NAME`, independent of `STREAM_KEY`: a custom stream key
+no longer moves the manifest URL, so you can rotate the key without editing the
+player. Only edit `services/hoast-player/index.html` if you set a custom
+`DASH_NAME`.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `STREAM_KEY` | `hoast_demo` | Publish auth at rtmp-ingest: stream name or `?token=` must match |
+| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `STREAM_KEY` so the key is rotatable. Must match the name hardcoded in `services/hoast-player/index.html` |
 | `FFMPEG_FLAGS` | VP9 realtime, 2 s segments | Video policy of the earshot transcode; audio is always 16-ch Opus. `-c:v copy` fallback documented in `.env.example` |
 
 Copy `.env.example` to `.env` to override either.
