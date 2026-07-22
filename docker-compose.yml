@@ -136,6 +136,7 @@ services:
     volumes:
       - dash-output:/usr/share/nginx/html/dash:ro
       - status-public:/usr/share/nginx/html/status:ro   # curated telemetry (status.json)
+      - ./content/vod/dash:/usr/share/nginx/html/vod-dash:ro   # on-demand VOD DASH clips
     ports:
       - "8080:80"
     healthcheck:

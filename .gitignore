@@ -30,3 +30,7 @@ __pycache__/
 
 # local-only working notes (audits, scratch analysis); not part of the published repo
 docs/local/
+
+# generated VOD packaging (masters are content/**/*.webm above; these dirs are derived)
+content/vod/dash/
+content/vod/ladder-*/

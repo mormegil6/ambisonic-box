@@ -89,10 +89,30 @@
       footer{border-top:1px solid var(--line);margin-top:10px;padding:28px 0 48px;color:var(--body);font-size:13.5px}
       footer a{color:var(--accent);text-decoration:none} footer a:hover{text-decoration:underline}
       footer .row{margin-bottom:8px}
-      .theme-toggle{position:fixed;top:14px;right:14px;z-index:20;width:38px;height:38px;border-radius:50%;
+      /* top-right cluster: Live|VOD pills + theme toggle (shared with the VOD page) */
+      .topbar{position:fixed;top:12px;right:12px;z-index:20;display:flex;gap:8px;align-items:center}
+      nav.modes{display:flex;gap:6px}
+      nav.modes a{font-size:13px;font-weight:600;padding:6px 13px;border-radius:999px;border:1px solid var(--line);
+        color:var(--body);background:var(--card);box-shadow:var(--shadow)}
+      nav.modes a:hover{text-decoration:none;color:var(--ink)}
+      nav.modes a.on{background:var(--accent);border-color:var(--accent);color:#06231f}
+      .theme-toggle{width:38px;height:38px;border-radius:50%;
         border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;padding:0;
         display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:color .15s}
       .theme-toggle:hover{color:var(--accent)} .theme-toggle svg{width:18px;height:18px}
+
+      /* VOD clip tabs - occupy the below-player slot where live shows status */
+      .tabs{display:flex;gap:8px;margin:6px 0 4px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:18px}
+      .tabs[hidden]{display:none}
+      .tabs a{font-size:14.5px;font-weight:600;padding:8px 15px;border-radius:8px;border:1px solid var(--line);
+             background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+      .tabs a:hover{text-decoration:none}
+      .tabs a.on{background:var(--accent);border-color:var(--accent);color:#06231f}
+      .clip-meta{font-size:13.5px;color:var(--body);opacity:.9;margin:12px 0 0}
+      /* loop toggle in the control bar (inline SVG, never a font glyph) */
+      .vjs-loop-button{cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+      .vjs-loop-button svg{width:17px;height:17px}
+      .vjs-loop-button.vjs-loop-on{color:var(--accent)}
 
       /* collapsible public server-status panel */
       details.status{border-top:1px solid var(--line)}
@@ -137,15 +157,18 @@
     </style>
 </head>
 
-<body onload="init()">
+<body onload="boot()">
 
-    <button id="themeBtn" class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Toggle theme"></button>
+    <div class="topbar">
+      <nav class="modes"><a href="/" class="on" aria-current="page">Live</a><a href="/vod/">VOD</a></nav>
+      <button id="themeBtn" class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Toggle theme"></button>
+    </div>
 
     <div class="wrap">
       <div id="overlay">
         <div id="topfill"></div>
         <div id="headers">
-          <span class="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order Ambisonics</span></span>
+          <span class="kicker" id="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order Ambisonics</span></span>
           <h1><span id="h1">HOA 360&deg; Livestream</span></h1>
           <p id="hoast-text">A spatial-audio 360&deg; video stream: third-order Ambisonic sound (16 channels)
              rotated to follow your view and binauralized in real time, delivered live over MPEG-DASH.</p>
@@ -175,9 +198,15 @@
           </div>
         </div>
       </div>
-      <p class="hint">Drag to look around; use headphones for the spatial audio.</p>
+      <p class="hint" id="hint">Drag to look around; use headphones for the spatial audio.</p>
 
-      <details class="status">
+      <div class="tabs" id="clipTabs" hidden>
+        <a data-clip="directions" href="/vod/?clip=directions">Directions</a>
+        <a data-clip="colortones" href="/vod/?clip=colortones">Colortones (A/V sync)</a>
+      </div>
+      <p class="clip-meta" id="clipMeta" hidden></p>
+
+      <details class="status" id="statusPanel">
         <summary>Server status <span class="live-dot" id="stDot"></span></summary>
         <div class="status-grid">
           <div class="cell"><div class="k">Broadcast</div><div class="v"><span class="stat-badge sb-off" id="stLive">&hellip;</span></div></div>
@@ -196,7 +225,7 @@
           <div class="card"><div class="k">Spatial audio</div><div class="v"><span id="stSpatial">3rd-order Ambisonics</span> <small><span id="stCh">16</span> ch<span id="stConv"> &middot; ACN/SN3D</span></small></div></div>
           <div class="card"><div class="k">Video</div><div class="v"><span id="stCodec">360&deg;</span> <small>equirectangular</small></div></div>
           <div class="card"><div class="k">Audio codec</div><div class="v"><span id="stACodec">Opus</span> <small><span id="stCh2">16</span>-channel</small></div></div>
-          <div class="card"><div class="k">Delivery</div><div class="v">MPEG-DASH <small>live, WebM</small></div></div>
+          <div class="card"><div class="k">Delivery</div><div class="v" id="stDelivery">MPEG-DASH <small>live, WebM</small></div></div>
           <div class="card"><div class="k">Deployment</div><div class="v">Docker <small>containerised toolchain</small></div></div>
         </div>
       </section>
@@ -226,12 +255,22 @@
         .then(function (b) {
           if (!b) return;
           var lead = document.getElementById('aboutLead');
-          if (b.lead && lead) lead.innerHTML = b.lead;
+          if (b.lead && lead && MODE !== 'vod') lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
           if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
           if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
-          if (b.favicon) { var ic = document.querySelector('link[rel="icon"]'); if (ic) ic.setAttribute('href', b.favicon); }
+          if (b.favicon) {
+            // Replace the <link rel="icon"> element rather than mutating its
+            // href: browsers frequently ignore an in-place favicon href change
+            // and keep the icon they loaded from the initial markup, so the
+            // generic fallback would reappear intermittently.
+            var oldIc = document.querySelector('link[rel="icon"]');
+            if (oldIc && oldIc.parentNode) oldIc.parentNode.removeChild(oldIc);
+            var ic = document.createElement('link');
+            ic.rel = 'icon'; ic.href = b.favicon;
+            document.head.appendChild(ic);
+          }
         })
         .catch(function () {});
 
@@ -271,7 +310,7 @@
         } catch (e) {}
       }
     </script>
-    <script src="./dist/hoast360.bundle.js?v=rf10"></script>
+    <script src="/dist/hoast360.bundle.js?v=rf10"></script>
     <script>
         var hoast360 = new HOAST360();
 
@@ -446,6 +485,108 @@
         try { document.getElementById('yr').textContent = new Date().getFullYear(); } catch(e){}
     </script>
     <script>
+      // Unified page: this one document serves the live stream (/) and the
+      // on-demand test clips (/vod/). Mode comes from the URL path; the header
+      // title/subtitle and the player middle switch, while About, tiles,
+      // Reference, footer, nav and theme are shared. The live gate/start/status
+      // logic above runs in live mode only (gated here and in the status poll).
+      var MODE = /^\/vod\/?$/.test(location.pathname) ? 'vod' : 'live';
+      var CLIPS = {
+        directions: {
+          title: "Directions",
+          desc: "A 360° orientation test: the Orion360 card with an ambisonic energy-visualisation overlay, and spoken front/left/right/top read directions. 8K, 16-ch 3OA, looped to 2 min.",
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · ~2 min loop"
+        },
+        colortones: {
+          title: "Colortones (A/V sync)",
+          desc: "An audio/video-sync test pattern: colour flashes paired with distinct 300–1200 Hz tones on channel 1, so any A/V offset is unambiguous. 8K, 1 s lead-in, looped to 2 min.",
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus · colour+tone A/V-sync markers · 2 min loop"
+        }
+      };
+      var vodLoopOn = true;
+
+      function boot() {
+        document.querySelectorAll('nav.modes a').forEach(function (a) {
+          var isVod = /\/vod/.test(a.getAttribute('href'));
+          var on = (MODE === 'vod') === isVod;
+          a.classList.toggle('on', on);
+          if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+        });
+        if (MODE === 'vod') return initVod();
+        init();   // existing live boot, unchanged
+      }
+
+      function initVod() {
+        var params = new URLSearchParams(location.search);
+        var clip = params.get('clip'); if (!CLIPS[clip]) clip = 'directions';
+        var info = CLIPS[clip];
+
+        var k = document.getElementById('kicker'); if (k) k.textContent = 'HOA 360° · VOD test clips';
+        var h = document.getElementById('h1'); if (h) h.textContent = info.title;
+        var t = document.getElementById('hoast-text'); if (t) t.textContent = info.desc;
+        var m = document.getElementById('clipMeta'); if (m) { m.textContent = info.meta; m.hidden = false; }
+
+        var tabs = document.getElementById('clipTabs'); if (tabs) tabs.hidden = false;
+        document.querySelectorAll('#clipTabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.clip === clip); });
+
+        // About lead + spec tiles reflect on-demand delivery; live keeps the
+        // brand.json concert text (guarded in the brand fetch above).
+        var lead = document.getElementById('aboutLead');
+        if (lead) lead.innerHTML = 'On-demand third-order Ambisonic (16-channel) 360° reference clips, delivered over the same MPEG-DASH pipeline as the live stream and rendered in your browser by the HOAST360 engine, which rotates the sound field to match wherever you look. Use them to check orientation, spatial imaging and audio/video sync.';
+        var del = document.getElementById('stDelivery'); if (del) del.innerHTML = 'MPEG-DASH <small>on-demand, AV1</small>';
+        var vc = document.getElementById('stCodec'); if (vc) vc.textContent = '360° AV1';
+
+        // hide live-only chrome
+        var sp = document.getElementById('statusPanel'); if (sp) sp.hidden = true;
+        var g = document.getElementById('gate'); if (g) g.hidden = true;
+        var hint = document.getElementById('hint'); if (hint) hint.textContent = 'Drag to look around; use headphones for the spatial audio. The clip loops.';
+
+        if (!hoast360.opusSupport) {
+          var msg = document.getElementById('gateErrMsg');
+          if (msg) msg.textContent = 'This browser cannot play the clip. It needs 16-channel Opus over Media Source Extensions, which no browser on iOS or iPadOS provides. Use Firefox or a Chromium-based browser on desktop or Android.';
+          ['gateIdle', 'gateWait'].forEach(function (id) { var e = document.getElementById(id); if (e) e.hidden = true; });
+          var err = document.getElementById('gateErr'); if (err) err.hidden = false;
+          if (g) g.hidden = false;
+          return;
+        }
+
+        hoast360.initialize('/vod-dash/' + clip + '/' + clip + '.mpd', '/irs/', 3);
+        wireVodLoop();
+        addLoopButton();
+      }
+
+      // Loop the VOD. HTMLMediaElement.loop is unreliable through videojs-dash's
+      // managed source, so also drive it on 'ended'. The loop button toggles it.
+      function wireVodLoop() {
+        var v = document.querySelector('#hoast360-player video') || document.querySelector('video');
+        if (!v) return setTimeout(wireVodLoop, 400);
+        v.loop = vodLoopOn;
+        v.addEventListener('ended', function () { if (vodLoopOn) { try { v.currentTime = 0; v.play(); } catch (e) {} } });
+      }
+
+      // Inject a loop toggle into the videojs control bar (before fullscreen).
+      // Done by DOM so it needs no videojs global; the bundle does not expose one.
+      function addLoopButton() {
+        var p = hoast360.videoPlayer;
+        if (!p || !p.controlBar || !p.controlBar.el()) return setTimeout(addLoopButton, 400);
+        var cb = p.controlBar.el();
+        if (cb.querySelector('.vjs-loop-button')) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'vjs-control vjs-button vjs-loop-button' + (vodLoopOn ? ' vjs-loop-on' : '');
+        btn.title = 'Loop';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="vjs-control-text">Loop</span>';
+        btn.addEventListener('click', function () {
+          vodLoopOn = !vodLoopOn;
+          var v = document.querySelector('#hoast360-player video');
+          if (v) v.loop = vodLoopOn;
+          btn.classList.toggle('vjs-loop-on', vodLoopOn);
+        });
+        var fs = cb.querySelector('.vjs-fullscreen-control');
+        if (fs) cb.insertBefore(btn, fs); else cb.appendChild(btn);
+      }
+    </script>
+    <script>
       (function(){
         function dur(s){ if(s==null) return "-"; var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+"d ":"")+(h?h+"h ":"")+m+"m"; }
         function set(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
@@ -476,7 +617,7 @@
             }
           }).catch(function(){ set('stViewers',"unavailable"); });
         }
-        poll(); setInterval(poll, 15000);
+        if (MODE === 'live') { poll(); setInterval(poll, 15000); }
       })();
     </script>
     <script>
