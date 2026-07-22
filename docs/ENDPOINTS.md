@@ -12,7 +12,7 @@ and (for anything public) a reverse proxy or tunnel.
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
 | 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
 | 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` publishes `8081:80` on all interfaces; Compose appends port entries, so an override cannot narrow it. Firewall the port or edit the base file |
-| 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private** — bind localhost/VPN only, never `0.0.0.0` |
+| 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
 
 Internal-only, never published: earshot's RTMP relay + `on_publish` callback
 (1935 / 8000 inside the network), rtmp-ingest's health port (8080 internal),
@@ -58,10 +58,10 @@ use the legacy element audio.
 
 ## What telemetry itself polls (the monitoring inputs)
 
-- `earshot /stat` → `<publishing/>`, `<nclients>` — is a stream live?
-- newest `chunk-stream*.webm` mtime in the dash volume — segment freshness
-- docker container health + the hoast-player access log — viewers + countries
-- `/sys/class/thermal/thermal_zone0/temp`, `df /`, uptime, load — host health
+- `earshot /stat` → `<publishing/>`, `<nclients>`: is a stream live?
+- newest `chunk-stream*.webm` mtime in the dash volume: segment freshness
+- docker container health + the hoast-player access log: viewers + countries
+- `/sys/class/thermal/thermal_zone0/temp`, `df /`, uptime, load: host health
 
 ## What to watch from outside
 
@@ -76,7 +76,7 @@ use the legacy element audio.
 ## Your deployment (fill in; keep OUT of git)
 
 Record the real addresses in a local ops note or in
-`docker-compose.override.yml` — not in this committed file:
+`docker-compose.override.yml`, not in this committed file:
 
 - Host / SSH: `<hostname>` / `<vpn-ip>` (+ any port-forward)
 - Player public URL: `https://<your-domain>`
