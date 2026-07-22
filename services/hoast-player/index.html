@@ -495,12 +495,20 @@
         directions: {
           title: "Directions",
           desc: "A 360° orientation test: the Orion360 card with an ambisonic energy-visualisation overlay, and spoken front/left/right/top read directions. 8K, 16-ch 3OA, looped to 2 min.",
-          meta: "8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · 2 min loop"
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · 2 min loop",
+          captions: [
+            { src: '/vod-dash/directions/captions_en.vtt', lang: 'en', label: 'English' },
+            { src: '/vod-dash/directions/captions_pl.vtt', lang: 'pl', label: 'Polski' }
+          ]
         },
         colortones: {
           title: "Colortones (A/V sync)",
           desc: "An audio/video-sync test pattern: colour flashes paired with distinct 300–1200 Hz tones on channel 1, so any A/V offset is unambiguous. 8K, 1 s lead-in, looped to 2 min.",
-          meta: "8K (7680×3840) · AV1 · 16-channel Opus · colour+tone A/V-sync markers · 2 min loop"
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus · colour+tone A/V-sync markers · 2 min loop",
+          captions: [
+            { src: '/vod-dash/colortones/captions_en.vtt', lang: 'en', label: 'English' },
+            { src: '/vod-dash/colortones/captions_pl.vtt', lang: 'pl', label: 'Polski' }
+          ]
         }
       };
       var vodLoopOn = true;
@@ -553,6 +561,7 @@
         hoast360.initialize('/vod-dash/' + clip + '/' + clip + '.mpd', '/irs/', 3);
         wireVodLoop();
         addLoopButton();
+        if (info.captions) addCaptions(info.captions);
       }
 
       // Loop the VOD. HTMLMediaElement.loop is unreliable through videojs-dash's
@@ -584,6 +593,20 @@
         });
         var fs = cb.querySelector('.vjs-fullscreen-control');
         if (fs) cb.insertBefore(btn, fs); else cb.appendChild(btn);
+      }
+
+      // Side-load caption/subtitle tracks as native video.js text tracks — the
+      // reliable path. DASH-embedded WebVTT (a text AdaptationSet) is handled
+      // inconsistently by videojs-contrib-dash (the CC button appears but the
+      // text never renders); pointing video.js straight at the .vtt files avoids
+      // that. The CC button lists them and the first is shown by default.
+      function addCaptions(caps) {
+        var p = hoast360.videoPlayer;
+        if (!p || typeof p.addRemoteTextTrack !== 'function') return setTimeout(function () { addCaptions(caps); }, 400);
+        caps.forEach(function (c, i) {
+          var el = p.addRemoteTextTrack({ kind: 'captions', src: c.src, srclang: c.lang, label: c.label, 'default': i === 0 }, true);
+          if (i === 0 && el && el.track) el.track.mode = 'showing';
+        });
       }
     </script>
     <script>
