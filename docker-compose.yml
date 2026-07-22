@@ -104,9 +104,14 @@ services:
           echo "[loop-source] see .env.example for the exact command."
           exec sleep 2147483647
         fi
-        echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/live/$${STREAM_KEY}"
+        # Publish under a fixed, non-secret stream name (${DASH_NAME:-hoast_demo})
+        # and pass STREAM_KEY as ?token= instead of using the key AS the stream
+        # name. rtmp-ingest accepts either, but a clean name keeps the secret out
+        # of the RTMP publish/relay log lines (which print the stream name); the
+        # token itself is suppressed by access_log off on the /auth location.
+        echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo} (token auth)"
         exec ffmpeg -hide_banner -re -stream_loop -1 -i /content/demo.mp4 \
-          -c copy -f flv "rtmp://rtmp-ingest:1935/live/$${STREAM_KEY}"
+          -c copy -f flv "rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo}?token=$${STREAM_KEY}"
     environment:
       - STREAM_KEY=${STREAM_KEY:-hoast_demo}
     volumes:

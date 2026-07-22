@@ -39,6 +39,10 @@ http {
         #   rtmp://<host>:1935/live/${STREAM_KEY}
         #   rtmp://<host>:1935/live/<anything>?token=${STREAM_KEY}
         location = /auth {
+            # The publish credential arrives here as ?token= (or the stream
+            # name); keep it out of the access log so the key is not written to
+            # stdout/docker logs on every publish.
+            access_log off;
             if ($arg_name = '${STREAM_KEY}') {
                 return 201;
             }
