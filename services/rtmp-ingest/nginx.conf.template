@@ -1,5 +1,9 @@
 daemon off;
-error_log /dev/stdout info;
+# notice, not info: nginx-rtmp logs the publish event ("publish: name=... args=
+# token=...") at info, which would write the ?token= credential to stdout on
+# every publish. notice keeps warnings/errors; raise back to info temporarily to
+# debug RTMP connect/publish flow.
+error_log /dev/stdout notice;
 pid /run/nginx/nginx.pid;
 
 load_module /usr/lib/nginx/modules/ngx_rtmp_module.so;
