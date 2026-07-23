@@ -16,9 +16,13 @@
 # on channel 1, channels 2-16 silent but PRESERVED (never downmixed). This
 # SCRIPT is the reproducible master.
 #
-# Usage: scripts/make-colortones.sh [out.webm] [WIDTH] [HEIGHT] [MINUTES(even)] [LEAD_s]
+# Usage: scripts/make-colortones.sh [--captions-only] [out.webm] [WIDTH] [HEIGHT] [MINUTES(even)] [LEAD_s]
 #   defaults: content/vod/masters/colortones_8k360_16ch.webm 7680 3840 2 1
+#   --captions-only re-emits just the .vtt sidecars and skips the (slow) encode
 set -euo pipefail
+
+CAPTIONS_ONLY=0
+if [ "${1:-}" = "--captions-only" ]; then CAPTIONS_ONLY=1; shift; fi
 
 OUT="${1:-content/vod/masters/colortones_8k360_16ch.webm}"
 W="${2:-7680}"; H="${3:-3840}"; MIN="${4:-2}"; LEAD="${5:-1}"
@@ -70,16 +74,18 @@ fc+="drawbox=x=0:y=(ih-${LINE})/2:w=iw:h=${LINE}:color=white@0.85:t=fill[vout];"
 fc+="${alab}concat=n=${k}:v=0:a=1,pan=hexadecagonal|c0=c0[aout]"
 
 echo "colortones: ${W}x${H} ${FPS}fps  ${LEAD}s lead, clean ${MIN} min total (${LOOPS}x ${CYCLE}s cycle, tail trimmed by ${LEAD}s; ${N} colour+tone pairs 300-1200Hz)"
-ffmpeg -y -hide_banner -filter_complex "$fc" \
-  -map "[vout]" -map "[aout]" \
-  -t $(( MIN * 60 )) \
-  -c:v libsvtav1 -preset 8 -crf 12 -g "${GOP}" -pix_fmt yuv420p \
-  -c:a libopus -mapping_family 255 -b:a 256k \
-  "$OUT"
+if [ "$CAPTIONS_ONLY" -eq 0 ]; then
+  ffmpeg -y -hide_banner -filter_complex "$fc" \
+    -map "[vout]" -map "[aout]" \
+    -t $(( MIN * 60 )) \
+    -c:v libsvtav1 -preset 8 -crf 12 -g "${GOP}" -pix_fmt yuv420p \
+    -c:a libopus -mapping_family 255 -b:a 256k \
+    "$OUT"
 
-echo "wrote $OUT"
-ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,channels \
-  -show_entries format=duration -of default=noprint_wrappers=1 "$OUT"
+  echo "wrote $OUT"
+  ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,channels \
+    -show_entries format=duration -of default=noprint_wrappers=1 "$OUT"
+fi
 
 # Caption sidecars, built from the same colour<->tone table and cadence as the
 # video above, so every cue lands exactly on its flash and names the pair you

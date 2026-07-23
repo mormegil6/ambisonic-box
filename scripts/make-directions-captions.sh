@@ -78,7 +78,8 @@ def build(dirmap, helps):
     return "\n".join(out) + "\n"
 
 for lang, dirmap, helps in (("en", EN_DIR, EN_HELP), ("pl", PL_DIR, PL_HELP)):
-    path = os.path.join(outdir, "directions_captions_%s.vtt" % lang)
+    # named to pair with the master release asset, directions_8k360_16ch.webm
+    path = os.path.join(outdir, "directions_8k360_16ch_captions_%s.vtt" % lang)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(build(dirmap, helps))
     print("wrote %s (%d cues)" % (path, len(cues)))
