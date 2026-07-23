@@ -37,9 +37,25 @@ const PORT = 8889;
 
     const errors = [];
     const warnings = [];
+    const ignored = [];
+
+    // dash.js logs an exception per SourceBuffer while the media source is torn
+    // down, because it polls buffered ranges on a SourceBuffer that detach has
+    // already removed. It is a teardown race inside dash.js, not a fault in the
+    // player or this stack, and it fires on the stop/load reset cycle this test
+    // performs on purpose. Counting it as an error made the test report FAIL for
+    // a healthy player - which matters now that scripts/measure-for-paper.sh
+    // treats this as evidence. Matched narrowly, and still reported, so a real
+    // SourceBuffer problem is not swallowed by a blanket filter.
+    const BENIGN = [
+        /getAllBufferRanges exception.*SourceBuffer has been removed from the parent media source/,
+    ];
+    const isBenign = t => BENIGN.some(re => re.test(t));
+
     page.on('console', msg => {
-        if (msg.type() === 'error') errors.push('[console.error] ' + msg.text());
-        if (msg.type() === 'warning') warnings.push('[console.warn] ' + msg.text());
+        const t = msg.text();
+        if (msg.type() === 'error') (isBenign(t) ? ignored : errors).push('[console.error] ' + t);
+        if (msg.type() === 'warning') warnings.push('[console.warn] ' + t);
     });
     page.on('pageerror', err => errors.push('[pageerror] ' + err.message));
     page.on('requestfailed', req => {
@@ -115,6 +131,10 @@ const PORT = 8889;
         console.log('\n=== console errors:', errors.length);
         errors.forEach(e => console.log('  ' + e));
         console.log('=== console warnings:', warnings.length);
+        if (ignored.length) {
+            console.log('=== ignored (known-benign dash.js teardown):', ignored.length);
+            ignored.slice(0, 2).forEach(e => console.log('  ' + e));
+        }
         warnings.slice(0, 10).forEach(w => console.log('  ' + w));
 
         if (errors.length === 0 && before !== after) {
