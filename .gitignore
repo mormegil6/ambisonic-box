@@ -33,6 +33,7 @@ docs/local/
 
 # generated VOD packaging (masters are content/**/*.webm above; these dirs are derived)
 content/vod/dash/
+content/vod/ladder/
 content/vod/ladder-*/
 # caption sidecars ship as release assets alongside their clip, like the masters
 content/**/*.vtt

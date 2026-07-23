@@ -6,20 +6,23 @@
 # cuts segments on keyframes. Audio is 16-ch Opus (mapping_family 255), NEVER
 # downmixed.
 #
-# The top rung used to be forced to preset 8, because SVT-AV1 v1.7 refused 8K
-# below M8. That restriction is gone as of v4.2.0. Dropping it is a trade, not
-# a free win: on the full 120 s directions clip, preset 6 produces 169.5 MB at
-# SSIM 0.997129 (25.42 dB) against preset 8's 184.0 MB at 0.997346 (25.76 dB).
-# So 7.8 % fewer bytes for 0.34 dB less fidelity, at ~2.8x the encode time
-# (4m15 against 1m30).
+# The top rung used to be pinned to preset 8, because SVT-AV1 v1.7 refuses 8K
+# below M8 ("8k+ resolution support is limited to M8 and faster presets" - the
+# rung fails outright, it does not degrade). v4.2.0 lifted that. Rather than pin
+# to 8 everywhere, which costs quality on modern libs, or assume 6 everywhere,
+# which breaks the ladder on older ones, each rung is attempted at PRESET and
+# falls back to 8 only when the encoder actually refuses. the encode host's WSL2 ffmpeg
+# is still on v1.7, so that fallback is live, not theoretical.
 #
-# Preset 6 is kept because the 8K rung is the one that strains the player: it
-# is what pushed dash.js past the MSE buffer quota and had to be capped in the
-# fork, so bytes off the top rung buy real headroom, and 0.34 dB of SSIM on a
-# 25 dB clip is not visible. Measure again for content that is not this one -
-# a 10 s excerpt of the same source suggested preset 6 won on BOTH axes, which
-# the full-length encode did not bear out. If you are on an SVT-AV1 older than
-# about v2, check the top rung still encodes at all before trusting this.
+# Preset 6 over 8 is a trade, not a free win: on the full 120 s directions clip
+# preset 6 produces 169.5 MB at SSIM 0.997129 (25.42 dB) against preset 8's
+# 184.0 MB at 0.997346 (25.76 dB) - 7.8 % fewer bytes for 0.34 dB less fidelity,
+# at ~2.8x the encode time (4m15 against 1m30). Worth it because the 8K rung is
+# the one that strains the player: it is what pushed dash.js past the MSE buffer
+# quota and had to be capped in the fork, so bytes off the top rung buy real
+# headroom, and 0.34 dB on a 25 dB clip is not visible. Measure again for other
+# content - a 10 s excerpt of this same source suggested preset 6 won on BOTH
+# axes, which the full-length encode did not bear out.
 #
 # LOOP_TO repeats a short master until the given number of seconds, which is how
 # the `directions` clip is built: its master is exactly one 11.083 s loop of the
@@ -39,6 +42,8 @@ OUT="${2:?output dir required}"
 CRF="${3:-30}"
 FPS="${4:-24}"
 LOOP_TO="${5:-0}"
+PRESET="${PRESET:-6}"          # SVT-AV1 preset; the 8K rung falls back to 8 on
+                               # older libs that refuse it (see the loop below)
 mkdir -p "$OUT"
 GOP=$(( FPS * 2 ))
 
@@ -48,15 +53,32 @@ if [ "$LOOP_TO" != "0" ]; then
   echo "looping ${SRC##*/} to ${LOOP_TO}s"
 fi
 
+encode_rung () {   # W H preset outfile errfile
+  ffmpeg -y -hide_banner -loglevel error "${LOOP_IN[@]}" -i "$SRC" \
+    -an -map 0:v:0 -vf "scale=${1}:${2}:flags=lanczos" \
+    -c:v libsvtav1 -preset "$3" -crf "$CRF" -g "$GOP" -pix_fmt yuv420p \
+    "${LOOP_OUT[@]}" "$4" 2>"$5"
+}
+
 rungs=("7680 3840" "5760 2880" "3840 1920" "2880 1440" "1920 960" "1440 720" "1080 540" "720 360")
+err=$(mktemp); trap 'rm -f "$err"' EXIT
 for r in "${rungs[@]}"; do
   set -- $r; W=$1; H=$2; name="v_${W}x${H}"
-  preset=6
-  echo ">>> $name (crf $CRF preset $preset gop $GOP)"
-  ffmpeg -y -hide_banner -loglevel error "${LOOP_IN[@]}" -i "$SRC" \
-    -an -map 0:v:0 -vf "scale=${W}:${H}:flags=lanczos" \
-    -c:v libsvtav1 -preset "$preset" -crf "$CRF" -g "$GOP" -pix_fmt yuv420p \
-    "${LOOP_OUT[@]}" "$OUT/${name}.mp4"
+  echo ">>> $name (crf $CRF preset $PRESET gop $GOP)"
+  if ! encode_rung "$W" "$H" "$PRESET" "$OUT/${name}.mp4" "$err"; then
+    # Older SVT-AV1 (<= v1.7, still what the encode host's WSL2 ffmpeg carries) refuses
+    # 8K below preset M8 and fails the whole rung:
+    #   Svt[error]: 8k+ resolution support is limited to M8 and faster presets.
+    # v4.2 lifted that, so rather than pin the top rung to 8 everywhere - which
+    # costs quality on modern libs - or assume 6 everywhere - which breaks the
+    # ladder on older ones - fall back only when the encoder actually says no.
+    if grep -qi "8k+ resolution support is limited" "$err"; then
+      echo "    SVT-AV1 refuses ${W}x${H} below M8 on this build; retrying at preset 8"
+      encode_rung "$W" "$H" 8 "$OUT/${name}.mp4" "$err" || { cat "$err" >&2; exit 1; }
+    else
+      cat "$err" >&2; exit 1
+    fi
+  fi
 done
 
 echo ">>> audio 16-ch Opus"
