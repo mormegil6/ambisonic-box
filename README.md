@@ -15,7 +15,7 @@ flowchart TD
     OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["DOCKER COMPOSE"]
-        direction TD
+        direction TB
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>ffmpeg loop of demo.mp4"]
         EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
