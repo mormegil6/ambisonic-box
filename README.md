@@ -14,7 +14,7 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 flowchart TD
     OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
-    subgraph COMPOSE["docker compose"]
+    subgraph COMPOSE["DOCKER COMPOSE"]
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>ffmpeg loop of demo.mp4"]
         EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
@@ -35,6 +35,7 @@ flowchart TD
     VOL -. "segment freshness" .-> TELEM
     TELEM -. "curated status.json" .-> PLAYER
     PLAYER -- "HTTP :8080" --> VIEWER
+    style COMPOSE stroke-width:3px
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity

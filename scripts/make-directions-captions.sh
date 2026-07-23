@@ -16,11 +16,18 @@
 # confidently wrong timings.
 #
 # Re-measured 2026-07-23 against the 8K ProRes master (360_test-8k_3OA.mov),
-# which is exactly one loop. Same recording as before, very slightly different
-# phase: the first "Right" moved 3.00 -> 2.86 s and the later words by up to
-# 0.18 s. The loop period confirmed at 11.083 s. Front is not directly
-# detectable this way - it is the direction W and X agree on most of the time,
-# so its two offsets are carried over unchanged from the earlier measurement.
+# which is exactly one loop (266 frames at 24 fps = 11.083333 s).
+#
+# The AUDIO IS UNCHANGED. Running the same analysis over the previously
+# published 120 s master puts its reads at 2.88 / 3.80 / 4.68 / 5.66 / 6.82 /
+# 7.66 s, against 2.86 / 3.80 / 4.68 / 5.66 / 6.82 / 7.64 here - agreement to
+# within one 0.02 s analysis hop. The earlier constants (R0 3.0, offsets 1.0 /
+# 2.0 / 2.8 / 4.0 / 4.8) were simply a rounder first pass; these are the same
+# words located more precisely. Folding the old master's later events back by
+# the loop period lands them on 2.88 again, which confirms the period exactly.
+#
+# Front is not directly detectable this way - it is the direction W and X agree
+# on most of the time - so its two offsets are carried over unchanged.
 #
 # It lives in the repo only so that measurement survives in readable form. The
 # .vtt files themselves are NOT tracked - like the clip masters, they ship as
