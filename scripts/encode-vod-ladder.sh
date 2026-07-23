@@ -2,27 +2,34 @@
 # Encode a VOD master (video + 16-ch audio) into an 8-rung AV1 ABR ladder plus a
 # single 16-channel Opus audio rendition, ready for scripts/package-vod-dash.sh.
 #
-# All rungs are 2:1 equirectangular at preset 6. GOP = 2 s so the DASH packager
+# All rungs are 2:1 equirectangular. GOP = 2 s so the DASH packager
 # cuts segments on keyframes. Audio is 16-ch Opus (mapping_family 255), NEVER
 # downmixed.
 #
-# The top rung used to be pinned to preset 8, because SVT-AV1 v1.7 refuses 8K
-# below M8 ("8k+ resolution support is limited to M8 and faster presets" - the
-# rung fails outright, it does not degrade). v4.2.0 lifted that. Rather than pin
-# to 8 everywhere, which costs quality on modern libs, or assume 6 everywhere,
-# which breaks the ladder on older ones, each rung is attempted at PRESET and
-# falls back to 8 only when the encoder actually refuses. the encode host's WSL2 ffmpeg
-# is still on v1.7, so that fallback is live, not theoretical.
+# PRESET defaults to 4 because slower presets measured better on BOTH size and
+# fidelity at every rung - not the usual trade. Full 120 s directions clip,
+# SSIM against the source over a 30 s window:
 #
-# Preset 6 over 8 is a trade, not a free win: on the full 120 s directions clip
-# preset 6 produces 169.5 MB at SSIM 0.997129 (25.42 dB) against preset 8's
-# 184.0 MB at 0.997346 (25.76 dB) - 7.8 % fewer bytes for 0.34 dB less fidelity,
-# at ~2.8x the encode time (4m15 against 1m30). Worth it because the 8K rung is
-# the one that strains the player: it is what pushed dash.js past the MSE buffer
-# quota and had to be capped in the fork, so bytes off the top rung buy real
-# headroom, and 0.34 dB on a 25 dB clip is not visible. Measure again for other
-# content - a 10 s excerpt of this same source suggested preset 6 won on BOTH
-# axes, which the full-length encode did not bear out.
+#   7680x3840   p6 169.5 MB 25.419 dB  ->  p5 147.1 MB 25.974 dB   -13.2 %, +0.55 dB
+#   5760x2880   p6 122.9 MB 25.749 dB  ->  p4 102.5 MB 26.255 dB   -16.6 %, +0.51 dB
+#   3840x1920   p6  56.3 MB 24.777 dB  ->  p4  44.7 MB 25.122 dB   -20.5 %, +0.35 dB
+#   1920x960    p6  19.8 MB 24.236 dB  ->  p4  16.6 MB 24.523 dB   -16.2 %, +0.29 dB
+#
+# Cost is 1.2-1.7x encode time. Fewer bytes on the top rung matter beyond
+# bandwidth: the 8K rung is what pushed dash.js past the MSE buffer quota and
+# forced the cap in the player fork.
+#
+# SVT-AV1 refuses 8K below a preset floor, and the floor MOVES between versions:
+# v1.7 allows only M8 and faster, v4.2 allows M5 and faster. The rung fails
+# outright rather than degrading. So each rung is attempted at PRESET, and on
+# refusal the floor is read straight out of the error text
+# ("8k+ resolution support is limited to M5 and faster presets") and retried
+# there - which keeps the best preset each library actually permits instead of
+# pinning to the oldest one's floor. the encode host's WSL2 ffmpeg is still v1.7, so
+# this path is live, not theoretical.
+#
+# Measure again for other content, and full length: a 10 s excerpt of this same
+# source once pointed the opposite way from the 120 s encode.
 #
 # LOOP_TO repeats a short master until the given number of seconds, which is how
 # the `directions` clip is built: its master is exactly one 11.083 s loop of the
@@ -42,8 +49,8 @@ OUT="${2:?output dir required}"
 CRF="${3:-30}"
 FPS="${4:-24}"
 LOOP_TO="${5:-0}"
-PRESET="${PRESET:-6}"          # SVT-AV1 preset; the 8K rung falls back to 8 on
-                               # older libs that refuse it (see the loop below)
+PRESET="${PRESET:-4}"          # SVT-AV1 preset; rungs the library refuses fall
+                               # back to the floor it names (see the loop below)
 mkdir -p "$OUT"
 GOP=$(( FPS * 2 ))
 
@@ -66,15 +73,15 @@ for r in "${rungs[@]}"; do
   set -- $r; W=$1; H=$2; name="v_${W}x${H}"
   echo ">>> $name (crf $CRF preset $PRESET gop $GOP)"
   if ! encode_rung "$W" "$H" "$PRESET" "$OUT/${name}.mp4" "$err"; then
-    # Older SVT-AV1 (<= v1.7, still what the encode host's WSL2 ffmpeg carries) refuses
-    # 8K below preset M8 and fails the whole rung:
-    #   Svt[error]: 8k+ resolution support is limited to M8 and faster presets.
-    # v4.2 lifted that, so rather than pin the top rung to 8 everywhere - which
-    # costs quality on modern libs - or assume 6 everywhere - which breaks the
-    # ladder on older ones - fall back only when the encoder actually says no.
-    if grep -qi "8k+ resolution support is limited" "$err"; then
-      echo "    SVT-AV1 refuses ${W}x${H} below M8 on this build; retrying at preset 8"
-      encode_rung "$W" "$H" 8 "$OUT/${name}.mp4" "$err" || { cat "$err" >&2; exit 1; }
+    # SVT-AV1 refuses 8K below a preset floor and fails the rung outright:
+    #   Svt[error]: 8k+ resolution support is limited to M5 and faster presets.
+    # The floor differs by version (M8 on v1.7, M5 on v4.2), so read it out of
+    # the message rather than hard-coding either one. Anything else is a real
+    # error and must not be retried.
+    floor=$(grep -oiE "limited to M[0-9]+" "$err" | grep -oE "[0-9]+" | head -1)
+    if [ -n "$floor" ]; then
+      echo "    SVT-AV1 on this build refuses ${W}x${H} below M${floor}; retrying at preset ${floor}"
+      encode_rung "$W" "$H" "$floor" "$OUT/${name}.mp4" "$err" || { cat "$err" >&2; exit 1; }
     else
       cat "$err" >&2; exit 1
     fi
