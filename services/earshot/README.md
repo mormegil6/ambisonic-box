@@ -9,7 +9,17 @@ and are omitted.
 
 ## Local modifications
 
-Three deviations from upstream:
+Four deviations from the vendored commit. They are deviations from the pinned
+2022 snapshot, not necessarily from upstream today - two have since been
+accepted upstream and will disappear the next time `src/` is re-vendored from a
+newer commit:
+
+| # | change | upstream |
+|---|---|---|
+| 1 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`, 2026-07-23) |
+| 2 | volume-safe entrypoint | open, [#55](https://github.com/EnvelopSound/Earshot/pull/55) |
+| 3 | `suggestedPresentationDelay` floor | not proposed - too specific to this stack |
+| 4 | `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`, 2026-07-22) |
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -34,6 +44,19 @@ Upstream wipes `/opt/data` at startup, which fails on a busy mountpoint when a
 Docker volume is mounted at `/opt/data/dash` (the `&&` chain then breaks and
 nginx starts unconfigured). The patched version clears stale segments without
 removing the mountpoint itself.
+
+### 4. `src/nginx-transcoder/nginx*.conf`: `wait_key` / `wait_video` on the relay
+
+The transcoder is an nginx-rtmp `exec` ffmpeg that *subscribes* to the internal
+relay, and a subscriber joining a live stream gets audio immediately but no
+decodable video until the next keyframe - up to a full GOP later. The DASH muxer
+records that skew as a leading empty edit (`elst media_time = -1`) on the video
+track, which Firefox honours and Chromium's MSE does not, so Chromium paints
+video early by the same amount. These two directives start the relayed video at
+a keyframe and hold audio until video flows, so the tracks start together and no
+edit box is written at all. Measured: empty edits on 10/10 joins without them,
+`elst [(0,0)]` and tracks aligned within 3 ms on 20/20 with them. See
+`docs/PAPER-NOTES.md` §12.
 
 ### 3. `src/Dockerfile`: `suggestedPresentationDelay` floor patched into ffmpeg
 
