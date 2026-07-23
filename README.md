@@ -15,13 +15,14 @@ flowchart TD
     OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["DOCKER COMPOSE"]
+        direction TD
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>ffmpeg loop of demo.mp4"]
         EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
         VOL[("dash-output volume")]
         SHAKA["shaka packager<br/>(profile: tools)"]
-        TELEM["telemetry<br/>dashboard :8090 + alerts"]
         PLAYER["hoast-player<br/>nginx + HOAST360"]
+        TELEM["telemetry<br/>dashboard :8090 + alerts"]
     end
 
     VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
@@ -32,8 +33,8 @@ flowchart TD
     EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
     SHAKA -. "VOD / lip-sync packaging" .-> VOL
     VOL --> PLAYER
-    VOL -. "segment freshness" .-> TELEM
     PLAYER -- "HTTP :8080" --> VIEWER
+    VOL -. "segment freshness" .-> TELEM
     style COMPOSE stroke-width:3px
 ```
 
