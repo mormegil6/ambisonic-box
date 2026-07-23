@@ -7,30 +7,47 @@
 # preset 8; the rest use preset 6. Audio is 16-ch Opus (mapping_family 255),
 # NEVER downmixed.
 #
-# Usage: scripts/encode-vod-ladder.sh <master.(webm|mov|mp4)> <out-dir> [crf] [fps]
-#   defaults: crf 30, fps 24
+# LOOP_TO repeats a short master until the given number of seconds, which is how
+# the `directions` clip is built: its master is exactly one 11.083 s loop of the
+# spoken reads, and the delivered clip is 2 min of it. Looping happens at read
+# time rather than by writing an intermediate, which for an 8K ProRes master
+# would be tens of gigabytes. Video and audio are looped in separate ffmpeg runs,
+# which is only safe because both streams are an exact whole number of samples
+# long (266 frames at 24 fps, 532000 samples at 48 kHz - both exactly 11.083333 s),
+# so the two never drift apart at the seams. Check that before reusing this on
+# another master.
+#
+# Usage: scripts/encode-vod-ladder.sh <master.(webm|mov|mp4)> <out-dir> [crf] [fps] [loop-to-seconds]
+#   defaults: crf 30, fps 24, no looping
 set -euo pipefail
-SRC="${1:?usage: encode-vod-ladder.sh <master> <out-dir> [crf] [fps]}"
+SRC="${1:?usage: encode-vod-ladder.sh <master> <out-dir> [crf] [fps] [loop-to-seconds]}"
 OUT="${2:?output dir required}"
 CRF="${3:-30}"
 FPS="${4:-24}"
+LOOP_TO="${5:-0}"
 mkdir -p "$OUT"
 GOP=$(( FPS * 2 ))
+
+LOOP_IN=(); LOOP_OUT=()
+if [ "$LOOP_TO" != "0" ]; then
+  LOOP_IN=(-stream_loop -1); LOOP_OUT=(-t "$LOOP_TO")
+  echo "looping ${SRC##*/} to ${LOOP_TO}s"
+fi
 
 rungs=("7680 3840" "5760 2880" "3840 1920" "2880 1440" "1920 960" "1440 720" "1080 540" "720 360")
 for r in "${rungs[@]}"; do
   set -- $r; W=$1; H=$2; name="v_${W}x${H}"
   preset=6; [ "$W" -ge 7680 ] && preset=8            # SVT-AV1 v1.7: 8K needs >= M8
   echo ">>> $name (crf $CRF preset $preset gop $GOP)"
-  ffmpeg -y -hide_banner -loglevel error -i "$SRC" \
+  ffmpeg -y -hide_banner -loglevel error "${LOOP_IN[@]}" -i "$SRC" \
     -an -map 0:v:0 -vf "scale=${W}:${H}:flags=lanczos" \
     -c:v libsvtav1 -preset "$preset" -crf "$CRF" -g "$GOP" -pix_fmt yuv420p \
-    "$OUT/${name}.mp4"
+    "${LOOP_OUT[@]}" "$OUT/${name}.mp4"
 done
 
 echo ">>> audio 16-ch Opus"
-ffmpeg -y -hide_banner -loglevel error -i "$SRC" \
+ffmpeg -y -hide_banner -loglevel error "${LOOP_IN[@]}" -i "$SRC" \
   -vn -map 0:a:0 -c:a libopus -mapping_family 255 -b:a 1024k \
-  "$OUT/audio_16ch.webm"
+  "${LOOP_OUT[@]}" "$OUT/audio_16ch.webm"
 
 echo "ladder written to $OUT"; ls -lh "$OUT"
