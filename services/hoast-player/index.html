@@ -619,14 +619,28 @@
         var p = window.hoast360 && hoast360.videoPlayer;
         return (p && typeof p.xr === 'function') ? p.xr() : null;
       }
+      // Rotate a vector by a quaternion, and by its inverse. Done by hand
+      // because THREE is bundled by webpack and is not a global here.
+      function qRot(v, q, inverse) {
+        var qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+        if (inverse) { qx = -qx; qy = -qy; qz = -qz; }
+        var x = v[0], y = v[1], z = v[2];
+        var ix =  qw * x + qy * z - qz * y,
+            iy =  qw * y + qz * x - qx * z,
+            iz =  qw * z + qx * y - qy * x,
+            iw = -qx * x - qy * y - qz * z;
+        return [ix * qw + iw * -qx + iy * -qz - iz * -qy,
+                iy * qw + iw * -qy + iz * -qx - ix * -qz,
+                iz * qw + iw * -qz + ix * -qy - iy * -qx];
+      }
       window.hoastBearing = function () {
-        var xr = hoastXR(); if (!xr || !xr.camera || !xr.movieScreen) return null;
-        var THREE = xr.THREE || window.THREE;
-        var d = new THREE.Vector3(0, 0, -1).applyQuaternion(xr.camera.quaternion);
-        d.applyQuaternion(xr.movieScreen.quaternion.clone().invert());
-        d.x *= -1;                                   // undo scale.x = -1
-        var az = Math.atan2(d.z, d.x) * 180 / Math.PI * window.HOAST_AZ_SIGN;
-        var el = Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI;
+        var xr = hoastXR();
+        if (!xr || !xr.camera || !xr.movieScreen) return null;
+        var d = qRot([0, 0, -1], xr.camera.quaternion, false);   // camera looks down -Z
+        d = qRot(d, xr.movieScreen.quaternion, true);            // into sphere-local
+        d[0] *= -1;                                              // undo scale.x = -1
+        var az = Math.atan2(d[2], d[0]) * 180 / Math.PI * window.HOAST_AZ_SIGN;
+        var el = Math.asin(Math.max(-1, Math.min(1, d[1]))) * 180 / Math.PI;
         return { az: +az.toFixed(1), el: +el.toFixed(1) };
       };
       window.hoastLook = function (azDeg, elDeg) {
