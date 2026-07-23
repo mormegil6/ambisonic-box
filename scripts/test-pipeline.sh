@@ -60,9 +60,15 @@ DASH_NAME="${DASH_NAME:-hoast_demo}"
 # earshot names the manifest after DASH_NAME, not the publish name. TEST_STREAM
 # stays the publish name so the ?token= path is still exercised.
 TEST_MPD="$OUTPUT_DIR/$DASH_NAME.mpd"
+# An EMPTY FFMPEG_FLAGS does not mean "no policy" - it means the compose file's
+# own default applies, and since 5663fa9 that default is `-c:v copy`, not VP9.
+# Asserting vp09 here made the test fail against a correctly configured stack.
+# Keep this branch in step with docker-compose.yml if that default changes.
 case "$FFMPEG_FLAGS" in
-    *"-c:v copy"*) VIDEO_CODEC=avc1 ;;   # H.264 passthrough fallback
-    *)             VIDEO_CODEC=vp09 ;;   # default policy
+    *"libvpx-vp9"*) VIDEO_CODEC=vp09 ;;   # explicit VP9 transcode
+    *"-c:v copy"*)  VIDEO_CODEC=avc1 ;;   # explicit H.264 passthrough
+    "")             VIDEO_CODEC=avc1 ;;   # unset -> compose default (-c:v copy)
+    *)              VIDEO_CODEC=vp09 ;;   # some other transcode: assume policy
 esac
 
 log()  { printf '[test-pipeline] %s\n' "$*"; }
