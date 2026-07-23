@@ -10,10 +10,17 @@
 # (16chAmbiX_FrontRightLeftTop). The spoken reads were located by correlating
 # the W channel against the X/Y/Z channels of the third-order Ambisonic mix,
 # which recovers both WHEN each word occurs and WHICH direction it is panned to
-# (Right = -Y, Left = +Y, Top = +Z, Front = +X). That analysis yielded an
-# 11.08 s loop period, a first "Right" onset at 3.0 s, and the per-word offsets
-# hard-coded below. Point this at any other clip and it will emit confidently
-# wrong timings.
+# (Right = -Y, Left = +Y, Top = +Z, Front = +X). Simple level thresholding does
+# not work here: the reads sit on a continuous bed, so onsets only separate once
+# you look at direction. Point this at any other clip and it will emit
+# confidently wrong timings.
+#
+# Re-measured 2026-07-23 against the 8K ProRes master (360_test-8k_3OA.mov),
+# which is exactly one loop. Same recording as before, very slightly different
+# phase: the first "Right" moved 3.00 -> 2.86 s and the later words by up to
+# 0.18 s. The loop period confirmed at 11.083 s. Front is not directly
+# detectable this way - it is the direction W and X agree on most of the time,
+# so its two offsets are carried over unchanged from the earlier measurement.
 #
 # It lives in the repo only so that measurement survives in readable form. The
 # .vtt files themselves are NOT tracked - like the clip masters, they ship as
@@ -31,17 +38,17 @@ import sys, os
 outdir = sys.argv[1]
 
 # ---- measured from the recording; see header before changing anything ------
-LOOP  = 11.08   # s  loop period (Right->Right within a pair 0.96 s, then 10.12 s)
-R0    = 3.0     # s  onset of the first "Right"
+LOOP  = 11.083  # s  loop period (the ProRes master is exactly one loop)
+R0    = 2.86    # s  onset of the first "Right"
 NLOOP = 11      # loops that fall inside the clip
 TOTAL = 120.0   # s  clip duration
 HOLD  = 1.6     # s  max a cue stays up when the next word is far off
 
 # (direction, offset from that loop's first Right, helper-line group)
 WORDS = [('F', -2.7, 0), ('F', -1.7, 0),
-         ('R',  0.0, 1), ('R',  1.0, 1),
-         ('L',  2.0, 2), ('L',  2.8, 2),
-         ('T',  4.0, 3), ('T',  4.8, 3)]
+         ('R',  0.00, 1), ('R',  0.94, 1),
+         ('L',  1.82, 2), ('L',  2.80, 2),
+         ('T',  3.96, 3), ('T',  4.78, 3)]
 
 EN_DIR = {'F': 'Front', 'R': 'Right', 'L': 'Left', 'T': 'Top'}
 PL_DIR = {'F': 'Przód', 'R': 'Prawo', 'L': 'Lewo', 'T': 'Góra'}
