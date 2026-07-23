@@ -310,7 +310,7 @@
         } catch (e) {}
       }
     </script>
-    <script src="/dist/hoast360.bundle.js?v=rf10"></script>
+    <script src="/dist/hoast360.bundle.js?v=rf11"></script>
     <script>
         var hoast360 = new HOAST360();
 
@@ -600,6 +600,58 @@
       // inconsistently by videojs-contrib-dash (the CC button appears but the
       // text never renders); pointing video.js straight at the .vtt files avoids
       // that. The CC button lists them and the first is shown by default.
+      // ---- view bearing helpers (console) --------------------------------
+      // hoastBearing()      -> {az, el} of the current view, in the SAME
+      //                        convention printed on each wall of the test
+      //                        card (az 0 front, +90 left; el +90 up).
+      // hoastLook(az, el)   -> point the view there.
+      //
+      // Derived from the scene graph rather than guessed: three's
+      // SphereGeometry lays u=0 on local -X and u=0.25 on local +Z, and the
+      // movie sphere is turned -90 deg about Y with scale.x = -1, which makes
+      // local (x, y, z) equal ambisonic (front, up, left). Driving the orbit
+      // controls (not the camera) keeps the "change" event firing, so the
+      // ambisonic field turns with the picture exactly as it does on a drag.
+      //
+      // If az comes out mirrored on your build, set window.HOAST_AZ_SIGN = -1.
+      window.HOAST_AZ_SIGN = window.HOAST_AZ_SIGN || 1;
+      function hoastXR() {
+        var p = window.hoast360 && hoast360.videoPlayer;
+        return (p && typeof p.xr === 'function') ? p.xr() : null;
+      }
+      window.hoastBearing = function () {
+        var xr = hoastXR(); if (!xr || !xr.camera || !xr.movieScreen) return null;
+        var THREE = xr.THREE || window.THREE;
+        var d = new THREE.Vector3(0, 0, -1).applyQuaternion(xr.camera.quaternion);
+        d.applyQuaternion(xr.movieScreen.quaternion.clone().invert());
+        d.x *= -1;                                   // undo scale.x = -1
+        var az = Math.atan2(d.z, d.x) * 180 / Math.PI * window.HOAST_AZ_SIGN;
+        var el = Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI;
+        return { az: +az.toFixed(1), el: +el.toFixed(1) };
+      };
+      window.hoastLook = function (azDeg, elDeg) {
+        var xr = hoastXR();
+        var orbit = xr && xr.controls3d && xr.controls3d.orbit;
+        if (!orbit) return 'player not ready';
+        azDeg = azDeg || 0; elDeg = Math.max(-89.9, Math.min(89.9, elDeg || 0));
+        // converge on the target: robust to whichever sign the orbit uses
+        for (var i = 0; i < 40; i++) {
+          var b = window.hoastBearing(); if (!b) break;
+          var dAz = ((azDeg - b.az + 540) % 360) - 180, dEl = elDeg - b.el;
+          if (Math.abs(dAz) < 0.15 && Math.abs(dEl) < 0.15) break;
+          var before = b.az;
+          orbit.rotateLeft(dAz * Math.PI / 180); orbit.rotateUp(-dEl * Math.PI / 180);
+          orbit.update();
+          var after = window.hoastBearing();
+          if (i === 0 && after && Math.abs(((azDeg - after.az + 540) % 360) - 180) > Math.abs(dAz)) {
+            // first step moved away: the orbit turns the other way, so invert
+            orbit.rotateLeft(-2 * dAz * Math.PI / 180); orbit.update();
+          }
+          if (after && before === after.az && Math.abs(dEl) < 0.15) break;
+        }
+        return window.hoastBearing();
+      };
+
       function addCaptions(caps) {
         var p = hoast360.videoPlayer;
         if (!p || typeof p.addRemoteTextTrack !== 'function') return setTimeout(function () { addCaptions(caps); }, 400);
