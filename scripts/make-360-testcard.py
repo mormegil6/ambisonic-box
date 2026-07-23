@@ -304,7 +304,7 @@ def render_card_face(name, size, ss=2):
     d.rectangle([bx0, by0, bx1, by1], outline=DIM, width=max(1, int(2 * k)))
 
     # -- grey staircase: gamma and banding ----------------------------------
-    sx0, sx1, sy0, sy1 = P(0.155), P(0.845), P(0.825), P(0.915)
+    sx0, sx1, sy0, sy1 = P(0.155), P(0.845), P(0.843), P(0.918)
     steps = 11
     sw = (sx1 - sx0) / steps
     for i in range(steps):
@@ -314,11 +314,6 @@ def render_card_face(name, size, ss=2):
     d.rectangle([sx0, sy0, sx1, sy1], outline=DIM, width=max(1, int(2 * k)))
     d.text((sx0, sy1 + 6 * k), "0%", font=font(26 * k), fill=DIM, anchor="lt")
     d.text((sx1, sy1 + 6 * k), "100%", font=font(26 * k), fill=DIM, anchor="rt")
-
-    # -- face identity, above the blocks ------------------------------------
-    az, el = FACE_AZ_EL[name]
-    d.text((F / 2.0, P(0.205)), "az %d°   ·   el %d°" % (az, el),
-           font=font(28 * k), fill=ACCENT, anchor="mm")
 
     # -- the four corner blocks ---------------------------------------------
     # Captions sit above the lower pair and below the upper pair, keeping the
@@ -398,9 +393,17 @@ def render_card_face(name, size, ss=2):
                           (0.272, 0.5, 90), (0.728, 0.5, 270)):
         _rot_text(img, P(cxx), P(cyy), "HOA 360", wf, DIM, ang)
 
-    # -- the name of the wall you are looking at -----------------------------
-    d.text((cx, P(0.790)), name.upper(), font=font(68 * k), fill=INK,
+    # -- the name of the wall you are looking at, and its bearing ------------
+    # The bearing sits directly under the name, as one identity block. Floated
+    # on its own above the centre it read as if it were annotating a point up
+    # there - which is a bad signal on a card whose job is saying where things
+    # are, and it cannot go on the bullseye: the star owns that area, and the
+    # exact face centre is what gets smeared into the pole band.
+    az, el = FACE_AZ_EL[name]
+    d.text((cx, P(0.783)), name.upper(), font=font(58 * k), fill=INK,
            anchor="mm")
+    d.text((cx, P(0.822)), "az %d°   ·   el %d°" % (az, el),
+           font=font(25 * k), fill=ACCENT, anchor="mm")
 
     # -- corner targets, clockwise from top-left ----------------------------
     tr = P(0.038)
