@@ -80,3 +80,31 @@ ffmpeg -y -hide_banner -filter_complex "$fc" \
 echo "wrote $OUT"
 ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,channels \
   -show_entries format=duration -of default=noprint_wrappers=1 "$OUT"
+
+# Caption sidecars, built from the same colour<->tone table and cadence as the
+# video above, so every cue lands exactly on its flash and names the pair you
+# should be hearing. Like the master, these are NOT tracked in git - they ship
+# as release assets alongside it (see .gitignore).
+if [[ "$LEAD" =~ ^[0-9]+$ ]]; then
+  en=(Red Orange Yellow Green Cyan Blue Violet Magenta White Gray)
+  pl=(Czerwony Pomarańczowy Żółty Zielony Cyjan Niebieski Fioletowy Purpurowy Biały Szary)
+  vtt_ts() { printf '00:%02d:%02d.000' $(( $1 / 60 )) $(( $1 % 60 )); }
+  write_vtt() {
+    local out="$1"; shift; local -a names=("$@")
+    { printf 'WEBVTT\n\n'
+      for ((l=0; l<LOOPS; l++)); do
+        for ((i=0; i<N; i++)); do
+          local st=$(( LEAD + l*N*SLOT + i*SLOT ))
+          local fin=$(( st + SLOT )); (( fin > MIN*60 )) && fin=$(( MIN*60 ))
+          printf '%s --> %s align:center\n%s · %s Hz\n\n' \
+            "$(vtt_ts "$st")" "$(vtt_ts "$fin")" "${names[$i]}" "${freqs[$i]}"
+        done
+      done
+    } >"$out"
+    echo "wrote $out"
+  }
+  write_vtt "${OUT%.*}_captions_en.vtt" "${en[@]}"
+  write_vtt "${OUT%.*}_captions_pl.vtt" "${pl[@]}"
+else
+  echo "note: non-integer LEAD, skipping caption sidecars (cue times would drift)"
+fi
