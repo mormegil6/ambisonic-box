@@ -11,29 +11,37 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
     OBS["OBS Music Edition<br/>H.264 + 16-ch AAC (PCE)"]
-    VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
 
     subgraph COMPOSE["docker compose"]
-        LOOP["loop-source<br/>ffmpeg loop of content/demo.mp4"]
-        INGEST["rtmp-ingest<br/>nginx-rtmp: stream-key auth, relay"]
-        EARSHOT["earshot<br/>nginx-rtmp + ffmpeg (PCE fork)"]
-        VOL[("dash-output<br/>volume")]
-        PLAYER["hoast-player<br/>nginx + HOAST360"]
-        SHAKA["shaka<br/>packager (profile: tools)"]
-        TELEM["telemetry<br/>dashboard :8090 + alerts"]
+        subgraph CONTRIB["contribution leg &mdash; RTMP, H.264 + 16-ch AAC (PCE)"]
+            direction LR
+            LOOP["loop-source<br/>ffmpeg loop of<br/>content/demo.mp4"]
+            INGEST["rtmp-ingest<br/>nginx-rtmp:<br/>stream-key auth, relay"]
+            EARSHOT["earshot<br/>nginx-rtmp + ffmpeg<br/>(PCE fork)"]
+            LOOP -- "RTMP<br/>(internal)" --> INGEST
+            INGEST -- "RTMP relay,<br/>authenticated" --> EARSHOT
+        end
+
+        subgraph DELIVERY["delivery leg &mdash; 16-ch Opus + video (copy or VP9), DASH"]
+            direction LR
+            VOL[("dash-output<br/>volume")]
+            PLAYER["hoast-player<br/>nginx + HOAST360"]
+            SHAKA["shaka<br/>packager<br/>(profile: tools)"]
+            TELEM["telemetry<br/>dashboard :8090<br/>+ alerts"]
+            VOL --> PLAYER
+        end
     end
-    
+
+    VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
+
     OBS -- "RTMP :1935" --> INGEST
-    LOOP -- "RTMP (internal)" --> INGEST
-    INGEST -- "RTMP relay, authenticated" --> EARSHOT
-    EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
-    VOL --> PLAYER
-    SHAKA -. "VOD / lip-sync packaging" .-> VOL
+    EARSHOT -- "live DASH<br/>segments" --> VOL
     PLAYER -- "HTTP :8080" --> VIEWER
-    VOL -. "segment freshness" .-> TELEM
-    TELEM -. "curated status.json" .-> PLAYER
+    SHAKA -. "VOD / lip-sync<br/>packaging" .-> VOL
+    VOL -. "segment<br/>freshness" .-> TELEM
+    TELEM -. "curated<br/>status.json" .-> PLAYER
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
@@ -135,6 +143,10 @@ mapping is the same one ffmpeg's `v360` filter implements, so
 cross-check (it agrees to 0.05/255). `scripts/make-orientation-card.py` remains
 as the plain measurement graticule - degree ticks and cardinal labels, no
 imaging targets.
+
+The rendered 8K card ships as a **release asset** alongside the clip masters
+and caption sidecars; only the generator is tracked here, so a fresh clone
+reproduces the card rather than downloading it.
 
 **Captions.** Each clip carries WebVTT subtitles beside its segments as
 `captions_<lang>.vtt`, declared per clip in the `CLIPS` table in
