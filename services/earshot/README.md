@@ -45,6 +45,15 @@ Docker volume is mounted at `/opt/data/dash` (the `&&` chain then breaks and
 nginx starts unconfigured). The patched version clears stale segments without
 removing the mountpoint itself.
 
+### 3. `src/Dockerfile`: `suggestedPresentationDelay` floor patched into ffmpeg
+
+A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's
+`suggestedPresentationDelay` at `DASH_SPD_FLOOR` seconds (build arg, default
+30). No ffmpeg flag can set SPD for WebM DASH (`-target_latency` is
+force-zeroed outside LL-DASH mode) and upstream hardcodes it to the last
+segment duration, which makes players join right at the live edge and
+gap-jump.
+
 ### 4. `src/nginx-transcoder/nginx*.conf`: `wait_key` / `wait_video` on the relay
 
 The transcoder is an nginx-rtmp `exec` ffmpeg that *subscribes* to the internal
@@ -57,15 +66,6 @@ a keyframe and hold audio until video flows, so the tracks start together and no
 edit box is written at all. Measured: empty edits on 10/10 joins without them,
 `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 with them. See
 `docs/PAPER-NOTES.md` §12.
-
-### 3. `src/Dockerfile`: `suggestedPresentationDelay` floor patched into ffmpeg
-
-A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's
-`suggestedPresentationDelay` at `DASH_SPD_FLOOR` seconds (build arg, default
-30). No ffmpeg flag can set SPD for WebM DASH (`-target_latency` is
-force-zeroed outside LL-DASH mode) and upstream hardcodes it to the last
-segment duration, which makes players join right at the live edge and
-gap-jump.
 
 ## What this service does in the stack
 
