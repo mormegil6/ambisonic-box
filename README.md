@@ -43,6 +43,26 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
 audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics,
 ACN/SN3D, 16 channels end to end.
 
+**Why 16 channels, and what it would take to go higher.** The ceiling sits on
+the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses
+a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal`
+is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV
+cannot carry Opus. Everything downstream is already order-4 capable, verified
+component by component: 25-channel Opus at `mapping_family 255` round-trips
+intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the
+manifest, and the player image ships the complete order-4 impulse-response set.
+
+So **the on-demand path is 4th-order ready today** - it never touches AAC, and
+the only hardcoded piece is the order argument the page passes to HOAST360
+(`initialize(mpd, irs, 3)`). A 4th-order VOD clip needs a 4th-order master and
+that argument changed, with no format, packaging or renderer work. It is not
+claimed as a shipped feature because no 4th-order clip has been played end to
+end yet; the components are proven, the integration is not. Raising the *live*
+path is a different matter - it needs a contribution format that can carry 25
+channels (a wider-layout AAC encoder, or moving ingest off RTMP to SRT/WebRTC
+with Opus), which is architectural rather than configuration. See
+[docs/PAPER-NOTES.md](docs/PAPER-NOTES.md) §15 for the measurements.
+
 **Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single
 source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a
 clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4`
