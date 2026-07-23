@@ -33,7 +33,6 @@ flowchart TD
     SHAKA -. "VOD / lip-sync packaging" .-> VOL
     VOL --> PLAYER
     VOL -. "segment freshness" .-> TELEM
-    TELEM -. "curated status.json" .-> PLAYER
     PLAYER -- "HTTP :8080" --> VIEWER
     style COMPOSE stroke-width:3px
 ```
