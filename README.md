@@ -15,33 +15,26 @@ flowchart TD
     OBS["OBS Music Edition<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["docker compose"]
-        subgraph CONTRIB["contribution leg &mdash; RTMP, H.264 + 16-ch AAC (PCE)"]
-            direction LR
-            LOOP["loop-source<br/>ffmpeg loop of<br/>content/demo.mp4"]
-            INGEST["rtmp-ingest<br/>nginx-rtmp:<br/>stream-key auth, relay"]
-            EARSHOT["earshot<br/>nginx-rtmp + ffmpeg<br/>(PCE fork)"]
-            LOOP -- "RTMP<br/>(internal)" --> INGEST
-            INGEST -- "RTMP relay,<br/>authenticated" --> EARSHOT
-        end
-
-        subgraph DELIVERY["delivery leg &mdash; 16-ch Opus + video (copy or VP9), DASH"]
-            direction LR
-            VOL[("dash-output<br/>volume")]
-            PLAYER["hoast-player<br/>nginx + HOAST360"]
-            SHAKA["shaka<br/>packager<br/>(profile: tools)"]
-            TELEM["telemetry<br/>dashboard :8090<br/>+ alerts"]
-            VOL --> PLAYER
-        end
+        INGEST["rtmp-ingest<br/>nginx-rtmp: stream-key auth, relay"]
+        LOOP["loop-source<br/>ffmpeg loop of content/demo.mp4"]
+        EARSHOT["earshot<br/>nginx-rtmp + ffmpeg (PCE fork)"]
+        VOL[("dash-output<br/>volume")]
+        SHAKA["shaka<br/>packager (profile: tools)"]
+        TELEM["telemetry<br/>dashboard :8090 + alerts"]
+        PLAYER["hoast-player<br/>nginx + HOAST360"]
     end
 
     VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
 
     OBS -- "RTMP :1935" --> INGEST
-    EARSHOT -- "live DASH<br/>segments" --> VOL
+    LOOP -- "RTMP (internal)" --> INGEST
+    INGEST -- "RTMP relay, authenticated" --> EARSHOT
+    EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
+    SHAKA -. "VOD / lip-sync packaging" .-> VOL
+    VOL --> PLAYER
+    VOL -. "segment freshness" .-> TELEM
+    TELEM -. "curated status.json" .-> PLAYER
     PLAYER -- "HTTP :8080" --> VIEWER
-    SHAKA -. "VOD / lip-sync<br/>packaging" .-> VOL
-    VOL -. "segment<br/>freshness" .-> TELEM
-    TELEM -. "curated<br/>status.json" .-> PLAYER
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
