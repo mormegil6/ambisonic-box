@@ -12,14 +12,14 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 
 ```mermaid
 flowchart TD
-    OBS["OBS Music Edition<br/>H.264 + 16-ch AAC (PCE)"]
+    OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["docker compose"]
-        INGEST["rtmp-ingest<br/>nginx-rtmp: stream-key auth, relay"]
-        LOOP["loop-source<br/>ffmpeg loop of content/demo.mp4"]
-        EARSHOT["earshot<br/>nginx-rtmp + ffmpeg (PCE fork)"]
-        VOL[("dash-output<br/>volume")]
-        SHAKA["shaka<br/>packager (profile: tools)"]
+        INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
+        LOOP["loop-source<br/>ffmpeg loop of demo.mp4"]
+        EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
+        VOL[("dash-output volume")]
+        SHAKA["shaka packager<br/>(profile: tools)"]
         TELEM["telemetry<br/>dashboard :8090 + alerts"]
         PLAYER["hoast-player<br/>nginx + HOAST360"]
     end
@@ -41,6 +41,14 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
 (legacy RTMP/FLV cannot carry VP9/Opus). Everything from the earshot
 transcode onward is VP9 + 16-ch Opus in WebM. Audio is never downmixed:
 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
+
+**PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's
+predefined layouts, so a stream carrying one has to spell the layout out in a
+PCE rather than name it; stock ffmpeg will not write that, which is why earshot
+vendors a patched, PCE-aware build. Without it the contribution leg could not
+carry 16 channels over RTMP at all. `dash-output` is a Docker volume - the
+shared filesystem earshot segments into and nginx serves from, nothing to do
+with level.
 
 | Service | Role | Host port |
 |---|---|---|
