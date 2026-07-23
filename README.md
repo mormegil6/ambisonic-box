@@ -1,9 +1,9 @@
-![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white) ![FFmpeg](https://img.shields.io/badge/FFmpeg-VP9%20%2B%20Opus-007808.svg?logo=ffmpeg&logoColor=white) ![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg) ![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg) ![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white) [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white) ![FFmpeg](https://img.shields.io/badge/FFmpeg-16--ch%20Opus%20%2B%20VP9%2Fcopy-007808.svg?logo=ffmpeg&logoColor=white) ![MPEG-DASH](https://img.shields.io/badge/MPEG--DASH-live-F76935.svg) ![Ambisonics](https://img.shields.io/badge/Ambisonics-3rd%20order%2C%2016ch-8A2BE2.svg) ![Platform](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey.svg?logo=linux&logoColor=white) [![Live demo](https://img.shields.io/badge/live%20demo-bmroz.eu-1F6FEB.svg)](https://bmroz.eu/projects/360-livestream/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 # hoa-360-stream: live 360 video and third-order Ambisonics over MPEG-DASH
 
 Containerised toolchain for live streaming 360 video with third-order
-Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (VP9 + Opus, WebM) out,
+Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (16-ch Opus, WebM) out,
 rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player.
 
 **Live demo:** <https://bmroz.eu/projects/360-livestream/>
@@ -39,9 +39,22 @@ flowchart TD
 ```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
-(legacy RTMP/FLV cannot carry VP9/Opus). Everything from the earshot
-transcode onward is VP9 + 16-ch Opus in WebM. Audio is never downmixed:
-3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
+(legacy RTMP/FLV cannot carry VP9/Opus). From the earshot transcode onward the
+audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics,
+ACN/SN3D, 16 channels end to end.
+
+**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single
+source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a
+clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4`
+while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as
+a ready-to-uncomment line in `.env.example`; it is not the running default,
+because the only VP9 configuration ever measured cost ~310 % CPU on the Mac
+Mini even when scaled down. To check what a given host will actually do rather
+than trusting this paragraph:
+
+```bash
+docker compose config | grep FFMPEG_FLAGS
+```
 
 **PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's
 predefined layouts, so a stream carrying one has to spell the layout out in a

@@ -7,13 +7,14 @@
 # rtmp-ingest's token auth into earshot, then asserts live DASH appears in
 # ./output/:
 #   - <stream>.mpd manifest: valid XML, 16-ch Opus audio
-#     (AudioChannelConfiguration value="16"), VP9 video (vp09) with the
-#     default FFMPEG_FLAGS (avc1 accepted when the -c:v copy fallback is set)
+#     (AudioChannelConfiguration value="16"), and the video codec that the
+#     EFFECTIVE FFMPEG_FLAGS imply - read from docker compose, never assumed
 #   - chunk files within FIRST_SEGMENT_DEADLINE seconds of the push start
 #   - at least MIN_CHUNKS chunks per stream after the push completes
 #
 # The RTMP contribution leg is H.264 + 16-ch AAC by protocol necessity; the
-# earshot transcode (16-ch Opus + VP9 WebM) is what this test verifies.
+# earshot transcode (always 16-ch Opus; video per FFMPEG_FLAGS) is what this
+# test verifies.
 #
 # The test publishes as "pipeline-test?token=$STREAM_KEY" (exercising the
 # token-auth path). earshot writes every stream's chunks into the same
@@ -60,17 +61,6 @@ DASH_NAME="${DASH_NAME:-hoast_demo}"
 # earshot names the manifest after DASH_NAME, not the publish name. TEST_STREAM
 # stays the publish name so the ?token= path is still exercised.
 TEST_MPD="$OUTPUT_DIR/$DASH_NAME.mpd"
-# An EMPTY FFMPEG_FLAGS does not mean "no policy" - it means the compose file's
-# own default applies, and since 5663fa9 that default is `-c:v copy`, not VP9.
-# Asserting vp09 here made the test fail against a correctly configured stack.
-# Keep this branch in step with docker-compose.yml if that default changes.
-case "$FFMPEG_FLAGS" in
-    *"libvpx-vp9"*) VIDEO_CODEC=vp09 ;;   # explicit VP9 transcode
-    *"-c:v copy"*)  VIDEO_CODEC=avc1 ;;   # explicit H.264 passthrough
-    "")             VIDEO_CODEC=avc1 ;;   # unset -> compose default (-c:v copy)
-    *)              VIDEO_CODEC=vp09 ;;   # some other transcode: assume policy
-esac
-
 log()  { printf '[test-pipeline] %s\n' "$*"; }
 fail() { log "FAIL: $*"; exit 1; }
 pre()  { log "ERROR: $*"; exit 2; }
@@ -79,6 +69,24 @@ command -v docker >/dev/null || pre "docker not found"
 docker compose version >/dev/null 2>&1 || pre "docker compose plugin not found"
 docker info >/dev/null 2>&1 || pre "docker daemon not running"
 mkdir -p "$OUTPUT_DIR"
+
+# Codec policy. An EMPTY FFMPEG_FLAGS does not mean "no policy" - it means the
+# compose file's own fallback applies. Read that EFFECTIVE value instead of
+# restating it: docker-compose.yml is the single source of truth, and hard-coding
+# a guess here is exactly how this script came to assert VP9 while the stack
+# shipped passthrough, failing its own test against a correct host. Runs after
+# the docker checks above, since it shells out to compose.
+if [ -z "$FFMPEG_FLAGS" ]; then
+    FFMPEG_FLAGS=$(docker compose config 2>/dev/null \
+        | awk '/^  [a-z-]+:$/{svc=$1} svc=="earshot:" && /FFMPEG_FLAGS:/ {sub(/^[^:]*: */,""); print; exit}')
+fi
+case "$FFMPEG_FLAGS" in
+    *"libvpx-vp9"*) VIDEO_CODEC=vp09 ;;   # VP9 transcode
+    *"-c:v copy"*)  VIDEO_CODEC=avc1 ;;   # H.264 passthrough
+    "")  pre "cannot determine FFMPEG_FLAGS - set it explicitly, or check that 'docker compose config' works" ;;
+    *)              VIDEO_CODEC=vp09 ;;   # some other transcode: assume policy
+esac
+log "codec policy: $VIDEO_CODEC (effective FFMPEG_FLAGS: $FFMPEG_FLAGS)"
 
 fetch_stat() { curl -sf --max-time 5 http://localhost:8081/stat 2>/dev/null; }
 

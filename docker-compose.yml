@@ -53,6 +53,10 @@ services:
       # -g 50 at 25) or the muxer cuts at the next keyframe past the target.
       # suggestedPresentationDelay >= 30 s is patched into the muxer itself
       # (services/earshot/src/Dockerfile, DASH_SPD_FLOOR) - no flag controls it.
+      # SINGLE SOURCE OF TRUTH for the video codec policy. Everything else
+      # (README, .env.example, scripts/test-pipeline.sh) must reference or
+      # derive from this line, never restate it - they drifted apart once
+      # and the shipped stack failed its own test as a result.
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -max_muxing_queue_size 1000 -c:v copy}
     volumes:
       - dash-output:/opt/data/dash
