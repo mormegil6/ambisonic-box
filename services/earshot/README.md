@@ -7,26 +7,35 @@ licensed (see `src/LICENSE`). Only what the Docker image needs is vendored:
 CloudFormation templates and Git-LFS binaries are not required for the image
 and are omitted.
 
+## Relationship to upstream
+
+The pinned commit above is a 2022 snapshot, but this tree is **not** four years
+behind. Upstream has made exactly six commits since, four of which touch what we
+vendor - and all four are changes contributed *from here* and merged in July
+2026:
+
+| change | upstream |
+|---|---|
+| `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`) |
+| `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
+| volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
+
+So `src/` is content-equivalent to upstream master `389da2d` plus the local
+extras below. Verified by diff against master: **nothing upstream carries is
+missing here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical
+(`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
+
+Re-vendoring would therefore be pure bookkeeping: it gains no code, because the
+reason upstream changed is that upstream adopted these changes. The only thing
+it would buy is a less misleading pin. Worth doing when convenient, not urgent,
+and the local extras below would all have to be re-applied afterwards anyway.
+
 ## Local modifications
 
-Four deviations from the vendored commit - but only one of them is still a
-deviation from upstream *today*. Three were contributed back and merged in
-July 2026; they persist here only because `src/` is pinned to the 2022
-snapshot, and re-vendoring from current master would drop all three:
-
-| # | change | upstream |
-|---|---|---|
-| 1 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`, 2026-07-23) |
-| 2 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`, 2026-07-23) |
-| 3 | `suggestedPresentationDelay` floor | local only - too specific to this stack to propose |
-| 4 | `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`, 2026-07-22) |
-
-Re-vendoring is therefore a real simplification available at any time, leaving
-the SPD floor as the sole patch. It is not free: upstream's Dockerfile and
-nginx templates move with it, and the SPD floor is a guarded `sed` against
-`libavformat/dashenc.c` that has to be re-verified on whatever ffmpeg version
-the newer Dockerfile pulls. The `sed` fails the build loudly rather than
-silently if the pattern stops matching, which is the point of the guard.
+Sections 1, 2 and 4 below are the changes now merged upstream - kept documented
+because they are still deviations from the *pinned* commit, and because sections
+2 and 5 build on them. Sections 3 and 5, plus the refinement noted in 2, are the
+only things still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -73,6 +82,21 @@ a keyframe and hold audio until video flows, so the tracks start together and no
 edit box is written at all. Measured: empty edits on 10/10 joins without them,
 `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 with them. See
 `docs/PAPER-NOTES.md` §12.
+
+### 5. `entrypoint.sh` + both nginx confs: `DASH_NAME` default and validation
+
+Upstream names the DASH manifest after the RTMP stream key (`$name.mpd`), which
+ties the player's manifest URL to the stream key: rotating the key moves the
+manifest and breaks the page. Here the manifest name is its own variable, so the
+key can be rotated freely.
+
+`DASH_NAME` is defaulted and validated in `entrypoint.sh` before nginx starts
+and before either `envsubst` call, and it is exported - the `envsubst` whitelist
+is derived from `env`, so an unexported value would leave a literal
+`${DASH_NAME}` in the rendered config and ffmpeg would write a file the player
+never fetches. It is read only from the container environment, never from the
+network, and rejecting `.` and `/` makes `..` and absolute paths
+unrepresentable.
 
 ## What this service does in the stack
 
