@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-"""Generate the equirectangular 360 orientation card used as the visual base of
-the `directions` reference clip.
+"""Generate a plain equirectangular 360 orientation graticule.
 
-This replaces the third-party card the clip previously used. That card is
-CC BY-ND: attribution is fine, but compositing the ambisonic energy overlay onto
-it produces Adapted Material, which ND forbids redistributing - and the clip is
-published both as a release asset and on the live VOD page. Generating the card
-here makes the clip ours end to end, publishable without qualification.
+This is the measurement card: degree ticks, a 30 deg grid and cardinal labels,
+and nothing else. It answers "which way am I facing, and how far off axis", not
+"is the picture arriving intact". For the latter - and for the visual base of
+the `directions` reference clip - use make-360-testcard.py, which arranges six
+flat broadcast test screens as the walls of a cube and inverse-projects them,
+so the pattern reaches the eye undistorted. Everything drawn directly in
+equirectangular, this file included, is pre-warped by construction and so can
+only carry labels, never imaging targets.
+
+Both exist because the third-party card the clip previously used is CC BY-ND:
+attribution is fine, but compositing the ambisonic energy overlay onto it
+produces Adapted Material, which ND forbids redistributing - and the clip is
+published both as a release asset and on the live VOD page. Generating our own
+makes the clip ours end to end, publishable without qualification.
 
 Layout follows the same convention as AmbisonicEnergyRenderer: azimuth runs
 +180 deg at the left edge, through 0 deg at centre, to -180 deg at the right, so
