@@ -9,17 +9,24 @@ and are omitted.
 
 ## Local modifications
 
-Four deviations from the vendored commit. They are deviations from the pinned
-2022 snapshot, not necessarily from upstream today - two have since been
-accepted upstream and will disappear the next time `src/` is re-vendored from a
-newer commit:
+Four deviations from the vendored commit - but only one of them is still a
+deviation from upstream *today*. Three were contributed back and merged in
+July 2026; they persist here only because `src/` is pinned to the 2022
+snapshot, and re-vendoring from current master would drop all three:
 
 | # | change | upstream |
 |---|---|---|
 | 1 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`, 2026-07-23) |
-| 2 | volume-safe entrypoint | open, [#55](https://github.com/EnvelopSound/Earshot/pull/55) |
-| 3 | `suggestedPresentationDelay` floor | not proposed - too specific to this stack |
+| 2 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`, 2026-07-23) |
+| 3 | `suggestedPresentationDelay` floor | local only - too specific to this stack to propose |
 | 4 | `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`, 2026-07-22) |
+
+Re-vendoring is therefore a real simplification available at any time, leaving
+the SPD floor as the sole patch. It is not free: upstream's Dockerfile and
+nginx templates move with it, and the SPD floor is a guarded `sed` against
+`libavformat/dashenc.c` that has to be re-verified on whatever ffmpeg version
+the newer Dockerfile pulls. The `sed` fails the build loudly rather than
+silently if the pattern stops matching, which is the point of the guard.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
