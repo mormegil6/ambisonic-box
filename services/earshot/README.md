@@ -10,21 +10,22 @@ and are omitted.
 ## Relationship to upstream
 
 The pinned commit above is a 2022 snapshot, but this tree is **not** four years
-behind. Upstream has made exactly six commits since, four of which touch what we
-vendor - and all four are changes contributed *from here* and merged in July
-2026:
+behind. Upstream has made exactly eight commits since (four merged pull
+requests), all of which touch what we vendor - and all four are changes
+contributed *from here* and merged in July 2026:
 
 | change | upstream |
 |---|---|
 | `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`) |
 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
-| relative redirects (`absolute_redirect off`) | **open**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) |
+| relative redirects (`absolute_redirect off`) | **merged**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) (`ac1dda7`) |
 
-So `src/` is content-equivalent to upstream master `389da2d` plus the local
-extras below, and now also one change contributed from here but not yet merged
-(`absolute_redirect off`, [#56](https://github.com/EnvelopSound/Earshot/pull/56),
-§6 below). Verified by diff against master: **nothing upstream carries is missing
+So `src/` is content-equivalent to upstream master `ac1dda7` plus the local
+extras below - that master head includes `absolute_redirect off`
+([#56](https://github.com/EnvelopSound/Earshot/pull/56), §6 below), contributed
+from here and merged upstream on 2026-07-24. Verified by diff against master:
+**nothing upstream carries is missing
 here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical
 (`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
 
@@ -35,10 +36,10 @@ and the local extras below would all have to be re-applied afterwards anyway.
 
 ## Local modifications
 
-Sections 1, 2 and 4 below are the changes now merged upstream - kept documented
-because they are still deviations from the *pinned* commit, and because sections
-2 and 5 build on them. Section 6 is contributed but not yet merged (#56). Sections
-3 and 5, plus the refinement noted in 2, are the only things still genuinely ours.
+Sections 1, 2, 4 and 6 below are the changes now merged upstream - kept
+documented because they are still deviations from the *pinned* commit, and
+because sections 2 and 5 build on them. Sections 3 and 5, plus the refinement
+noted in 2, are the only things still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -109,8 +110,8 @@ Docker or Tailscale bind: `http://host:8081/webtools` 301s to
 `http://host/webtools/` (port 80), the wrong service. `absolute_redirect off` at
 the HTTP server level makes the redirect relative, so the browser resolves it
 against the request URL and keeps the port. Contributed upstream as
-[#56](https://github.com/EnvelopSound/Earshot/pull/56) (open); applied here ahead
-of merge.
+[#56](https://github.com/EnvelopSound/Earshot/pull/56) and merged on 2026-07-24
+(`ac1dda7`); applied here ahead of that merge.
 
 ## What this service does in the stack
 
