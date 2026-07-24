@@ -66,6 +66,13 @@
   .btn:hover{border-color:var(--grn)} .btn:disabled{opacity:.5;cursor:default}
   .btn-stop:hover{border-color:var(--red)}
   .ctl-msg{color:var(--dim);font-size:12px;font-family:var(--mono)}
+  /* Branded launcher buttons: pushed to the right of the loop-source row. */
+  .ctl-nav{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .nav-btn{font:600 13px var(--sans);cursor:pointer;padding:6px 14px;border-radius:7px;
+           border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+           text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+  .nav-btn:hover{border-color:var(--blu)}
+  .nav-btn .ext{opacity:.55;font-size:11px}
 </style>
 </head>
 <body>
@@ -87,6 +94,7 @@
     <button id="btnStart" class="btn">Start</button>
     <button id="btnStop" class="btn btn-stop">Stop</button>
     <span class="ctl-msg" id="ctlMsg"></span>
+    <nav class="ctl-nav" id="boxNav"></nav>
   </div>
 
   <div class="grid">
@@ -345,6 +353,24 @@ function wireCtl(id, path, verb){
 }
 wireCtl('btnStart', '/api/start', 'start');
 wireCtl('btnStop', '/api/stop', 'stop');
+
+// Branded launcher buttons in the loop-source row (right side). The link list is
+// baked into the image; collect.py rewrites the host (and optionally the links)
+// from brand.json, so the same file that brands the player points these buttons
+// at this deployment. If no branded host, fall back to the address this page was
+// reached on. Kept on ONE line so collect.py's regex can replace the object.
+window.__BOX__ = {"host":null,"links":[{"label":"360° Player","port":8080,"path":"/"},{"label":"Earshot","port":8081,"path":"/webtools/"}]};
+(function(){
+  var cfg = window.__BOX__ || {}, host = cfg.host || location.hostname, nav = $('boxNav');
+  if(!nav) return;
+  (cfg.links||[]).forEach(function(l){
+    var a = document.createElement('a');
+    a.className = 'nav-btn'; a.target = '_blank'; a.rel = 'noopener';
+    a.href = l.url || (location.protocol + '//' + host + (l.port?':'+l.port:'') + (l.path||'/'));
+    a.innerHTML = l.label + ' <span class="ext">↗</span>';
+    nav.appendChild(a);
+  });
+})();
 
 tick(); setInterval(tick, 10000);
 </script>

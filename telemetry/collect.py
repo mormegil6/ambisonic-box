@@ -728,13 +728,27 @@ def main():
         # get the default without editing a tracked file.
         try:
             bp = Path(os.environ.get("TEL_BRAND", "/app/brand.json"))
-            if bp.exists():
-                fav = json.loads(bp.read_text()).get("favicon")
-                if fav:
-                    html = re.sub(r'(<link rel="icon" href=")[^"]*(">)',
-                                  lambda m: m.group(1) + fav + m.group(2), html, count=1)
+            brand = json.loads(bp.read_text()) if bp.exists() else {}
         except Exception:
-            pass
+            brand = {}
+        fav = brand.get("favicon")
+        if fav:
+            html = re.sub(r'(<link rel="icon" href=")[^"]*(">)',
+                          lambda m: m.group(1) + fav + m.group(2), html, count=1)
+        # Branded launcher buttons (loop-source row): the link list is baked into
+        # the page; the host (and an optional link override) come from the same
+        # brand.json, so one file points these buttons at this deployment's
+        # address. Absent -> host falls back client-side to the URL reached on.
+        if brand.get("host") or brand.get("boxLinks"):
+            def _box(m):
+                try:
+                    box = json.loads(m.group(2))
+                except Exception:
+                    return m.group(0)
+                if brand.get("host"):     box["host"]  = brand["host"]
+                if brand.get("boxLinks"): box["links"] = brand["boxLinks"]
+                return m.group(1) + json.dumps(box) + m.group(3)
+            html = re.sub(r'(window\.__BOX__\s*=\s*)(\{.*\})(;)', _box, html, count=1)
         (DATA/"index.html").write_text(html)
     threading.Thread(target=serve, daemon=True).start()
     while True:
