@@ -19,10 +19,13 @@ vendor - and all four are changes contributed *from here* and merged in July
 | `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`) |
 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
+| relative redirects (`absolute_redirect off`) | **open**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) |
 
 So `src/` is content-equivalent to upstream master `389da2d` plus the local
-extras below. Verified by diff against master: **nothing upstream carries is
-missing here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical
+extras below, and now also one change contributed from here but not yet merged
+(`absolute_redirect off`, [#56](https://github.com/EnvelopSound/Earshot/pull/56),
+§6 below). Verified by diff against master: **nothing upstream carries is missing
+here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical
 (`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
 
 Re-vendoring would therefore be pure bookkeeping: it gains no code, because the
@@ -34,8 +37,8 @@ and the local extras below would all have to be re-applied afterwards anyway.
 
 Sections 1, 2 and 4 below are the changes now merged upstream - kept documented
 because they are still deviations from the *pinned* commit, and because sections
-2 and 5 build on them. Sections 3 and 5, plus the refinement noted in 2, are the
-only things still genuinely ours.
+2 and 5 build on them. Section 6 is contributed but not yet merged (#56). Sections
+3 and 5, plus the refinement noted in 2, are the only things still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -97,6 +100,17 @@ is derived from `env`, so an unexported value would leave a literal
 never fetches. It is read only from the container environment, never from the
 network, and rejecting `.` and `/` makes `..` and absolute paths
 unrepresentable.
+
+### 6. `src/nginx-transcoder/nginx*.conf`: `absolute_redirect off` on the HTTP server
+
+nginx builds directory redirects (e.g. `/webtools` -> `/webtools/`) as absolute
+URLs from its internal listen port, which drops the external mapped port behind a
+Docker or Tailscale bind: `http://host:8081/webtools` 301s to
+`http://host/webtools/` (port 80), the wrong service. `absolute_redirect off` at
+the HTTP server level makes the redirect relative, so the browser resolves it
+against the request URL and keeps the port. Contributed upstream as
+[#56](https://github.com/EnvelopSound/Earshot/pull/56) (open); applied here ahead
+of merge.
 
 ## What this service does in the stack
 
