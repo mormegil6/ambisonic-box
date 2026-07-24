@@ -257,15 +257,13 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (b) {
           if (!b) return;
+          BRAND_DATA = b; showVodDownloads();   // first: immune to any later throw here
           var lead = document.getElementById('aboutLead');
           if (b.lead && lead && MODE !== 'vod') lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
           if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
           if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
-          // Free-form VOD download block from the deployment's brand.json (VOD page only).
-          var dl = document.getElementById('brandDownloads');
-          if (b.vodDownloads && dl && MODE === 'vod') { dl.innerHTML = b.vodDownloads; dl.hidden = false; }
           if (b.favicon) {
             // Replace the <link rel="icon"> element rather than mutating its
             // href: browsers frequently ignore an in-place favicon href change
@@ -497,6 +495,15 @@
       // Reference, footer, nav and theme are shared. The live gate/start/status
       // logic above runs in live mode only (gated here and in the status poll).
       var MODE = /^\/vod\/?$/.test(location.pathname) ? 'vod' : 'live';
+      // VOD download block (brand.json vodDownloads). Rendered from both the brand
+      // fetch and initVod, so it applies whichever finishes last, on any URL.
+      var BRAND_DATA = null;
+      function showVodDownloads() {
+        var dl = document.getElementById('brandDownloads');
+        if (dl && MODE === 'vod' && BRAND_DATA && BRAND_DATA.vodDownloads) {
+          dl.innerHTML = BRAND_DATA.vodDownloads; dl.hidden = false;
+        }
+      }
       var CLIPS = {
         directions: {
           title: "Directions",
@@ -568,6 +575,7 @@
         wireVodLoop();
         addLoopButton();
         if (info.captions) addCaptions(info.captions);
+        showVodDownloads();
       }
 
       // Loop the VOD. HTMLMediaElement.loop is unreliable through videojs-dash's
