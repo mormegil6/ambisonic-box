@@ -500,9 +500,15 @@
       var BRAND_DATA = null;
       function showVodDownloads() {
         var dl = document.getElementById('brandDownloads');
-        if (dl && MODE === 'vod' && BRAND_DATA && BRAND_DATA.vodDownloads) {
-          dl.innerHTML = BRAND_DATA.vodDownloads; dl.hidden = false;
-        }
+        if (!dl || MODE !== 'vod') return;
+        var render = function (b) { if (b && b.vodDownloads) { dl.innerHTML = b.vodDownloads; dl.hidden = false; } };
+        if (BRAND_DATA) { render(BRAND_DATA); return; }
+        // Data not delivered by the shared brand fetch yet: fetch our own copy so
+        // this is independent of that chain's timing/exceptions on any URL.
+        fetch('/brand.json', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (b) { if (b) { BRAND_DATA = b; render(b); } })
+          .catch(function () {});
       }
       var CLIPS = {
         directions: {
@@ -576,6 +582,8 @@
         addLoopButton();
         if (info.captions) addCaptions(info.captions);
         showVodDownloads();
+        setTimeout(showVodDownloads, 1200);
+        setTimeout(showVodDownloads, 3000);
       }
 
       // Loop the VOD. HTMLMediaElement.loop is unreliable through videojs-dash's
