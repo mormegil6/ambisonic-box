@@ -10,7 +10,9 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 
 ## Architecture
 
-![HOA 360 stream architecture: OBS and loop-source feed rtmp-ingest, earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume](docs/architecture/architecture.png)
+<div align="center">
+<img src="docs/architecture/architecture.png" width="80%" alt="HOA 360 stream architecture: OBS and loop-source feed rtmp-ingest, earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume">
+</div>
 
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
