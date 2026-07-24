@@ -1,0 +1,17 @@
+{
+  "theme": "base",
+  "flowchart": { "curve": "basis" },
+  "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+  "themeVariables": {
+    "darkMode": true,
+    "primaryColor": "#1e2f52",
+    "primaryBorderColor": "#4a6ea5",
+    "primaryTextColor": "#ffffff",
+    "lineColor": "#b4d4f5",
+    "clusterBkg": "#0f1830",
+    "clusterBorder": "#7b6cf0",
+    "edgeLabelBackground": "#0b1220",
+    "tertiaryTextColor": "#dfe7f5",
+    "nodeBorder": "#4a6ea5"
+  }
+}

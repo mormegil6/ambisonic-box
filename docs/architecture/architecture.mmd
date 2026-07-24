@@ -1,0 +1,29 @@
+%% Architecture / data-flow diagram for the HOA 360 stream stack.
+%% This is the SOURCE only: dagre's raw layout is rearranged by postprocess.py,
+%% so do not embed a plain `mmdc` render of this. Run ./build.sh to regenerate
+%% architecture.svg / architecture.png. The subgraph deliberately has no
+%% `direction` (a nested one would give the SVG two coordinate systems).
+flowchart TD
+    OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
+
+    subgraph COMPOSE["DOCKER COMPOSE"]
+        INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
+        LOOP["loop-source<br/>demo.mp4"]
+        EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
+        VOL[("dash-output volume")]
+        SHAKA["shaka packager<br/>(profile: tools)"]
+        PLAYER["hoast-player<br/>nginx + HOAST360"]
+        TELEM["telemetry<br/>dashboard :8090 + alerts"]
+    end
+
+    VIEWER["viewer browser<br/>HOAST360<br/>binaural HOA"]
+
+    OBS -- "RTMP :1935" --> INGEST
+    LOOP -- "RTMP (internal)" --> INGEST
+    INGEST -- "RTMP relay, authenticated" --> EARSHOT
+    EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
+    SHAKA -. "VOD / lip-sync packaging" .-> VOL
+    VOL --> PLAYER
+    PLAYER -- "HTTP :8080" --> VIEWER
+    VOL -. "segment freshness" .-> TELEM
+    style COMPOSE stroke-width:3px

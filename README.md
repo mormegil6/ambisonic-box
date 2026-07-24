@@ -10,33 +10,10 @@ rendered binaurally in the browser by a patched [HOAST360](https://github.com/mo
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
+![HOA 360 stream architecture: OBS and loop-source feed rtmp-ingest, earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume](docs/architecture/architecture.png)
 
-    subgraph COMPOSE["DOCKER COMPOSE"]
-        direction TB
-        INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
-        LOOP["loop-source<br/>ffmpeg loop of demo.mp4"]
-        EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
-        VOL[("dash-output volume")]
-        SHAKA["shaka packager<br/>(profile: tools)"]
-        PLAYER["hoast-player<br/>nginx + HOAST360"]
-        TELEM["telemetry<br/>dashboard :8090 + alerts"]
-    end
+<!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
-    VIEWER["viewer browser<br/>HOAST360, binaural HOA"]
-
-    OBS -- "RTMP :1935" --> INGEST
-    LOOP -- "RTMP (internal)" --> INGEST
-    INGEST -- "RTMP relay, authenticated" --> EARSHOT
-    EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
-    SHAKA -. "VOD / lip-sync packaging" .-> VOL
-    VOL --> PLAYER
-    PLAYER -- "HTTP :8080" --> VIEWER
-    VOL -. "segment freshness" .-> TELEM
-    style COMPOSE stroke-width:3px
-```
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity
 (legacy RTMP/FLV cannot carry VP9/Opus). From the earshot transcode onward the
