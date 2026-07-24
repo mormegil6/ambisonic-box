@@ -359,7 +359,7 @@ wireCtl('btnStop', '/api/stop', 'stop');
 // from brand.json, so the same file that brands the player points these buttons
 // at this deployment. If no branded host, fall back to the address this page was
 // reached on. Kept on ONE line so collect.py's regex can replace the object.
-window.__BOX__ = {"host":null,"links":[{"label":"360° Player","port":8080,"path":"/"},{"label":"Earshot","port":8081,"path":"/webtools/"}]};
+window.__BOX__ = {"host":null,"links":[{"label":"Earshot","port":8081,"path":"/webtools/"},{"label":"360° Player","port":8080,"path":"/"}]};
 (function(){
   var cfg = window.__BOX__ || {}, host = cfg.host || location.hostname, nav = $('boxNav');
   if(!nav) return;
