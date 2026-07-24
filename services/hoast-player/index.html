@@ -109,6 +109,7 @@
       .tabs a:hover{text-decoration:none}
       .tabs a.on{background:var(--accent);border-color:var(--accent);color:#06231f}
       .clip-meta{font-size:13.5px;color:var(--body);opacity:.9;margin:12px 0 0}
+      .clip-dl{font-size:13.5px;margin:8px 0 0}
       /* loop toggle in the control bar (inline SVG, never a font glyph) */
       .vjs-loop-button{cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
       .vjs-loop-button svg{width:17px;height:17px}
@@ -205,6 +206,7 @@
         <a data-clip="colortones" href="/vod/?clip=colortones">Colortones (A/V sync)</a>
       </div>
       <p class="clip-meta" id="clipMeta" hidden></p>
+      <p class="clip-dl" id="brandDownloads" hidden></p>
 
       <details class="status" id="statusPanel">
         <summary>Server status <span class="live-dot" id="stDot"></span></summary>
@@ -249,7 +251,8 @@
       // stays the single source and cannot drift. A deployment mounts /brand.json
       // (see docker-compose.override.yml.example); without it the page is generic.
       // Keys: lead (About paragraph HTML), reference (Reference section body),
-      // copyright (a footer row HTML).
+      // copyright (a footer row HTML), vodDownloads (a VOD-page HTML block, e.g.
+      // clip download links; this generic image ships none).
       fetch('/brand.json', { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (b) {
@@ -260,6 +263,9 @@
           if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
           if (b.copyright && cp) { cp.innerHTML = b.copyright; cp.hidden = false; }
+          // Free-form VOD download block from the deployment's brand.json (VOD page only).
+          var dl = document.getElementById('brandDownloads');
+          if (b.vodDownloads && dl && MODE === 'vod') { dl.innerHTML = b.vodDownloads; dl.hidden = false; }
           if (b.favicon) {
             // Replace the <link rel="icon"> element rather than mutating its
             // href: browsers frequently ignore an in-place favicon href change

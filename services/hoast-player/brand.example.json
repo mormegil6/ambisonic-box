@@ -3,6 +3,7 @@
   "lead": "Describe this deployment: what the source is, and whether it is genuinely live or a replayed recording.",
   "reference": "<h2>Reference</h2><cite>A. Author, B. Author, &ldquo;Paper Title,&rdquo; in <em>Proc. Venue</em>, Year. <a href=\"https://example.org\" target=\"_blank\" rel=\"noopener\">Link</a>.</cite>",
   "copyright": "&copy; 2026 Your Name &middot; Your Institution.",
+  "vodDownloads": "<strong>Download:</strong> <a href=\"https://example.org/clip-a.webm\">Clip A (WebM)</a> &middot; <a href=\"https://example.org/clip-b.webm\">Clip B (WebM)</a> &middot; <a href=\"https://example.org/releases\" target=\"_blank\" rel=\"noopener\">all files</a>",
   "favicon": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232bbc8a'/%3E%3C/svg%3E",
   "_comment_telemetry": "host and boxLinks brand the telemetry dashboard's launcher buttons. host is this deployment's reachable address (a Tailscale name or an IP); omit it and the buttons fall back to whatever address the dashboard was opened on. boxLinks overrides the built-in button list (label + port + path, all resolved on host); omit it to keep the defaults shown below. Do not use TEL_HOST for this: it is only a display label.",
   "host": "your-tailscale-name-or-ip",
