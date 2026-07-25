@@ -16,6 +16,14 @@ services:
   earshot:
     build:
       context: ./services/earshot/src
+      args:
+        # Redistributable by default: this stack links no nonfree library, so
+        # ffmpeg's --enable-nonfree would only stamp the binary
+        # non-redistributable (services/earshot/README.md section 7, upstream
+        # PR #57). The upstream Dockerfile keeps the stock default; the STACK
+        # opts out here so published images are clean. Set 1 to restore the
+        # stock build.
+        ENABLE_NONFREE: "${ENABLE_NONFREE:-0}"
     image: hoa360-earshot:local
     environment:
       - HTTP_PORT=80          # must stay 80: upstream on_publish callback is hardcoded port-80

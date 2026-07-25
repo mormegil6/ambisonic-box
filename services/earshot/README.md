@@ -123,8 +123,9 @@ against the request URL and keeps the port. Contributed upstream as
 ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this
 build links no nonfree library (only libx264/libopus/libvpx), so the flag is
 a no-op licence stamp that blocks publishing a pre-built image. The ARG
-defaults to 1 (build unchanged); `--build-arg ENABLE_NONFREE=0` drops the
-flag for a redistributable, plain-GPLv3 image. Verified equivalent end to end
+defaults to 1 in the Dockerfile (stock build unchanged), but the stack's
+docker-compose.yml passes 0 by default so its images are redistributable;
+export ENABLE_NONFREE=1 to restore the stock build. Verified equivalent end to end
 (16-ch Opus hexadecagonal + VP9, full pipeline test). Contributed upstream as
 [#57](https://github.com/EnvelopSound/Earshot/pull/57) (open).
 
