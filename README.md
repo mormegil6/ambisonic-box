@@ -190,7 +190,7 @@ Does segment duration affect lip sync? Measured answer: **no**. The A/V start of
 
 **Raspberry Pi 5 (ARM64, experimental):** all base images are multi-arch and earshot builds from source, so `docker buildx build --platform linux/arm64` works, and the default `-c:v copy` passthrough is exactly what a Pi wants. Realtime VP9 (the `.env.example` opt-in) is the bottleneck; if enabled and the Pi cannot keep up, return to the default or use a bigger machine. The Pi target is a nice-to-have, not a requirement.
 
-**Per-host overrides:** deployment-specific settings (bind the telemetry dashboard to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry service, Telegram tokens, a branded landing page) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and adjust. The base stack runs without it.
+**Per-host overrides:** deployment-specific settings (bind the dashboard (:8090) to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry service, Telegram tokens, a branded landing page) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and adjust. The base stack runs without it.
 
 ## Documentation
 

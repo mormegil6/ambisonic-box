@@ -49,7 +49,7 @@ Audio-path flags (mechanism measured in the publication notes; see the README's 
 | `GET <player-public-url>/` | 200 |
 | `GET <player-public-url>/status/status.json` | 200; `live:true` while streaming |
 | `GET <player-public-url>/dash/<DASH_NAME>.mpd` | 200 while streaming |
-| telemetry dashboard | reachable **only** on your private/VPN address |
+| dashboard (:8090) | reachable **only** on your private/VPN address |
 | tunnel / edge (if used) | active |
 
 ## Your deployment (fill in; keep OUT of git)

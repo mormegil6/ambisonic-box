@@ -264,7 +264,7 @@ volumes:
       type: none
       o: bind
       device: ${PWD}/output
-  # telemetry dashboard + history (private; only the telemetry service mounts it)
+  # dashboard (:8090) + history (private; only the telemetry service mounts it)
   telemetry-data:
   # curated public status.json, shared telemetry -> hoast-player (no box internals)
   status-public:
