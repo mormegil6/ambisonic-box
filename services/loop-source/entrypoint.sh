@@ -26,11 +26,13 @@ if [ "$DEMO_CONTENT" = "1" ] && [ ! -f /content/demo.mp4 ]; then
     fi
 fi
 
-if [ "$DEMO_CONTENT" = "1" ]; then
+if [ "$DEMO_CONTENT" = "1" ] && [ "${VOD_ENABLED:-0}" = "1" ]; then
     # VOD masters, pinned tag + pinned SHA-256, cache-aware, fail-soft. Runs
     # backgrounded so a 369 MB first fetch never delays the stream; it keeps
     # running after the exec below (reparented, same container).
     sh "$DIR/fetch-demo-content.sh" &
+elif [ "$DEMO_CONTENT" = "1" ]; then
+    echo "[loop-source] VOD_ENABLED=0: skipping the reference-master fetch (DEMO_CONTENT only governs the live loop)"
 fi
 
 if [ ! -f /content/demo.mp4 ]; then

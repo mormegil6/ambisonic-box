@@ -8,6 +8,10 @@ FROM nginx:1.30.2-alpine
 # (conf.d is included alphabetically), hence the 00- prefix.
 COPY services/hoast-player/00-logformat.conf /etc/nginx/conf.d/00-logformat.conf
 COPY services/hoast-player/nginx.conf         /etc/nginx/conf.d/default.conf
+# VOD locations, activated (or stubbed to 404) by 15-vod-enabled.sh per the
+# VOD_ENABLED env var; see that script for the rationale
+COPY services/hoast-player/vod-locations.conf /etc/nginx/vod-locations.conf.on
+COPY services/hoast-player/15-vod-enabled.sh  /docker-entrypoint.d/15-vod-enabled.sh
 
 COPY services/hoast-player/index.html /usr/share/nginx/html/index.html
 COPY services/hoast-player/fonts/     /usr/share/nginx/html/fonts/

@@ -136,6 +136,8 @@ services:
       - DEMO_CONTENT=${DEMO_CONTENT:-1}
       # Release base override; used by the test harness with a fixture server
       - DEMO_BASE_URL=${DEMO_BASE_URL:-}
+      # VOD masters are only fetched when the VOD feature itself is on
+      - VOD_ENABLED=${VOD_ENABLED:-0}
     volumes:
       # rw: the entrypoint writes the synthesised demo.mp4 and the fetched
       # VOD masters here (was ro when loop-source only ever read demo.mp4)
@@ -159,6 +161,12 @@ services:
     build:
       context: .
       dockerfile: services/hoast-player/Dockerfile
+    environment:
+      # On-demand VOD page + packaged clips; OFF by default. The stack's
+      # purpose is live streaming; VOD is opt-in (see README). Independent of
+      # DEMO_CONTENT, and VOD_ENABLED=0 also suppresses loop-source's
+      # reference-master fetch.
+      - VOD_ENABLED=${VOD_ENABLED:-0}
     volumes:
       - dash-output:/usr/share/nginx/html/dash:ro
       - status-public:/usr/share/nginx/html/status:ro   # curated telemetry (status.json)
