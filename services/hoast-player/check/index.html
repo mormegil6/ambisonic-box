@@ -88,10 +88,14 @@ function render(out) {
   add('Streaming support (MSE, WebM Opus)', p.mse.webmOpus === true,
       'MediaSource: ' + p.mse.present + ' | audio/webm opus: ' + p.mse.webmOpus +
       ' | audio/mp4 opus: ' + p.mse.mp4Opus);
-  add('ManagedMediaSource', p.managedMediaSource.present,
+  // Info, not pass/fail: MMS is a Safari-only API and is EXPECTED to be
+  // absent in Chromium/Firefox, where classic MSE covers streaming. It only
+  // decides anything on iPhone Safari, which has no classic MSE.
+  add('ManagedMediaSource (Safari-only API)',
+      p.managedMediaSource.present ? true : null,
       p.managedMediaSource.present
-        ? 'audio/webm opus: ' + p.managedMediaSource.webmOpus + ' | audio/mp4 opus: ' + p.managedMediaSource.mp4Opus
-        : 'not present in this browser');
+        ? 'present | audio/webm opus: ' + p.managedMediaSource.webmOpus + ' | audio/mp4 opus: ' + p.managedMediaSource.mp4Opus
+        : 'absent, which is normal outside Safari; it matters only on iPhone, where classic MSE does not exist');
   add('Audio output channels (this device)', null, 'maxChannelCount: ' + p.maxChannelCount);
 
   var v = document.getElementById('verdict');
