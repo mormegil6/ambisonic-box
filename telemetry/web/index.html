@@ -374,9 +374,13 @@ async function tick(){
     // amber while a healthcheck is still 'starting': red implied broken,
     // but a restarting service that works is the common post-deploy state
     const c = sv.healthy ? col('--grn') : (sv.health === 'starting' ? '#d29922' : col('--red'));
+    // the label should agree with the dot: docker's state stays "running"
+    // while a healthcheck is starting or failing, which is exactly when the
+    // health word is the one worth reading
+    const lbl = (sv.health === 'starting' || sv.health === 'unhealthy') ? sv.health : (sv.state||"");
     const rk = SVC_RESTART[sv.name];
     const rb = rk ? `<button class="rsv" data-svc="${rk}" title="restart">&#x21bb;</button>` : '';
-    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}<span style="color:${col('--dim')}">${sv.state||""}</span>${rb}</span>`;
+    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}<span style="color:${col('--dim')}">${lbl}</span>${rb}</span>`;
   }).join("") || '<span class="chip">no services</span>')
   + `<span class="chip"><span class="dot" style="background:${col('--grn')}"></span>telemetry<span style="color:${col('--dim')}">this page</span><button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
   + `<span class="ctl-msg" id="restartMsg"></span>`;
