@@ -111,6 +111,12 @@
       .clip-meta{font-size:13.5px;color:var(--body);opacity:.9;margin:12px 0 0}
       .clip-dl{font-size:13.5px;margin:8px 0 0}
       /* guest-stream notice: visible only while a guest holds the endpoint */
+      [hidden]{display:none!important}
+      .guest-notice summary{cursor:pointer;display:flex;align-items:center;gap:10px;list-style-position:outside}
+      .gn-flags{margin-left:auto;display:flex;gap:4px}
+      .gn-flags button{font-size:17px;line-height:1;padding:2px 5px;border:1px solid transparent;
+        border-radius:6px;background:transparent;cursor:pointer;opacity:.45;width:auto}
+      .gn-flags button.on{opacity:1;border-color:#d29922}
       .guest-notice{margin:10px 0 0;padding:10px 14px;border:1px solid #d29922;
         border-radius:8px;background:rgba(210,153,34,.08);font-size:13px}
       .guest-notice p{margin:4px 0;white-space:pre-line}
@@ -216,13 +222,18 @@
            guest session holds the endpoint. Right under the player on purpose:
            this is where someone actually encounters unexpected content, not a
            footer. All insertion is textContent. -->
-      <div class="guest-notice" id="guestNotice" hidden>
-        <p id="guestNoticeShort"><strong id="guestNoticeBadge"></strong></p>
-        <p id="guestNoticeFullEn"></p>
-        <p id="guestNoticeFullPl"></p>
+      <details class="guest-notice" id="guestNotice" hidden>
+        <summary>
+          <strong id="guestNoticeBadge"></strong>
+          <span class="gn-flags">
+            <button id="gnLangEn" type="button" title="English" aria-label="English">&#x1F1EC;&#x1F1E7;</button>
+            <button id="gnLangPl" type="button" title="Polski" aria-label="Polski">&#x1F1F5;&#x1F1F1;</button>
+          </span>
+        </summary>
+        <p id="guestNoticeFull"></p>
         <p id="guestNoticeAffil" hidden></p>
-        <p><button id="guestReportBtn" type="button" hidden>Report this stream / Zgłoś transmisję</button></p>
-      </div>
+        <p><button id="guestReportBtn" type="button" hidden></button></p>
+      </details>
       <!-- Why the last guest session ended (visible ~10 min): OBS reports a
            successful connection even when the transcode stalls on a wrong
            audio layout, so without this line the commonest failure is
@@ -400,7 +411,8 @@
             var gb = window.__GUEST_BRAND__;
             var active = ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace');
             if (!gb || !gb.d || !active) { box.hidden = true; return; }
-            var en = gb.d.en || {}, pl = gb.d.pl || {};
+            var lang = gnLang();
+            var t = gb.d[lang] || gb.d.en || {};
             // The disclaimer's numeric claims ({MAX_H}, {RETENTION_DAYS},
             // {BAN_DAYS}) interpolate from the running config via /api/live,
             // so the prose can never drift from what the arbiter enforces.
@@ -414,15 +426,20 @@
                                  function (_, k) { return v[k]; });
             }
             var badge = document.getElementById('guestNoticeBadge');
-            if (badge) badge.textContent = [en.short, pl.short].filter(Boolean).map(subst).join(' \u00b7 ');
-            var fe = document.getElementById('guestNoticeFullEn');
-            if (fe) fe.textContent = subst(en.full);
-            var fp = document.getElementById('guestNoticeFullPl');
-            if (fp) fp.textContent = subst(pl.full);
+            if (badge) badge.textContent = subst(t.short);
+            var ff = document.getElementById('guestNoticeFull');
+            if (ff) ff.textContent = subst(t.full);
+            ['En', 'Pl'].forEach(function (k) {
+                var b = document.getElementById('gnLang' + k);
+                if (b) b.classList.toggle('on', lang === k.toLowerCase());
+            });
             var af = document.getElementById('guestNoticeAffil');
             if (af) { af.textContent = gb.a || ''; af.hidden = !gb.a; }
             var rb = document.getElementById('guestReportBtn');
-            if (rb) rb.hidden = false;
+            if (rb) {
+                if (!rb.dataset.state) rb.textContent = lang === 'pl' ? 'Zg\u0142o\u015b transmisj\u0119' : 'Report this stream';
+                rb.hidden = false;
+            }
             box.hidden = false;
         }
 
@@ -589,20 +606,39 @@
                 .then(function () { if (btn) btn.disabled = false; });
         }
 
+        // Disclaimer language: one at a time, English default, choice kept per
+        // browser. Flag clicks must not toggle the <details> they sit in.
+        function gnLang() {
+            var l = null;
+            try { l = localStorage.getItem('gnLang'); } catch (e) {}
+            return l === 'pl' ? 'pl' : 'en';
+        }
+        ['En', 'Pl'].forEach(function (k) {
+            var b = document.getElementById('gnLang' + k);
+            if (!b) return;
+            b.addEventListener('click', function (ev) {
+                ev.preventDefault(); ev.stopPropagation();
+                try { localStorage.setItem('gnLang', k.toLowerCase()); } catch (e) {}
+                renderGuestNotice(window.__LAST_EP__);
+            });
+        });
+
         (function () {
             var rb = document.getElementById('guestReportBtn');
             if (!rb) return;
             rb.addEventListener('click', function () {
                 rb.disabled = true;
+                var pl = gnLang() === 'pl';
                 fetch('/api/guest/report', { method: 'POST' })
                     .then(function (r) { return r.json().catch(function () { return {}; }); })
                     .then(function (b) {
+                        rb.dataset.state = 'done';
                         rb.textContent = (b && b.ok)
-                            ? 'Reported. Thank you. / Zg\u0142oszono. Dzi\u0119kujemy.'
-                            : 'Report already received. / Zg\u0142oszenie ju\u017c przyj\u0119te.';
+                            ? (pl ? 'Zg\u0142oszono. Dzi\u0119kujemy.' : 'Reported. Thank you.')
+                            : (pl ? 'Zg\u0142oszenie ju\u017c przyj\u0119te.' : 'Report already received.');
                     })
                     .catch(function () {
-                        rb.textContent = 'Could not send the report. / Nie uda\u0142o si\u0119 wys\u0142a\u0107 zg\u0142oszenia.';
+                        rb.textContent = pl ? 'Nie uda\u0142o si\u0119 wys\u0142a\u0107 zg\u0142oszenia.' : 'Could not send the report.';
                         rb.disabled = false;
                     });
             });
