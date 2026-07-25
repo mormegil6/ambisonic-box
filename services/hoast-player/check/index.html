@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spatial audio capability check</title>
+  <style>
+    :root { --ok:#0b8a43; --bad:#c62828; --dim:#666; }
+    body { margin:0; padding:22px 18px 60px; font:17px/1.55 -apple-system, BlinkMacSystemFont,
+           "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:#1c1c1c; background:#fff; }
+    @media (prefers-color-scheme: dark) {
+      body { background:#161616; color:#e8e8e8; } .card { background:#222; border-color:#3a3a3a; }
+      :root { --dim:#aaa; }
+    }
+    main { max-width:640px; margin:0 auto; }
+    h1 { font-size:24px; margin:0 0 6px; }
+    .sub { color:var(--dim); font-size:15px; margin:0 0 18px; }
+    .verdict { font-size:21px; font-weight:700; padding:14px 16px; border-radius:10px;
+               margin:0 0 18px; background:#eee; }
+    .verdict.ok { background:rgba(11,138,67,.12); color:var(--ok); }
+    .verdict.bad { background:rgba(198,40,40,.12); color:var(--bad); }
+    .card { border:1px solid #ddd; border-radius:10px; padding:12px 16px; margin:0 0 12px;
+            background:#fafafa; }
+    .card b { font-size:16.5px; }
+    .ok { color:var(--ok); } .bad { color:var(--bad); }
+    .detail { color:var(--dim); font-size:14.5px; word-break:break-word; }
+    button { font:600 17px inherit; padding:12px 22px; border-radius:10px; border:1px solid #bbb;
+             background:#f2f2f2; color:inherit; width:100%; margin-top:8px; cursor:pointer; }
+    @media (prefers-color-scheme: dark) { button { background:#2c2c2c; border-color:#484848; } }
+    button:active { opacity:.7; }
+    #copyBtn.done { border-color:var(--ok); color:var(--ok); }
+    pre { white-space:pre-wrap; word-break:break-word; font-size:12.5px; color:var(--dim);
+          background:transparent; margin:14px 0 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Spatial audio capability check</h1>
+  <p class="sub">Checks whether this browser can decode the multichannel Opus audio used by
+  the HOA 360&deg; livestream. Runs by itself in a few seconds; nothing is recorded or uploaded.</p>
+
+  <div class="verdict" id="verdict">Running the checks&hellip;</div>
+  <div id="cards"></div>
+
+  <button id="copyBtn" type="button" hidden>Copy the result</button>
+  <button id="againBtn" type="button" hidden>Run again</button>
+  <pre id="raw"></pre>
+</main>
+
+<script src="probes.js"></script>
+<script>
+'use strict';
+var lastText = '';
+
+function card(title, okState, detail) {
+  var cls = okState === true ? 'ok' : okState === false ? 'bad' : '';
+  var mark = okState === true ? 'works' : okState === false ? 'FAILED' : '';
+  return '<div class="card"><b>' + title + ':</b> <b class="' + cls + '">' + mark + '</b>' +
+         '<div class="detail"></div></div>';
+}
+
+function render(out) {
+  var p = out.results.probes;
+  var cards = document.getElementById('cards');
+  cards.textContent = '';
+  function add(title, ok, detail) {
+    var el = document.createElement('div'); el.className = 'card';
+    var b1 = document.createElement('b'); b1.textContent = title + ': ';
+    var b2 = document.createElement('b');
+    b2.className = ok === true ? 'ok' : ok === false ? 'bad' : '';
+    b2.textContent = ok === true ? 'works' : ok === false ? 'FAILED' : String(ok);
+    var d = document.createElement('div'); d.className = 'detail'; d.textContent = detail || '';
+    el.appendChild(b1); el.appendChild(b2); el.appendChild(d);
+    cards.appendChild(el);
+  }
+  function decDetail(x) {
+    return x.ok ? x.channels + ' channels, ' + x.sampleRate + ' Hz, ' + x.duration + ' s'
+                : x.error;
+  }
+  add('Stereo Opus (control)', p.opus2.ok, decDetail(p.opus2));
+  add('16-channel Opus, 3rd order', p.opus16.ok, decDetail(p.opus16));
+  add('25-channel Opus, 4th order', p.opus25.ok, decDetail(p.opus25));
+  add('Streaming support (MSE, WebM Opus)', p.mse.webmOpus === true,
+      'MediaSource: ' + p.mse.present + ' | audio/webm opus: ' + p.mse.webmOpus +
+      ' | audio/mp4 opus: ' + p.mse.mp4Opus);
+  add('ManagedMediaSource', p.managedMediaSource.present,
+      p.managedMediaSource.present
+        ? 'audio/webm opus: ' + p.managedMediaSource.webmOpus + ' | audio/mp4 opus: ' + p.managedMediaSource.mp4Opus
+        : 'not present in this browser');
+  add('Audio output channels (this device)', undefined, 'maxChannelCount: ' + p.maxChannelCount);
+
+  var v = document.getElementById('verdict');
+  var canDecode = p.opus16.ok;
+  var canStream = p.mse.webmOpus === true || p.managedMediaSource.webmOpus === true;
+  if (canDecode && canStream) {
+    v.className = 'verdict ok';
+    v.textContent = 'This browser can play the stream: 16-channel Opus decodes and streaming is supported.';
+  } else if (canDecode) {
+    v.className = 'verdict ok';
+    v.textContent = '16-channel Opus decodes here, but streaming (MSE/MMS with WebM Opus) is not available, so the live player will not run yet.';
+  } else {
+    v.className = 'verdict bad';
+    v.textContent = 'This browser cannot decode the stream’s 16-channel Opus audio.';
+  }
+
+  lastText = out.text;
+  document.getElementById('raw').textContent = out.text;
+  document.getElementById('copyBtn').hidden = false;
+  document.getElementById('againBtn').hidden = false;
+}
+
+function run() {
+  document.getElementById('verdict').className = 'verdict';
+  document.getElementById('verdict').textContent = 'Running the checks…';
+  runCapabilityProbes('./').then(render).catch(function (e) {
+    var v = document.getElementById('verdict');
+    v.className = 'verdict bad';
+    v.textContent = 'The check itself failed: ' + e.message;
+  });
+}
+
+document.getElementById('copyBtn').addEventListener('click', function () {
+  var btn = this;
+  function done() { btn.classList.add('done'); btn.textContent = 'Copied'; setTimeout(function () { btn.classList.remove('done'); btn.textContent = 'Copy the result'; }, 1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(lastText).then(done, function () { fallback(); done(); });
+  } else { fallback(); done(); }
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = lastText; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+});
+document.getElementById('againBtn').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>

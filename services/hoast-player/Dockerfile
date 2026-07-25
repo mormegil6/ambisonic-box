@@ -15,6 +15,10 @@ COPY services/hoast-player/15-vod-enabled.sh  /docker-entrypoint.d/15-vod-enable
 
 COPY services/hoast-player/index.html /usr/share/nginx/html/index.html
 COPY services/hoast-player/fonts/     /usr/share/nginx/html/fonts/
+# standalone capability check page (/check/): static, independent of the
+# player and the stream, so the multichannel-Opus question gets an answer
+# even when everything else is broken or idle
+COPY services/hoast-player/check/     /usr/share/nginx/html/check/
 COPY hoast360/dist/      /usr/share/nginx/html/dist/
 COPY hoast360/irs/       /usr/share/nginx/html/irs/
 
