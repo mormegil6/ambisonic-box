@@ -165,6 +165,10 @@ How it behaves:
 - The `:8090` dashboard shows the session (name, source address, time left)
   and has an **End session** button; the public player page shows only
   endpoint state, sanitised name and time left.
+- **Session log:** anonymised statistics (timestamp, name, country, duration,
+  end reason) are kept indefinitely; the source IP is redacted after
+  `GUEST_RETENTION_DAYS` (default 30). Country comes from a local DB-IP
+  lookup; guest IPs are never sent to an online service.
 - **Fail-closed:** if telemetry is down, guest publishes are rejected while
   the token-authed `live` application and the demo loop keep working.
 - The owner path is unaffected: pushing with the stream key to `/live` does

@@ -59,3 +59,19 @@ deployment gets it for free. Three outputs from one small stdlib collector:
 
 The image needs only the docker **CLI** (talks to the socket) — no docker engine,
 no Python dependencies. Multi-arch (amd64 + arm64).
+
+
+## Guest session log: retention and geolocation
+
+`guest_sessions.csv` rows are kept indefinitely as anonymised statistics
+(timestamp, sanitised stream name, country, duration, end reason), mirroring
+the viewer stats' long-standing shape (counts and countries, never
+identifiers). The IP column is redacted after `GUEST_RETENTION_DAYS`
+(default 30), which is what the public notice's 30-day line refers to.
+
+Country is resolved locally at session end from the DB-IP country-lite
+database (fetched once into the data volume at start, fail-soft to `--`
+offline; refresh by deleting `dbip-country-lite.csv.gz` from the volume).
+Guest IPs are never sent to any online lookup service.
+
+IP Geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0).

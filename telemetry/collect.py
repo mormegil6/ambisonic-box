@@ -537,46 +537,122 @@ def _guest_save():
         pass
 
 
-# The public notice says connection details are retained for 30 days; this is
-# the code that makes that true for the moderation log (the one store where
-# guest publisher IPs persist). Container stdout logs rotate by size, not by
-# days; that residual is a known item for the final disclaimer wording.
+# The public notice says connection details are retained for 30 days. The
+# session log follows the same split the viewer stats always used (counts and
+# countries persist, identifiers do not): rows are kept indefinitely for
+# statistics, but the IP column is REDACTED once it ages past the window. The
+# country, resolved at write time and kept, is the aggregate-level residue,
+# exactly like viewers.csv's country codes. Container stdout logs rotate by
+# size, not by days; that residual is a known item for the final wording.
 GUEST_RETENTION_S = int(os.environ.get("GUEST_RETENTION_DAYS", "30")) * 86400
 
+# --- offline IP -> country, for the session statistics ---------------------
+# DB-IP's free country-lite CSV (CC BY 4.0; attribution in the dashboard
+# footer and telemetry/README.md), fetched ONCE into the data volume at boot,
+# parsed with the stdlib only (the image deliberately carries no extra python
+# deps). Everything fails soft to "--": geolocation is a statistics nicety,
+# never worth blocking on, and guest IPs are deliberately NEVER sent to any
+# online lookup service (that would hand a third party the very data the
+# notice promises to guard).
+GEOCSV = DATA/"dbip-country-lite.csv.gz"
+_geo = {"v4": [], "v6": [], "loaded": False}
 
-def _guest_log_prune():
-    """Drop session rows older than the retention window. Cheap: the file is a
-    few KB; called once per collect cycle."""
+
+def _geo_load():
+    import gzip, csv as _csv, ipaddress, bisect
+    if not GEOCSV.exists():
+        # try current, then previous month (db-ip republishes monthly)
+        from datetime import date
+        months = []
+        y, m = date.today().year, date.today().month
+        months.append(f"{y}-{m:02d}")
+        y2, m2 = (y, m - 1) if m > 1 else (y - 1, 12)
+        months.append(f"{y2}-{m2:02d}")
+        for mo in months:
+            url = f"https://download.db-ip.com/free/dbip-country-lite-{mo}.csv.gz"
+            ok, _ = run(f"curl -fsSL --max-time 60 -o {GEOCSV}.tmp {url}", t=90)
+            if ok:
+                Path(f"{GEOCSV}.tmp").replace(GEOCSV)
+                print(f"geoip: fetched dbip-country-lite {mo}", flush=True)
+                break
+            Path(f"{GEOCSV}.tmp").unlink(missing_ok=True)
+    if not GEOCSV.exists():
+        print("geoip: no database (offline?); guest countries will read --", flush=True)
+        return
+    try:
+        v4, v6 = [], []
+        with gzip.open(GEOCSV, "rt") as f:
+            for row in _csv.reader(f):
+                if len(row) < 3:
+                    continue
+                try:
+                    a, b = ipaddress.ip_address(row[0]), ipaddress.ip_address(row[1])
+                except ValueError:
+                    continue
+                (v4 if a.version == 4 else v6).append((int(a), int(b), row[2]))
+        v4.sort(); v6.sort()
+        _geo["v4"], _geo["v6"], _geo["loaded"] = v4, v6, True
+        print(f"geoip: loaded {len(v4)} v4 + {len(v6)} v6 ranges", flush=True)
+    except Exception as e:
+        print("geoip: load failed:", e, flush=True)
+
+
+def geo_cc(ip):
+    """Country code for an address, '--' when unknown. Pure stdlib bisect."""
+    try:
+        import ipaddress, bisect
+        a = ipaddress.ip_address(ip)
+        table = _geo["v4"] if a.version == 4 else _geo["v6"]
+        if not table:
+            return "--"
+        i = bisect.bisect_right(table, (int(a), 2**129, "")) - 1
+        if i >= 0 and table[i][0] <= int(a) <= table[i][1]:
+            return table[i][2]
+        return "--"
+    except Exception:
+        return "--"
+
+
+def _guest_log_expire_ips():
+    """Redact the IP column of rows older than the retention window; the rows
+    themselves stay forever as anonymised statistics (timestamp, name,
+    country, duration, end reason). Cheap: a few KB once per collect cycle."""
     try:
         if not GUESTCSV.exists():
             return
         cutoff = time.time() - GUEST_RETENTION_S
         rows = GUESTCSV.read_text().splitlines()
-        kept = []
+        out, changed = [], 0
         for r in rows:
-            try:
-                ts = datetime.fromisoformat(r.split(",", 1)[0]).timestamp()
-                if ts >= cutoff:
-                    kept.append(r)
-            except Exception:
-                kept.append(r)      # unparseable row: keep, never silently drop
-        if len(kept) != len(rows):
+            p = r.split(",")
+            # rows are ts,name,addr,cc,dur,reason (legacy rows lack cc)
+            if len(p) >= 5 and p[2] not in ("-", ""):
+                try:
+                    if datetime.fromisoformat(p[0]).timestamp() < cutoff:
+                        p[2] = "-"
+                        changed += 1
+                except Exception:
+                    pass            # unparseable timestamp: leave untouched
+            out.append(",".join(p))
+        if changed:
             tmp = GUESTCSV.with_suffix(".csv.tmp")
-            tmp.write_text("\n".join(kept) + ("\n" if kept else ""))
+            tmp.write_text("\n".join(out) + "\n")
             tmp.replace(GUESTCSV)
-            print(f"guest log: pruned {len(rows) - len(kept)} row(s) past retention", flush=True)
+            print(f"guest log: redacted {changed} IP(s) past retention", flush=True)
     except Exception:
         pass
 
 
 def _guest_log(reason):
-    """One CSV row per finished session: contention and abuse stay visible
-    (within the retention window; see _guest_log_prune)."""
+    """One CSV row per finished session: contention and abuse stay visible.
+    Country is resolved locally at write time (see _geo_load); the IP column
+    expires after GUEST_RETENTION_DAYS (see _guest_log_expire_ips)."""
     try:
         start = _guest.get("start")
         dur = round(time.time() - start) if start else 0
+        cc = geo_cc(_guest.get("addr") or "")
         with open(GUESTCSV, "a") as f:
-            f.write(f"{now_iso()},{_guest.get('name')},{_guest.get('addr')},{dur},{reason}\n")
+            f.write(f"{now_iso()},{_guest.get('name')},{_guest.get('addr')},{cc},{dur},{reason}\n")
     except Exception:
         pass
 
@@ -1133,7 +1209,7 @@ def collect_once():
     s["source_running"] = bool(source_container(running_only=True))
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
-    _guest_log_prune()                  # honour the 30-day retention notice
+    _guest_log_expire_ips()             # 30-day IP redaction; rows stay as stats
     ep = guest_public()
     if ep:
         s["endpoint"] = {**ep, "addr": _guest.get("addr")}   # addr: private page only
@@ -1268,6 +1344,7 @@ def main():
             html = re.sub(r'(window\.__BOX__\s*=\s*)(\{.*\})(;)', _box, html, count=1)
         (DATA/"index.html").write_text(html)
     _guest_boot()      # restore a guest session across telemetry restarts
+    threading.Thread(target=_geo_load, daemon=True).start()   # fail-soft geoip
     threading.Thread(target=serve, daemon=True).start()
     while True:
         try:
