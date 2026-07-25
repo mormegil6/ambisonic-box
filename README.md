@@ -94,7 +94,9 @@ docker compose up -d --build
 ```
 
 Without `content/demo.mp4` the stack still runs and you can push to it live
-(next section). `loop-source` checks for the file once at startup. If you
+(next section), or synthesise a placeholder loop with
+`scripts/make-demo-loop.sh` (testsrc2 video + a 16-channel sine bed, one
+pitch per channel). `loop-source` checks for the file once at startup. If you
 add `demo.mp4` later, run `docker compose restart loop-source`.
 
 ## Stream your own content

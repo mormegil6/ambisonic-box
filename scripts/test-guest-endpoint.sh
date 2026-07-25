@@ -164,14 +164,8 @@ log "building images touched by the guest feature"
 docker compose build rtmp-ingest telemetry hoast-player >/dev/null 2>&1 || pre "image build failed"
 
 if [ ! -f content/demo.mp4 ]; then
-    log "content/demo.mp4 missing - synthesising a 60 s test loop (16-ch AAC PCE)"
-    docker image inspect hoa360-earshot:local >/dev/null 2>&1 \
-        || docker compose build earshot >/dev/null 2>&1 || true
-    docker run --rm -v "$PWD/content:/content" --entrypoint ffmpeg hoa360-earshot:local \
-        -hide_banner -loglevel error -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
-        -c:v libx264 -preset veryfast -pix_fmt yuv420p -b:v 1M -g 60 -keyint_min 60 \
-        -c:a aac -strict -2 -ac 16 -b:a 512k -t 60 -movflags +faststart \
-        /content/demo.mp4 || pre "could not synthesise content/demo.mp4"
+    log "content/demo.mp4 missing - synthesising a placeholder loop"
+    ./scripts/make-demo-loop.sh >/dev/null 2>&1 || pre "could not synthesise content/demo.mp4"
 fi
 
 log "starting stack with GUEST_ENABLED=1 GRACE=$TG_GRACE CAP=$TG_CAP COOLDOWN=$TG_COOLDOWN TEL_IDLE_STOP_MIN=0"
