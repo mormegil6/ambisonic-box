@@ -288,6 +288,13 @@ _live_since = [None]        # epoch the stream last became live, for readiness
 # liveness is not readiness, and the player must not initialise until this.
 READY_S = int(os.environ.get("TEL_READY_S", "35"))
 
+# Reachability probes, both optional and env-gated so the code stays generic
+# and deployments opt in (the box does; see its override). Neither needs a
+# credential: cloudflared already serves /ready + /metrics on localhost, and
+# the R2 check is an anonymous HEAD on a public object.
+TUNNEL_METRICS_URL = os.environ.get("TUNNEL_METRICS_URL", "").rstrip("/")
+VOD_PROBE_URL = os.environ.get("VOD_PROBE_URL", "")
+
 
 def timeline_depth():
     """Seconds of media the manifest actually advertises, summed over its
@@ -1473,6 +1480,55 @@ WORST_FMT = {
 }
 
 
+def tunnel_probe():
+    """Cloudflared health via its local metrics server: /ready gives the
+    connection count, /metrics the edge locations. The tunnel dropping is the
+    one failure where the box looks healthy to itself while being unreachable
+    to everyone else, hence its own panel and alert."""
+    if not TUNNEL_METRICS_URL:
+        return None
+    out = {"connected": False, "conns": 0, "locations": [],
+           "checked": now_iso()}
+    try:
+        r = urllib.request.urlopen(f"{TUNNEL_METRICS_URL}/ready", timeout=4)
+        j = json.loads(r.read().decode())
+        out["conns"] = int(j.get("readyConnections", 0))
+        out["connected"] = out["conns"] > 0
+    except Exception:
+        return out
+    try:
+        m = urllib.request.urlopen(f"{TUNNEL_METRICS_URL}/metrics", timeout=4).read().decode()
+        locs = set()
+        for line in m.splitlines():
+            if line.startswith("cloudflared_tunnel_server_locations{") and line.rstrip().endswith(" 1"):
+                i = line.find('edge_location="')
+                if i >= 0:
+                    locs.add(line[i + 15:line.index('"', i + 15)])
+        out["locations"] = sorted(locs)
+    except Exception:
+        pass
+    return out
+
+
+def vod_origin_probe():
+    """HEAD on one known VOD object. Not a usage metric, just reachable or
+    not; if it fails, the actionable response is removing vodBase from
+    brand.json so the player falls back to box-served VOD."""
+    if not VOD_PROBE_URL:
+        return None
+    out = {"ok": False, "code": None, "checked": now_iso(), "url": VOD_PROBE_URL}
+    try:
+        req = urllib.request.Request(VOD_PROBE_URL, method="HEAD")
+        r = urllib.request.urlopen(req, timeout=6)
+        out["code"] = r.status
+        out["ok"] = 200 <= r.status < 400
+    except urllib.error.HTTPError as e:
+        out["code"] = e.code
+    except Exception:
+        pass
+    return out
+
+
 def evaluate_alerts(s):
     try:
         state = json.loads(STATE.read_text())
@@ -1494,6 +1550,7 @@ def evaluate_alerts(s):
         "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, nearing 105°C critical", "CPU temp back below 100°C", t, "max"),
         "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x)", "encoder keeping up again", s["encoder"]["speed"], "min"),
         "stream_stalled": (stalled, f"stream publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
+        "tunnel_down":    (bool(s.get("tunnel")) and not s["tunnel"]["connected"], "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
     }
     for key, (cond, problem, recovered, metric, worse) in conds.items():
         counts[key] = (counts.get(key, 0) + 1) if cond else 0
@@ -1573,6 +1630,12 @@ def collect_once():
     # (pipeline/guest tests) also carries the loop-source service label and
     # would read as the source running while the real one is stopped
     s["source_running"] = bool(source_container(running_only=True))
+    tn = tunnel_probe()
+    if tn is not None:
+        s["tunnel"] = tn
+    vp = vod_origin_probe()
+    if vp is not None:
+        s["vod_origin"] = vp
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
     _guest_log_expire_ips()             # 30-day IP redaction; rows stay as stats

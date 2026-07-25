@@ -146,6 +146,18 @@
     <div class="svc" id="services"><span class="chip">…</span></div>
   </section>
 
+  <!-- Reachability: rendered only when the deployment configures the
+       probes (TUNNEL_METRICS_URL / VOD_PROBE_URL). The tunnel is the blind
+       spot where the box looks healthy while unreachable to everyone. -->
+  <section id="reachSec" hidden>
+    <h2>Reachability</h2>
+    <div class="svc">
+      <span class="chip" id="tunnelChip" hidden></span>
+      <span class="chip" id="vodOriginChip" hidden></span>
+    </div>
+    <div class="ctl-msg" id="vodOriginHint" hidden style="margin-top:6px"></div>
+  </section>
+
   <section>
     <h2>Stream detail</h2>
     <div class="kv">
@@ -331,6 +343,47 @@ async function tick(){
   const gb = $('btnGuestBan');
   if (gb) gb.hidden = !(ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace'));
   renderBans(s);
+
+  // reachability chips (only when the deployment runs the probes)
+  (function(){
+    const sec = $('reachSec'), tc = $('tunnelChip'), vc = $('vodOriginChip'), vh = $('vodOriginHint');
+    const tn = s.tunnel, vo = s.vod_origin;
+    if (!tn && !vo) { sec.hidden = true; return; }
+    sec.hidden = false;
+    if (tc) {
+      tc.hidden = !tn;
+      if (tn) {
+        tc.textContent = '';
+        const d = document.createElement('span'); d.className = 'dot';
+        d.style.background = tn.connected ? col('--grn') : col('--red');
+        tc.appendChild(d);
+        tc.appendChild(document.createTextNode('tunnel '));
+        const st = document.createElement('span'); st.style.color = col('--dim');
+        st.textContent = tn.connected
+          ? 'connected · ' + tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
+          : 'DISCONNECTED';
+        tc.appendChild(st);
+      }
+    }
+    if (vc) {
+      vc.hidden = !vo;
+      if (vo) {
+        vc.textContent = '';
+        const d = document.createElement('span'); d.className = 'dot';
+        d.style.background = vo.ok ? col('--grn') : col('--red');
+        vc.appendChild(d);
+        vc.appendChild(document.createTextNode('VOD origin (R2) '));
+        const st = document.createElement('span'); st.style.color = col('--dim');
+        st.textContent = (vo.ok ? 'reachable' : 'UNREACHABLE (HTTP ' + (vo.code || 'timeout') + ')')
+          + ' · checked ' + (vo.checked || '').slice(11, 19);
+        vc.appendChild(st);
+      }
+    }
+    if (vh) {
+      vh.hidden = !(vo && !vo.ok);
+      if (vo && !vo.ok) vh.textContent = 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.';
+    }
+  })();
 
   // stream tile
   const live = s.stream && s.stream.live;
