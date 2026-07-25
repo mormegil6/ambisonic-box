@@ -223,6 +223,10 @@ services:
       # collect.py (ban expiry and IP redaction are the same event)
       - GUEST_RETENTION_DAYS=${GUEST_RETENTION_DAYS:-30}
       - GUEST_BAN_DAYS=${GUEST_BAN_DAYS:-30}
+      # optional Cloudflare Web Analytics (VOD page arrivals on the dashboard);
+      # both empty = feature off, panel hidden
+      - CF_ANALYTICS_TOKEN=${CF_ANALYTICS_TOKEN:-}
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID:-}
     volumes:
       # read health/logs, and start/stop the loop source for on-demand idling
       - /var/run/docker.sock:/var/run/docker.sock

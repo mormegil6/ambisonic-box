@@ -16,7 +16,7 @@
 import json, os, re, subprocess, time, ipaddress, threading
 import http.server, socketserver, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HOST     = os.environ.get("TEL_HOST", "example-host")
@@ -295,6 +295,12 @@ READY_S = int(os.environ.get("TEL_READY_S", "35"))
 TUNNEL_METRICS_URL = os.environ.get("TUNNEL_METRICS_URL", "").rstrip("/")
 VOD_PROBE_URL = os.environ.get("VOD_PROBE_URL", "")
 
+# Cloudflare Web Analytics for the VOD page (page loads, not playback).
+# Account-scoped GraphQL, read-only token; both env vars absent = feature
+# entirely off, a deployer without Cloudflare sees no difference.
+CF_ANALYTICS_TOKEN = os.environ.get("CF_ANALYTICS_TOKEN", "")
+CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
+
 
 def timeline_depth():
     """Seconds of media the manifest actually advertises, summed over its
@@ -567,6 +573,10 @@ _guest = {"state": "free", "name": None, "addr": None, "start": None,
           "last_end": None, "last_end_reason": None}
 _reporters = {}              # reporter ip -> [accepted-report epochs]
 _stall_timer = [None]
+# viewer attribution for the CURRENT guest session (guest sessions ARE the
+# live stream while they run, so this is temporal attribution of the same
+# counter, not a second one). Guarded by _guest_lock.
+_guest_view = {"peak": 0, "sum": 0, "n": 0}
 _guest_timer = [None]      # the pending grace-expiry threading.Timer
 _resume_flag = [False]     # a resume attempt is owed (retried from guest_tick)
 _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint updates
@@ -728,13 +738,18 @@ def _guest_log_expire_ips():
 def _guest_log(reason):
     """One CSV row per finished session: contention and abuse stay visible.
     Country is resolved locally at write time (see _geo_load); the IP column
-    expires after GUEST_RETENTION_DAYS (see _guest_log_expire_ips)."""
+    expires after GUEST_RETENTION_DAYS (see _guest_log_expire_ips). Trailing
+    columns: peak and mean public viewer count sampled while the session was
+    live, so "did anyone actually watch this" is answerable per session
+    (aggregate counts, no new personal data)."""
     try:
         start = _guest.get("start")
         dur = round(time.time() - start) if start else 0
         cc = geo_cc(_guest.get("addr") or "")
+        peak = _guest_view["peak"]
+        mean = round(_guest_view["sum"] / _guest_view["n"], 1) if _guest_view["n"] else 0
         with open(GUESTCSV, "a") as f:
-            f.write(f"{now_iso()},{_guest.get('name')},{_guest.get('addr')},{cc},{dur},{reason}\n")
+            f.write(f"{now_iso()},{_guest.get('name')},{_guest.get('addr')},{cc},{dur},{reason},{peak},{mean}\n")
     except Exception:
         pass
 
@@ -756,6 +771,7 @@ def guest_public():
            "ban_days": GUEST_BAN_DAYS}
     if st["state"] == "live" and st["start"]:
         out["remaining_s"] = max(0, round(GUEST_MAX_S - (now - st["start"])))
+        out["viewers_peak"] = _guest_view["peak"]
     elif st["state"] == "grace" and st["grace_started"]:
         out["remaining_s"] = max(0, round(GUEST_GRACE_S - (now - st["grace_started"])))
     cd = st.get("cooldown_until")
@@ -921,6 +937,8 @@ def guest_publish(name, addr):
                   f"{name} from {addr}", flush=True)
             return 403
         resumed_session = _guest["state"] == "grace"
+        if not resumed_session:
+            _guest_view.update(peak=0, sum=0, n=0)
         # claim the slot as "handover" before the slow unwind: a concurrent
         # second publish is rejected rather than racing us, and the status
         # pages can show "switching over" instead of pretending it is live.
@@ -1541,6 +1559,65 @@ def vod_origin_probe():
     return out
 
 
+_cfa_cache = [0.0, None]     # (fetched_at, last good result)
+
+def cf_vod_analytics():
+    """VOD page loads + country breakdown from Cloudflare Web Analytics
+    (rumPageloadEventsAdaptiveGroups, last 24 h, requestPath /vod*). The
+    dataset is marked Beta, so every access is defensive: on any shape
+    change or API error the panel keeps the last good numbers marked stale
+    instead of crashing. Polled at most every 5 min."""
+    if not CF_ANALYTICS_TOKEN or not CF_ACCOUNT_ID:
+        return None
+    now = time.time()
+    if now - _cfa_cache[0] < 300:
+        return _cfa_cache[1]
+    _cfa_cache[0] = now
+    since = datetime.fromtimestamp(now - 86400, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    q = {
+        "query": """query($acct: String!, $since: Time!, $until: Time!) {
+          viewer { accounts(filter: {accountTag: $acct}) {
+            rumPageloadEventsAdaptiveGroups(limit: 100, filter: {AND: [
+              {datetime_geq: $since}, {datetime_leq: $until},
+              {requestPath_like: \"/vod%\"}]}) {
+              count
+              sum { visits }
+              dimensions { countryName }
+            } } } }""",
+        "variables": {"acct": CF_ACCOUNT_ID, "since": since, "until": until},
+    }
+    try:
+        req = urllib.request.Request(
+            "https://api.cloudflare.com/client/v4/graphql",
+            data=json.dumps(q).encode(),
+            headers={"Authorization": f"Bearer {CF_ANALYTICS_TOKEN}",
+                     "Content-Type": "application/json",
+                     "User-Agent": "hoa360-telemetry/1.0"})
+        j = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+        groups = j["data"]["viewer"]["accounts"][0]["rumPageloadEventsAdaptiveGroups"]
+        views, visits, countries = 0, 0, {}
+        for g in groups:
+            n = int(g.get("count") or 0)
+            views += n
+            visits += int((g.get("sum") or {}).get("visits") or 0)
+            cn = ((g.get("dimensions") or {}).get("countryName") or "").strip()
+            if cn:
+                countries[cn] = countries.get(cn, 0) + n
+        top = dict(sorted(countries.items(), key=lambda kv: -kv[1])[:6])
+        out = {"views": views, "visits": visits, "countries": top,
+               "window_h": 24, "checked": now_iso(), "stale": False}
+        _cfa_cache[1] = out
+        return out
+    except Exception as e:
+        print(f"cf web analytics poll failed (kept last good): {type(e).__name__}", flush=True)
+        prev = _cfa_cache[1]
+        if prev:
+            prev = {**prev, "stale": True}
+            _cfa_cache[1] = prev
+        return prev
+
+
 def evaluate_alerts(s):
     try:
         state = json.loads(STATE.read_text())
@@ -1648,8 +1725,17 @@ def collect_once():
     vp = vod_origin_probe()
     if vp is not None:
         s["vod_origin"] = vp
+    ca = cf_vod_analytics()
+    if ca is not None:
+        s["vod_analytics"] = ca
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
+    with _guest_lock:
+        if _guest["state"] == "live":
+            v = vw["now"]
+            _guest_view["peak"] = max(_guest_view["peak"], v)
+            _guest_view["sum"] += v
+            _guest_view["n"] += 1
     _guest_log_expire_ips()             # 30-day IP redaction; rows stay as stats
     _bans_expire()                      # same event: ban expiry = IP redaction
     ep = guest_public()
