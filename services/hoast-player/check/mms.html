@@ -147,7 +147,8 @@ function runTest() {
     catch (e) { return verdict(false, 'createMediaElementSource failed: ' + e.message); }
   } else {
     log('tap', 'SKIPPED (no createMediaElementSource); this run only proves playback, not channel delivery');
-    el.volume = 0.05;
+    el.volume = 1.0;
+    log('volume', '1.0 (direct element output; you should HEAR the tones if decode works)');
   }
   var NCH = 32;
   var splitter = ctx.createChannelSplitter(NCH);
@@ -278,6 +279,11 @@ function runTest() {
     } else if (active >= 1) {
       verdict(false, 'PARTIAL: audio decodes but only ' + active
         + ' channel(s) reach Web Audio (downmix). isTypeSupported was optimistic; iPhone stays blocked.');
+    } else if (el.currentTime > 0.3 || el.readyState === 4) {
+      verdict(false, 'PLAYBACK OK, CAPTURE SILENT: the element decoded and played ('
+        + 'currentTime ' + el.currentTime.toFixed(2) + ', rs ' + el.readyState
+        + ') but createMediaElementSource delivered zero signal on every channel. '
+        + 'That is a WebKit Web Audio capture defect, separate from codec support.');
     } else {
       verdict(false, 'FAIL: appended and played, but no signal reached Web Audio. el.error: '
         + (el.error ? el.error.code : 'none') + ', readyState ' + el.readyState);
