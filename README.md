@@ -170,6 +170,20 @@ How it behaves:
   end reason) are kept indefinitely; the source IP is redacted after
   `GUEST_RETENTION_DAYS` (default 30). Country comes from a local DB-IP
   lookup; guest IPs are never sent to an online service.
+- **Reporting:** the player page shows a report button while a guest session
+  is active. Reports are rate-limited (per reporter IP at nginx and in the
+  arbiter) and alert the operator; reporter IPs live under the same
+  `GUEST_RETENTION_DAYS` redaction as everything else.
+- **Bans:** the dashboard's End + ban button blocks the session's source IP
+  for `GUEST_BAN_DAYS` (default 30, clamped to the retention window: ban
+  expiry and IP redaction are deliberately the same event). Bans can be
+  lifted early from the dashboard. This is a SPEED BUMP, not enforcement:
+  dynamic IPs, CGNAT and VPNs all defeat an IP ban. It exists to make casual
+  misuse inconvenient, nothing more.
+- **Stalled transcodes:** a guest pushing the wrong audio layout (plain
+  stereo/mono is the classic mistake) produces no playable output; the
+  session is ended automatically after ~45 s and the reason is shown on the
+  player page, with no cooldown so a corrected retry works immediately.
 - **Fail-closed:** if telemetry is down, guest publishes are rejected while
   the token-authed `live` application and the demo loop keep working.
 - The owner path is unaffected: pushing with the stream key to `/live` does
@@ -193,7 +207,12 @@ synthesis), `VOD_ENABLED` governs the on-demand clips, and `VOD_ENABLED=0`
 suppresses the clip fetch even with `DEMO_CONTENT=1`.
 
 When enabled, the player serves on-demand reference clips at `/vod/`
-(`/vod/?clip=<name>`). Two are published as **release assets** - no media is
+(`/vod/?clip=<name>`). Delivery location is a `brand.json` choice: `vodBase`
+empty or absent serves the clips from this host's `/vod-dash/` route;
+setting it to a URL serves them from an external host that mirrors the
+`vod-dash/` tree (see "Optional: serving VOD from object storage" below for
+the CORS requirements). The player reads the key at clip start, so switching
+needs no rebuild. Two are published as **release assets** - no media is
 committed here, only the generators and the player wiring: `directions` (a 360
 orientation test - the equirectangular test card from
 `scripts/make-360-testcard.py`, an ambisonic energy-visualisation overlay,
@@ -283,7 +302,7 @@ box-served VOD instantly; the local copy and route stay in place either way.
 | `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |
 | `DEMO_CONTENT` | `1` | Self-provisioning demo at loop-source start: synthesise the spherical placeholder when `content/demo.mp4` is missing, fetch the VOD masters from the pinned release when absent (~373 MB once, SHA-256-verified, fail-soft). `0` = neither; see Quick start |
 | `VOD_ENABLED` | `0` | On-demand VOD page + packaged clips, off by default: the stack's purpose is live streaming, VOD is opt-in. `0` serves no VOD route and suppresses the reference-master fetch even with `DEMO_CONTENT=1`; the packaging scripts stay in the repo, inert until run |
-| `GUEST_ENABLED` | `0` | Keyless guest test endpoint, off by default; see the Guest test endpoint section. Timing knobs (`GUEST_GRACE_S`, `GUEST_MAX_S`, `GUEST_COOLDOWN_S`, `GUEST_RETENTION_DAYS`) are documented in `.env.example` |
+| `GUEST_ENABLED` | `0` | Keyless guest test endpoint, off by default; see the Guest test endpoint section. Timing knobs (`GUEST_GRACE_S`, `GUEST_MAX_S`, `GUEST_COOLDOWN_S`, `GUEST_RETENTION_DAYS`, `GUEST_BAN_DAYS`) are documented in `.env.example` |
 | `ENABLE_NONFREE` | `0` | earshot ffmpeg licence stamp: the stack builds WITHOUT `--enable-nonfree` so images are redistributable; `1` restores the stock upstream configure line (`services/earshot/README.md` section 7) |
 
 Copy `.env.example` to `.env` to override either.

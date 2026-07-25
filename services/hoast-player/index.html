@@ -399,12 +399,24 @@
             var active = ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace');
             if (!gb || !gb.d || !active) { box.hidden = true; return; }
             var en = gb.d.en || {}, pl = gb.d.pl || {};
+            // The disclaimer's numeric claims ({MAX_H}, {RETENTION_DAYS},
+            // {BAN_DAYS}) interpolate from the running config via /api/live,
+            // so the prose can never drift from what the arbiter enforces.
+            // Fallbacks cover a mixed-version deploy window only.
+            function subst(t) {
+                if (!t) return '';
+                var v = { MAX_H: (ep && ep.max_h) || 3,
+                          RETENTION_DAYS: (ep && ep.retention_days) || 30,
+                          BAN_DAYS: (ep && ep.ban_days) || 30 };
+                return t.replace(/\{(MAX_H|RETENTION_DAYS|BAN_DAYS)\}/g,
+                                 function (_, k) { return v[k]; });
+            }
             var badge = document.getElementById('guestNoticeBadge');
-            if (badge) badge.textContent = [en.short, pl.short].filter(Boolean).join(' · ');
+            if (badge) badge.textContent = [en.short, pl.short].filter(Boolean).map(subst).join(' \u00b7 ');
             var fe = document.getElementById('guestNoticeFullEn');
-            if (fe) fe.textContent = en.full || '';
+            if (fe) fe.textContent = subst(en.full);
             var fp = document.getElementById('guestNoticeFullPl');
-            if (fp) fp.textContent = pl.full || '';
+            if (fp) fp.textContent = subst(pl.full);
             var af = document.getElementById('guestNoticeAffil');
             if (af) { af.textContent = gb.a || ''; af.hidden = !gb.a; }
             var rb = document.getElementById('guestReportBtn');
@@ -933,8 +945,8 @@
               var pre = document.createElement('pre');
               pre.id = 'capProbes';
               pre.style.cssText = 'position:absolute;top:8px;right:8px;z-index:9999;'
-                + 'max-width:48%;white-space:pre-wrap;word-break:break-word;'
-                + 'background:rgba(0,0,0,.72);color:#0f0;font:11px ui-monospace,monospace;'
+                + 'max-width:min(560px,60%);white-space:pre-wrap;word-break:break-word;'
+                + 'background:rgba(0,0,0,.72);color:#0f0;font:10px ui-monospace,monospace;'
                 + 'line-height:1.35;padding:4px 7px;border-radius:4px;pointer-events:none;margin:0';
               pre.textContent = out.text;
               (document.querySelector('.player') || document.body).appendChild(pre);

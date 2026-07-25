@@ -16,7 +16,7 @@
 import json, os, re, subprocess, time, ipaddress, threading
 import http.server, socketserver, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 HOST     = os.environ.get("TEL_HOST", "example-host")
@@ -576,6 +576,12 @@ def _guest_save():
 # exactly like viewers.csv's country codes. Container stdout logs rotate by
 # size, not by days; that residual is a known item for the final wording.
 GUEST_RETENTION_S = int(os.environ.get("GUEST_RETENTION_DAYS", "30")) * 86400
+# IP bans (dashboard "End + ban"). Clamped to the retention window on
+# purpose: expiry and IP redaction are ONE event, so a ban outliving the
+# address that defines it would be incoherent.
+BANSCSV = DATA/"guest_bans.csv"
+GUEST_BAN_DAYS = min(int(os.environ.get("GUEST_BAN_DAYS", "30")),
+                     GUEST_RETENTION_S // 86400)
 
 # --- offline IP -> country, for the session statistics ---------------------
 # DB-IP's free country-lite CSV (CC BY 4.0; attribution in the dashboard
@@ -727,7 +733,12 @@ def guest_public():
     with _guest_lock:
         st, now = dict(_guest), time.time()
     out = {"state": st["state"], "name": st["name"], "grace_s": GUEST_GRACE_S,
-           "remaining_s": None}
+           "remaining_s": None,
+           # the disclaimer's numeric claims interpolate from these, so the
+           # prose can never drift from the running config
+           "max_h": round(GUEST_MAX_S / 3600, 1),
+           "retention_days": GUEST_RETENTION_S // 86400,
+           "ban_days": GUEST_BAN_DAYS}
     if st["state"] == "live" and st["start"]:
         out["remaining_s"] = max(0, round(GUEST_MAX_S - (now - st["start"])))
     elif st["state"] == "grace" and st["grace_started"]:
@@ -877,6 +888,12 @@ def _earshot_unwound(deadline_s):
 def guest_publish(name, addr):
     """on_publish for the guest app. 2xx accepts; anything else rejects."""
     if not GUEST_ENABLED:
+        return 403
+    # ban check first: blocks only rows that are active AND still carry an
+    # IP AND are unexpired by the clock, all three explicit, so a stale
+    # label after a missed sweep can never wrongly block anyone
+    if _ban_blocks(addr):
+        print(f"guest publish rejected (banned): {addr}", flush=True)
         return 403
     name = _guest_sanitize(name)
     with _guest_lock:
@@ -1040,6 +1057,151 @@ def guest_kill():
         _resume_after_guest()
         return {"ok": True, "state": "ended"}
     return {"ok": True, "state": "free"}
+
+
+# --- ban store ---------------------------------------------------------
+# guest_bans.csv rows: banned_at,ip,cc,expires_at,reason,state
+# Three end states: active (enforced, IP present), unbanned (lifted early,
+# IP kept until redaction, NOT enforced), expired (retention elapsed, IP
+# redacted in the same operation that writes the label, NOT enforced).
+# Enforcement deliberately does NOT trust the label alone: it blocks only
+# rows that are active AND still carry an IP AND whose expires_at is in the
+# future, so a stale label after a missed job cycle can never cause a
+# wrongful block.
+
+_bans_lock = threading.Lock()
+
+def _bans_read():
+    rows = []
+    try:
+        for line in BANSCSV.read_text().splitlines():
+            p = line.split(",")
+            if len(p) >= 6:
+                rows.append({"banned_at": p[0], "ip": p[1], "cc": p[2],
+                             "expires_at": p[3], "reason": p[4], "state": p[5]})
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    return rows
+
+def _bans_write(rows):
+    tmp = BANSCSV.with_suffix(".csv.tmp")
+    tmp.write_text("".join(
+        f'{r["banned_at"]},{r["ip"]},{r["cc"]},{r["expires_at"]},{r["reason"]},{r["state"]}\n'
+        for r in rows))
+    tmp.replace(BANSCSV)
+
+def _ban_blocks(ip):
+    """The enforcement rule, all three conditions explicit."""
+    if not ip:
+        return False
+    now = time.time()
+    for r in _bans_read():
+        if r["state"] != "active":
+            continue
+        if r["ip"] in ("-", "") or r["ip"] != ip:
+            continue
+        try:
+            if datetime.fromisoformat(r["expires_at"]).timestamp() > now:
+                return True
+        except Exception:
+            continue
+    return False
+
+def _bans_expire():
+    """Retention-window sweep: past-retention rows lose their IP, and rows
+    still labelled active get state=expired IN THE SAME WRITE, so the CSV
+    stays self-describing (unbanned rows keep their outcome label)."""
+    with _bans_lock:
+        rows = _bans_read()
+        if not rows:
+            return
+        cutoff = time.time() - GUEST_RETENTION_S
+        changed = 0
+        for r in rows:
+            try:
+                old = datetime.fromisoformat(r["banned_at"]).timestamp() < cutoff
+            except Exception:
+                old = False
+            if not old:
+                continue
+            if r["ip"] not in ("-", ""):
+                r["ip"] = "-"; changed += 1
+            if r["state"] == "active":
+                r["state"] = "expired"; changed += 1
+        if changed:
+            _bans_write(rows)
+            print(f"guest_bans.csv: {changed} field(s) expired/redacted", flush=True)
+
+def guest_ban():
+    """Dashboard 'End + ban': ban the current session's address, then ride
+    the normal kill path. Works in grace too (the publisher is gone but the
+    session, and its address, still exist)."""
+    if not GUEST_ENABLED:
+        return {"ok": False, "error": "guest endpoint disabled"}
+    with _guest_lock:
+        if _guest["state"] not in ("live", "handover", "grace"):
+            return {"ok": False, "error": "no active session"}
+        addr, name = _guest.get("addr"), _guest.get("name")
+    if not addr:
+        return {"ok": False, "error": "session has no recorded address"}
+    now = datetime.now().astimezone()
+    exp = now + timedelta(days=GUEST_BAN_DAYS)
+    with _bans_lock:
+        rows = _bans_read()
+        rows.append({"banned_at": now.isoformat(timespec="seconds"),
+                     "ip": addr, "cc": geo_cc(addr),
+                     "expires_at": exp.isoformat(timespec="seconds"),
+                     "reason": "operator ban", "state": "active"})
+        _bans_write(rows)
+    print(f"guest banned: {addr} until {exp.isoformat(timespec='seconds')} "
+          f"(session '{name}')", flush=True)
+    out = guest_kill()
+    out["banned"] = addr
+    return out
+
+def guest_unban(ip):
+    if not GUEST_ENABLED:
+        return {"ok": False, "error": "guest endpoint disabled"}
+    if not ip:
+        return {"ok": False, "error": "ip required"}
+    with _bans_lock:
+        rows = _bans_read()
+        hit = 0
+        for r in rows:
+            if r["state"] == "active" and r["ip"] == ip:
+                r["state"] = "unbanned"; hit += 1
+        if hit:
+            _bans_write(rows)
+    print(f"guest unban: {ip} ({hit} row(s))", flush=True)
+    return {"ok": bool(hit), "unbanned": hit}
+
+def _bans_lists():
+    """Dashboard split: active = the enforcement view (same triple rule, so
+    a stale label can never grow an Unban button on a redacted row);
+    history = everything else, no IPs, outcome computed by time when the
+    label lags the clock."""
+    now = time.time()
+    active, history = [], []
+    for r in _bans_read():
+        live = False
+        if r["state"] == "active" and r["ip"] not in ("-", ""):
+            try:
+                live = datetime.fromisoformat(r["expires_at"]).timestamp() > now
+            except Exception:
+                live = False
+        if live:
+            active.append({"ip": r["ip"], "cc": r["cc"], "banned_at": r["banned_at"],
+                           "expires_at": r["expires_at"], "reason": r["reason"]})
+        else:
+            outcome = r["state"]
+            if r["state"] == "active":
+                outcome = "expired"          # label lagging a missed sweep
+            history.append({"cc": r["cc"], "banned_at": r["banned_at"],
+                            "expires_at": r["expires_at"], "reason": r["reason"],
+                            "outcome": outcome})
+    return {"active": active, "history": history}
 
 
 def _guest_stall_arm():
@@ -1394,9 +1556,11 @@ def collect_once():
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
     _guest_log_expire_ips()             # 30-day IP redaction; rows stay as stats
+    _bans_expire()                      # same event: ban expiry = IP redaction
     ep = guest_public()
     if ep:
         s["endpoint"] = {**ep, "addr": _guest.get("addr")}   # addr: private page only
+        s["bans"] = _bans_lists()                            # private page only
     auto_idle(strm, vw.get("any", vw["now"]))
     # Read back after the decision so the panel shows the current countdown
     # rather than last cycle's.
@@ -1488,6 +1652,12 @@ def serve():
             # boundary as /api/stop: this port only.
             if p == "/api/guest/kill":
                 return self._json(200, guest_kill())
+            if p == "/api/guest/ban":
+                return self._json(200 if GUEST_ENABLED else 404, guest_ban())
+            if p == "/api/guest/unban":
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                return self._json(200 if GUEST_ENABLED else 404,
+                                  guest_unban((q.get("ip") or [""])[0]))
             # Abuse report, proxied from the public player with the real
             # reporter identity in headers (nginx cf-aware maps)
             if p == "/api/guest/report":

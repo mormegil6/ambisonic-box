@@ -219,6 +219,10 @@ services:
       # after a cap/kill-forced end, refuse guest publishes this long, so an
       # auto-reconnecting encoder cannot re-claim the slot instantly
       - GUEST_COOLDOWN_S=${GUEST_COOLDOWN_S:-300}
+      # IP log retention and ban duration; ban is clamped to retention in
+      # collect.py (ban expiry and IP redaction are the same event)
+      - GUEST_RETENTION_DAYS=${GUEST_RETENTION_DAYS:-30}
+      - GUEST_BAN_DAYS=${GUEST_BAN_DAYS:-30}
     volumes:
       # read health/logs, and start/stop the loop source for on-demand idling
       - /var/run/docker.sock:/var/run/docker.sock

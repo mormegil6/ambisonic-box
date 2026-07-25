@@ -104,6 +104,21 @@
     <span class="ctl-lbl">Guest endpoint</span>
     <span class="ctl-msg" id="guestState">…</span>
     <button id="btnGuestKill" class="btn btn-stop" hidden>End session</button>
+    <button id="btnGuestBan" class="btn btn-stop" hidden>End + ban</button>
+  </div>
+
+  <!-- Bans. Active list mirrors the ENFORCEMENT rule (active + IP present +
+       unexpired), so a redacted or lapsed row can never grow an Unban
+       button; everything else is read-only history. -->
+  <div class="ctl" id="bansRow" hidden>
+    <span class="ctl-lbl">Bans</span>
+    <div style="flex:1;min-width:0">
+      <table id="bansActive" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+      <details id="bansHistWrap" style="margin-top:4px">
+        <summary style="cursor:pointer;font-size:12px;opacity:.7">history</summary>
+        <table id="bansHist" style="width:100%;border-collapse:collapse;font-size:12px;opacity:.75"></table>
+      </details>
+    </div>
   </div>
 
   <!-- Service restarts. Two-click confirm; earshot only ships paired with
@@ -297,6 +312,9 @@ async function tick(){
     }
   }
   if (gk) gk.hidden = !(ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace'));
+  const gb = $('btnGuestBan');
+  if (gb) gb.hidden = !(ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace'));
+  renderBans(s);
 
   // stream tile
   const live = s.stream && s.stream.live;
@@ -426,6 +444,70 @@ wireCtl('btnStop', '/api/stop', 'stop');
                       ? 'telemetry restarting (expected drop), back in ~10 s'
                       : 'failed: ' + e.message; });
     });
+  });
+})();
+
+// Bans: active table (Unban per row) + collapsed read-only history.
+function renderBans(s){
+  var row = $('bansRow'); if(!row) return;
+  var b = s && s.bans;
+  if (!b || (!b.active.length && !b.history.length)) { row.hidden = true; return; }
+  row.hidden = false;
+  var ta = $('bansActive'); ta.textContent = '';
+  b.active.forEach(function(r){
+    var tr = document.createElement('tr');
+    [r.ip, r.cc || '?', r.banned_at.slice(0,16).replace('T',' '),
+     'until ' + r.expires_at.slice(0,10)].forEach(function(t){
+      var td = document.createElement('td'); td.textContent = t;
+      td.style.padding = '2px 8px 2px 0'; tr.appendChild(td);
+    });
+    var td = document.createElement('td');
+    var btn = document.createElement('button');
+    btn.className = 'btn'; btn.textContent = 'Unban';
+    btn.addEventListener('click', function(){
+      btn.disabled = true;
+      fetch('/api/guest/unban?ip=' + encodeURIComponent(r.ip), {method:'POST'})
+        .then(function(){ tick(); });
+    });
+    td.appendChild(btn); tr.appendChild(td); ta.appendChild(tr);
+  });
+  if (!b.active.length) {
+    var tr = document.createElement('tr'), td = document.createElement('td');
+    td.textContent = 'no active bans'; td.style.opacity = '.6';
+    td.style.padding = '2px 0'; tr.appendChild(td); ta.appendChild(tr);
+  }
+  var th = $('bansHist'); th.textContent = '';
+  b.history.forEach(function(r){
+    var tr = document.createElement('tr');
+    [r.cc || '?', r.banned_at.slice(0,10), 'to ' + r.expires_at.slice(0,10),
+     r.outcome].forEach(function(t){
+      var td = document.createElement('td'); td.textContent = t;
+      td.style.padding = '2px 8px 2px 0'; tr.appendChild(td);
+    });
+    th.appendChild(tr);
+  });
+  $('bansHistWrap').hidden = !b.history.length;
+}
+
+// End + ban: two-click confirm, because unlike kill this one persists for
+// GUEST_BAN_DAYS. Unban exists, but a misclick should not need it.
+(function(){
+  var b = $('btnGuestBan'); if(!b) return;
+  var armed = false, t = null;
+  function disarm(){ armed = false; b.textContent = 'End + ban'; if(t){clearTimeout(t); t=null;} }
+  b.addEventListener('click', function(){
+    if (!armed) {
+      var bd = (window.__LAST_STATS__ && window.__LAST_STATS__.endpoint
+                && window.__LAST_STATS__.endpoint.ban_days) || 30;
+      armed = true; b.textContent = 'Confirm ban (' + bd + ' days)';
+      t = setTimeout(disarm, 5000); return;
+    }
+    disarm(); b.disabled = true;
+    fetch('/api/guest/ban', {method:'POST'}).then(r=>r.json())
+      .then(r=>{ $('guestState').textContent = r.ok === false
+                   ? ('ban failed: ' + (r.error || '')) : ('banned ' + (r.banned || '') + ', ending session...'); tick(); })
+      .catch(e=>{ $('guestState').textContent = 'ban failed: ' + e.message; })
+      .then(()=>{ setTimeout(function(){ b.disabled = false; }, 1500); });
   });
 })();
 

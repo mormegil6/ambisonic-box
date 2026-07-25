@@ -21,6 +21,11 @@
 #            retryable).
 #   RB       report button path: accepted report returns ok, repeat within the
 #            reporter window returns already-reported, session counter grows.
+#   BN       ban path: End+ban ends the live session and the banned address is
+#            refused at on_publish; unban lifts it. Edge cases per the design:
+#            an active-labelled row that is time-expired, and one with a
+#            redacted IP, must BOTH still be allowed to publish (the triple
+#            rule protects against stale labels after a missed sweep).
 #   R        second concurrent publisher is rejected fast; first is unharmed.
 #   F        fail-closed: with telemetry stopped, a guest push is rejected and
 #            the demo loop keeps publishing untouched.
@@ -390,6 +395,43 @@ if wait_for "$label: guest live" 30 st_is live; then
     wait_resume "$label" >/dev/null || fail "$label: loop did not resume"
     if [ "$FAILS" -eq "$fails0" ]; then
         row "$label: report accepted, 4th rate-limited (429), 2nd reporter ok, $n rows logged"
+        log "$label ok"
+    fi
+else
+    fail "$label: guest publish never accepted"
+fi
+
+# ------------------------------------------------- BN ban path --------------
+label="BN-ban"
+fails0=$FAILS
+push_guest tban 60
+if wait_for "$label: guest live" 30 st_is live; then
+    r=$(curl -s -X POST "$TEL/api/guest/ban")
+    echo "$r" | grep -q '"banned"' || fail "$label: ban call did not report an address ($r)"
+    wait_for "$label: session ended by ban" 30 st_is free || fail "$label: ban did not end the session"
+    docker rm -f guestpush-tban >/dev/null 2>&1 || true
+    ip=$(docker compose exec -T telemetry sh -c 'tail -1 /data/guest_bans.csv | cut -d, -f2' | tr -d '\r')
+    # let the operator-kill cooldown lapse so a 403 below can ONLY be the ban
+    sleep $((TG_COOLDOWN + 2))
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$TEL/rtmp/guest/publish?call=publish&name=zzz&addr=$ip")
+    [ "$code" = "403" ] || fail "$label: banned addr not refused at on_publish (got $code)"
+    # triple-rule edges, tested against the exact enforcement function so no
+    # slot/cooldown side effects: a stale active label past its expiry and a
+    # redacted-IP row must both be inert
+    docker compose exec -T telemetry sh -c 'printf "2026-01-01T00:00:00+00:00,198.51.100.77,DE,2026-01-31T00:00:00+00:00,operator ban,active\n2026-01-01T00:00:00+00:00,-,DE,2099-01-01T00:00:00+00:00,operator ban,active\n" >> /data/guest_bans.csv'
+    edges=$(docker compose exec -T telemetry python3 -c "import collect; print(collect._ban_blocks('198.51.100.77'), collect._ban_blocks('198.51.100.88'), collect._ban_blocks('$ip'))" | tr -d '\r')
+    [ "$edges" = "False False True" ] || fail "$label: triple rule wrong (got '$edges', want 'False False True')"
+    # unban lifts it: checked against the enforcement function, NOT via a
+    # real publish, so no slot is claimed and nothing needs backstop cleanup
+    curl -s -X POST "$TEL/api/guest/unban?ip=$ip" >/dev/null
+    lifted=$(docker compose exec -T telemetry python3 -c "import collect; print(collect._ban_blocks('$ip'))" | tr -d '\r')
+    [ "$lifted" = "False" ] || fail "$label: unbanned addr still blocked by the rule (got '$lifted')"
+    st=$(docker compose exec -T telemetry sh -c "grep ',$ip,' /data/guest_bans.csv | tail -1 | cut -d, -f6" | tr -d '\r')
+    [ "$st" = "unbanned" ] || fail "$label: CSV state not rewritten to unbanned (got '$st')"
+    docker compose exec -T telemetry sh -c 'rm -f /data/guest_bans.csv'
+    wait_resume "$label" >/dev/null || fail "$label: loop did not resume"
+    if [ "$FAILS" -eq "$fails0" ]; then
+        row "$label: ban ends session + blocks addr; stale-label and redacted rows inert; unban lifts, CSV self-describes"
         log "$label ok"
     fi
 else
