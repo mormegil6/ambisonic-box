@@ -848,12 +848,11 @@
           // deployment provides its site token in brand.json. Cookieless, no
           // personal data stored, so no consent banner; the script serves
           // ACAO * + CORP cross-origin, so COEP require-corp is satisfied.
-          var cfTok = BRAND_DATA && BRAND_DATA.cfBeaconToken;
+          var cfTok = BRAND_DATA && BRAND_DATA.webAnalyticsToken;
           if (cfTok && !document.querySelector('script[data-cf-beacon]')) {
             var cb = document.createElement('script');
-            cb.defer = true;
+            cb.type = 'module';
             cb.src = 'https://static.cloudflareinsights.com/beacon.min.js';
-            cb.setAttribute('crossorigin', 'anonymous');
             cb.setAttribute('data-cf-beacon', JSON.stringify({ token: String(cfTok) }));
             document.head.appendChild(cb);
           }

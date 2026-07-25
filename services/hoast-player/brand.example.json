@@ -34,6 +34,6 @@
   "_comment_guestDisclaimer_tokens": "{MAX_H}, {RETENTION_DAYS} and {BAN_DAYS} interpolate at render time from the running config (via /api/live), so the numeric claims cannot drift from what the arbiter actually enforces. Keep the tokens when editing the wording.",
   "_comment_vodBase": "Empty or absent = VOD served from this host. Set to a URL to serve it externally. The URL is prepended to the /vod-dash/... paths, so the remote must mirror that tree and allow CORS from the player origin, including the 'range' request header (DASH SegmentBase addresses by byte range).",
   "vodBase": "",
-  "_comment_cfBeaconToken": "Optional Cloudflare Web Analytics site token; when set, the VOD page (and only the VOD page) loads the cookieless beacon. The token is public by nature (it appears in page source) but deployment-specific, hence here and not in the committed page. Create the Web Analytics site with automatic setup DISABLED or Cloudflare injects the beacon on every proxied page including the live player.",
-  "cfBeaconToken": ""
+  "_comment_webAnalyticsToken": "Optional Cloudflare Web Analytics site token; when set, the VOD page (and only the VOD page) loads the cookieless beacon. The token is public by nature (it appears in page source) but deployment-specific, hence here and not in the committed page. Create the Web Analytics site with automatic setup DISABLED, or Cloudflare injects the beacon on every proxied page including the live player.",
+  "webAnalyticsToken": ""
 }
