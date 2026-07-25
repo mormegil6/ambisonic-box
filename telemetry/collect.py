@@ -62,6 +62,7 @@ START_GRACE_S = int(os.environ.get("TEL_START_GRACE_S", "300"))  # never idle ju
 PUBDIR = Path(os.environ.get("TEL_PUB", "/pub"))   # shared with hoast-player (public)
 STATS = DATA/"stats.json"; PUB = PUBDIR/"status.json"
 CSV   = DATA/"viewers.csv"; STATE = DATA/"alert_state.json"
+VODCSV = DATA/"vod_analytics.csv"   # 24h-window gauge rows, one per fresh poll
 
 
 def run(cmd, t=12):
@@ -1728,6 +1729,21 @@ def collect_once():
     ca = cf_vod_analytics()
     if ca is not None:
         s["vod_analytics"] = ca
+        # persist for future analysis: one gauge row per FRESH poll (the
+        # 5-min cache returns the same 'checked' between polls; stale rows
+        # are skipped). Aggregate counts only, no personal data, keep forever
+        # like viewers.csv. Columns: checked_ts, views_24h, visits_24h, cc:n;...
+        if not ca.get("stale"):
+            try:
+                last = ""
+                if VODCSV.exists():
+                    last = VODCSV.read_text().rsplit("\n", 2)[-2].split(",", 1)[0]
+                if last != ca["checked"]:
+                    cs = ";".join(f"{k}:{v}" for k, v in ca["countries"].items())
+                    with open(VODCSV, "a") as f:
+                        f.write(f'{ca["checked"]},{ca["views"]},{ca["visits"]},{cs}\n')
+            except Exception:
+                pass
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
     with _guest_lock:
