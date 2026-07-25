@@ -1487,13 +1487,23 @@ def tunnel_probe():
     to everyone else, hence its own panel and alert."""
     if not TUNNEL_METRICS_URL:
         return None
-    out = {"connected": False, "conns": 0, "locations": [],
+    # connected: True/False from a successful metrics read; None when the
+    # metrics endpoint itself is unreachable. The distinction matters for the
+    # alert: an unreachable metrics port must read as UNKNOWN, never as
+    # "tunnel down", or a probe misconfiguration would page the operator.
+    out = {"connected": None, "conns": 0, "locations": [],
            "checked": now_iso()}
     try:
         r = urllib.request.urlopen(f"{TUNNEL_METRICS_URL}/ready", timeout=4)
         j = json.loads(r.read().decode())
         out["conns"] = int(j.get("readyConnections", 0))
         out["connected"] = out["conns"] > 0
+    except urllib.error.HTTPError as e:
+        # cloudflared answers 503 on /ready when it has no connections:
+        # that IS a definite "down", not an unknown
+        if e.code == 503:
+            out["connected"] = False
+        return out
     except Exception:
         return out
     try:
@@ -1518,7 +1528,9 @@ def vod_origin_probe():
         return None
     out = {"ok": False, "code": None, "checked": now_iso(), "url": VOD_PROBE_URL}
     try:
-        req = urllib.request.Request(VOD_PROBE_URL, method="HEAD")
+        # Cloudflare's bot rules 403 the default Python-urllib agent
+        req = urllib.request.Request(VOD_PROBE_URL, method="HEAD",
+                                     headers={"User-Agent": "hoa360-telemetry/1.0"})
         r = urllib.request.urlopen(req, timeout=6)
         out["code"] = r.status
         out["ok"] = 200 <= r.status < 400
@@ -1550,7 +1562,7 @@ def evaluate_alerts(s):
         "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, nearing 105°C critical", "CPU temp back below 100°C", t, "max"),
         "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x)", "encoder keeping up again", s["encoder"]["speed"], "min"),
         "stream_stalled": (stalled, f"stream publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
-        "tunnel_down":    (bool(s.get("tunnel")) and not s["tunnel"]["connected"], "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
+        "tunnel_down":    (bool(s.get("tunnel")) and s["tunnel"]["connected"] is False, "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
     }
     for key, (cond, problem, recovered, metric, worse) in conds.items():
         counts[key] = (counts.get(key, 0) + 1) if cond else 0

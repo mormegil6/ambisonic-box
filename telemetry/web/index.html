@@ -355,13 +355,13 @@ async function tick(){
       if (tn) {
         tc.textContent = '';
         const d = document.createElement('span'); d.className = 'dot';
-        d.style.background = tn.connected ? col('--grn') : col('--red');
+        d.style.background = tn.connected ? col('--grn') : (tn.connected === false ? col('--red') : col('--amb'));
         tc.appendChild(d);
         tc.appendChild(document.createTextNode('tunnel '));
         const st = document.createElement('span'); st.style.color = col('--dim');
         st.textContent = tn.connected
           ? 'connected · ' + tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
-          : 'DISCONNECTED';
+          : (tn.connected === false ? 'DISCONNECTED' : 'metrics unreachable');
         tc.appendChild(st);
       }
     }
