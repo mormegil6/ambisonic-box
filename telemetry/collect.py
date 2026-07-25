@@ -253,6 +253,7 @@ def viewers(ps):
 
 _start_lock = threading.Lock()
 _last_start = [0.0]      # epoch of the last start we issued, for the idle grace period
+_last_stop  = [0.0]      # epoch of the last stop; a stop supersedes an in-flight start
 _idle_cycles = [0]
 _src_cache = [0.0, False]   # (checked_at, running) for live_probe
 _live_since = [None]        # epoch the stream last became live, for readiness
@@ -306,10 +307,17 @@ def _note_live(is_live):
 
 def source_container(running_only=False):
     """Name of the loop-source container. Must look at stopped ones too: once the
-    idle timer stops it, `docker ps` alone can no longer find it to start again."""
+    idle timer stops it, `docker ps` alone can no longer find it to start again.
+
+    oneoff=False is load-bearing: `docker compose run ... loop-source` containers
+    (the pipeline test's pusher, the guest test's pusher) carry the same service
+    label, and without the filter a "stop the loop" during a guest handover
+    matched the guest's own pusher and killed the publisher it was admitting.
+    """
     flag = "" if running_only else "-a "
     out = sh(f'docker ps {flag}--filter "label=com.docker.compose.project={PROJECT}" '
-             f'--filter "label=com.docker.compose.service={SOURCE_SVC}" --format "{{{{.Names}}}}"')
+             f'--filter "label=com.docker.compose.service={SOURCE_SVC}" '
+             f'--filter "label=com.docker.compose.oneoff=False" --format "{{{{.Names}}}}"')
     lines = [l for l in out.strip().splitlines() if l.strip()]
     return lines[0] if lines else ""
 
@@ -319,8 +327,22 @@ def source_start():
     expose publicly, since the worst a flood achieves is the stream running, which
     is the normal state anyway. Stopping stays private."""
     with _start_lock:
-        if time.time() - _last_start[0] < 15:
-            return {"ok": True, "state": "starting"}          # coalesce a burst of clicks
+        # never start the demo loop under a guest: the shared MPD tolerates
+        # exactly one writer, and the guest holds the slot until it is free.
+        # _start_lock also serialises this whole check-then-start against the
+        # guest handover (which stops the loop under the same lock), so the
+        # two can only run one-after-the-other, never interleaved.
+        with _guest_lock:
+            guest_busy = _guest["state"] != "free"
+        if guest_busy:
+            return {"ok": False, "state": "guest_active",
+                    "error": "a guest session holds the stream"}
+        # coalesce a burst of start clicks, but ONLY while that start is still
+        # in flight: a stop issued after it (a guest handover) supersedes it,
+        # and coalescing then reports "starting" while nothing is starting -
+        # which silently swallowed the resume after an operator kill
+        if time.time() - _last_start[0] < 15 and _last_start[0] > _last_stop[0]:
+            return {"ok": True, "state": "starting"}
         if stream_state()["publishing"]:
             return {"ok": True, "state": "already_publishing"}
         name = source_container()
@@ -334,11 +356,16 @@ def source_start():
         return {"ok": True, "state": "starting"}
 
 
-def source_stop(reason="manual"):
+def source_stop(reason="manual", kill_after_s=None):
+    """kill_after_s bounds docker's SIGTERM grace (-t). The guest handover
+    passes a small value because it answers a held RTMP callback with a hard
+    ~10 s patience; everywhere else the default (10 s) is fine."""
     name = source_container(running_only=True)
     if not name:
         return {"ok": True, "state": "already_stopped"}
-    sh(f"docker stop {name}", t=40)
+    t_opt = f"-t {int(kill_after_s)} " if kill_after_s else ""
+    sh(f"docker stop {t_opt}{name}", t=(int(kill_after_s) + 4) if kill_after_s else 40)
+    _last_stop[0] = time.time()      # invalidates any in-flight start coalesce
     print(f"source stopped ({name}, {reason})", flush=True)
     return {"ok": True, "state": "stopped", "reason": reason}
 
@@ -365,6 +392,16 @@ def live_probe():
     # page said "0 seconds to go" and then sat there.
     remaining = max(0.0, READY_S - depth)
     ready = live and remaining <= 0
+    # Which manifest to play, as a web path. Fixed per deployment in practice
+    # (earshot writes ${DASH_NAME}.mpd whoever publishes), but reporting it here
+    # is what frees the player page from a baked-in stream name.
+    mpd = None
+    try:
+        mpds = sorted(DASH.glob("*.mpd"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if mpds:
+            mpd = "/dash/" + mpds[0].name
+    except Exception:
+        pass
     return {"live": live,
             "ready": ready,                          # safe to initialise a player
             "timeline_s": round(depth),
@@ -375,7 +412,9 @@ def live_probe():
             "segment_age_s": seg_age,
             "source_running": _src_cache[1],
             "on_demand": IDLE_STOP_MIN > 0,
-            "starting": now - _last_start[0] < 120}
+            "starting": now - _last_start[0] < 120,
+            "mpd": mpd,
+            **({"endpoint": ep} if (ep := guest_public()) else {})}
 
 
 def idle_state(**set_):
@@ -414,6 +453,12 @@ def auto_idle(strm, watchers):
     if watchers is not None and watchers > 0:
         idle_state(last_viewer=now, idle_accum=0.0)
         return
+    if _guest["state"] != "free":
+        # the publisher is a guest, not the loop; "stop the source" would be a
+        # no-op on an already-stopped container, but the idle bookkeeping would
+        # still churn and log for nothing. Guests are never idled out: their
+        # test needs no audience, and the cap bounds the session anyway.
+        return
     if IDLE_STOP_MIN <= 0 or not strm["publishing"]:
         return
     if watchers is None:
@@ -435,6 +480,409 @@ def auto_idle(strm, watchers):
         source_stop("idle")
     else:
         idle_state(idle_accum=accum)
+
+
+# --------------------------------------------------------------------------
+# Guest test endpoint arbiter. rtmp-ingest's `guest` application sends its
+# on_publish / on_publish_done / on_update callbacks here (proxied through
+# ingest's http block so the hostname resolves per request). This is the only
+# authority on who may publish: one guest at a time, the demo loop paused for
+# the duration, a reconnect grace after a disconnect, and an absolute session
+# cap enforced by answering an on_update with a non-2xx (nginx-rtmp then drops
+# the publisher). No keys, no queue, first come first served, by design.
+#
+# These routes are reachable on TEL_PORT: host-side that is localhost/VPN
+# only, but INSIDE the compose network every sibling container can reach it
+# unauthenticated (that is how ingest's proxy calls arrive). Like /api/stop,
+# they are trusted surface; the trust boundary is the compose network plus
+# whatever the operator binds 8090 to, and the public player proxies only
+# /api/live and /api/start, never these.
+# Master switch, OFF by default: most deployments are a single private
+# publisher and should never expose a keyless application. Everything below
+# no-ops when disabled, and the status surfaces omit the endpoint entirely.
+GUEST_ENABLED = os.environ.get("GUEST_ENABLED", "0") == "1"
+GUEST_GRACE_S = int(os.environ.get("GUEST_GRACE_S", "120"))   # reconnect window
+GUEST_MAX_S   = int(os.environ.get("GUEST_MAX_S", "10800"))   # absolute cap, ±update interval
+# After a session is ENDED by the cap or the operator kill (not a natural
+# stop), guest publishes are refused for this long. Without it, an encoder
+# with auto-reconnect re-claims the freed slot in seconds, which makes the cap
+# a 3 h duty cycle instead of a limit and the kill button a two-second blip.
+# 300 s outlasts OBS's default auto-reconnect budget (25 tries x 10 s).
+GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
+INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
+# Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
+# netcall gives up at ~10 s (not configurable), and the docker stop before the
+# wait is itself bounded to ~3.5 s, so the sum must stay safely under that.
+HANDOVER_S    = 4
+GSTATE  = DATA/"guest_state.json"
+GUESTCSV = DATA/"guest_sessions.csv"
+
+_guest_lock = threading.Lock()
+_guest = {"state": "free", "name": None, "addr": None, "start": None,
+          "last_seen": None, "grace_started": None, "kill": False,
+          "terminating": None, "cooldown_until": None}
+_guest_timer = [None]      # the pending grace-expiry threading.Timer
+_resume_flag = [False]     # a resume attempt is owed (retried from guest_tick)
+_pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint updates
+
+
+def _guest_sanitize(name):
+    return (re.sub(r"[^A-Za-z0-9_-]", "", name or "")[:32]) or "guest"
+
+
+def _guest_save():
+    try:
+        GSTATE.write_text(json.dumps(_guest))
+    except Exception:
+        pass
+
+
+def _guest_log(reason):
+    """One CSV row per finished session: contention and abuse stay visible."""
+    try:
+        start = _guest.get("start")
+        dur = round(time.time() - start) if start else 0
+        with open(GUESTCSV, "a") as f:
+            f.write(f"{now_iso()},{_guest.get('name')},{_guest.get('addr')},{dur},{reason}\n")
+    except Exception:
+        pass
+
+
+def guest_public():
+    """The publicly shown slice: no addr. remaining_s is cap time while live,
+    reconnect window while in grace. None when the feature is disabled, so
+    every status surface simply omits it."""
+    if not GUEST_ENABLED:
+        return None
+    with _guest_lock:
+        st, now = dict(_guest), time.time()
+    out = {"state": st["state"], "name": st["name"], "grace_s": GUEST_GRACE_S,
+           "remaining_s": None}
+    if st["state"] == "live" and st["start"]:
+        out["remaining_s"] = max(0, round(GUEST_MAX_S - (now - st["start"])))
+    elif st["state"] == "grace" and st["grace_started"]:
+        out["remaining_s"] = max(0, round(GUEST_GRACE_S - (now - st["grace_started"])))
+    cd = st.get("cooldown_until")
+    if st["state"] == "free" and cd and now < cd:
+        out["cooldown_s"] = round(cd - now)
+    return out
+
+
+def _refresh_pub_endpoint():
+    """Push the new endpoint state into status.json between collect cycles: the
+    player badge must not lag a takeover by up to a minute."""
+    pub = _pub_cache[0]
+    ep = guest_public()
+    if not pub or not ep:
+        return
+    try:
+        pub = dict(pub); pub["endpoint"] = ep
+        PUB.write_text(json.dumps(pub))
+    except Exception:
+        pass
+
+
+def _grace_timer_arm(seconds):
+    if _guest_timer[0]:
+        _guest_timer[0].cancel()
+    t = threading.Timer(max(0.5, seconds), guest_tick)
+    t.daemon = True
+    t.start()
+    _guest_timer[0] = t
+
+
+def _guest_end_locked(reason):
+    """Caller holds _guest_lock. Returns to free and logs; resuming the loop is
+    the caller's job AFTER releasing the lock (source_start probes docker)."""
+    _guest_log(reason)
+    if _guest_timer[0]:
+        _guest_timer[0].cancel(); _guest_timer[0] = None
+    # forced endings arm the cooldown; a natural stop (grace expiry) does not
+    cooldown = (time.time() + GUEST_COOLDOWN_S
+                if reason in ("session cap", "operator kill") and GUEST_COOLDOWN_S > 0
+                else None)
+    _guest.update(state="free", name=None, addr=None, start=None,
+                  last_seen=None, grace_started=None, kill=False,
+                  terminating=None, cooldown_until=cooldown)
+    _guest_save()
+    _resume_flag[0] = True
+    print(f"guest session ended ({reason})"
+          + (f"; cooldown {GUEST_COOLDOWN_S}s" if cooldown else ""), flush=True)
+
+
+def _resume_after_guest():
+    """Hand control back to the loop's NORMAL on-demand rule, evaluated now:
+    with idling disabled the loop simply runs; with idling enabled it returns
+    only if somebody is actually watching, otherwise the visitor flow starts it
+    later, exactly as if the guest had never existed."""
+    if _guest["state"] != "free":
+        return
+    # A cap/kill ends the session the instant on_publish_done arrives, which
+    # can be BEFORE the dropped guest's relay finishes tearing down at
+    # earshot. source_start would then see "publishing", no-op, and report
+    # success, leaving the loop down with nothing left to retry (the exact
+    # T4 failure in testing). Grace-expiry resumes never wait here: the
+    # teardown finished long before the window closed.
+    _earshot_unwound(6)
+    if IDLE_STOP_MIN <= 0:
+        r = source_start()
+    else:
+        vw = viewers(docker_ps())
+        if (vw.get("any") or 0) > 0:
+            r = source_start()
+        else:
+            idle_state(idle_accum=0.0)
+            _resume_flag[0] = False
+            print("guest slot free; loop stays idle (no viewers)", flush=True)
+            _refresh_pub_endpoint()
+            return
+    # "already_publishing" here is the teardown race, not success: keep the
+    # resume owed so the guest_tick backstop retries it.
+    if r.get("ok") and r.get("state") != "already_publishing":
+        _resume_flag[0] = False
+    _refresh_pub_endpoint()
+
+
+def guest_tick():
+    """Timer target and per-cycle backstop: expire grace, catch a dead session
+    whose on_update stopped arriving, retry an owed loop resume."""
+    if not GUEST_ENABLED:
+        return
+    ended = None
+    with _guest_lock:
+        now = time.time()
+        if _guest["state"] == "grace" and _guest["grace_started"]:
+            if now - _guest["grace_started"] >= GUEST_GRACE_S:
+                ended = "grace expired"
+                _guest_end_locked(ended)
+        elif _guest["state"] == "live":
+            # update pings come every 10 s; 60 s of silence means ingest died or
+            # the callback path broke mid-session. Treat as a disconnect.
+            if _guest["last_seen"] and now - _guest["last_seen"] > 60:
+                _guest.update(state="grace", grace_started=now)
+                _guest_save()
+                _grace_timer_arm(GUEST_GRACE_S)
+                print("guest updates stopped; entering grace", flush=True)
+        elif _guest["state"] == "handover":
+            # a handover is seconds long; a slot stuck here means both the
+            # flip and the publisher's done notification were lost
+            if _guest["last_seen"] and now - _guest["last_seen"] > 30:
+                _guest.update(state="grace", grace_started=now)
+                _guest_save()
+                _grace_timer_arm(GUEST_GRACE_S)
+                print("stale handover; entering grace", flush=True)
+    if ended or _resume_flag[0]:
+        _resume_after_guest()
+
+
+def _ingest_guest_publishing():
+    """Does ingest's stat page show a publisher on the guest application?"""
+    x = sh(f"curl -s --max-time 4 {INGEST_STAT}")
+    seg = x.split("<name>guest</name>", 1)
+    return len(seg) == 2 and "<publishing/>" in seg[1].split("</application>", 1)[0]
+
+
+def _earshot_unwound(deadline_s):
+    """Wait for earshot to have no publisher (the loop's relay fully gone) so
+    the guest's exec transcoder never runs beside the loop's on one MPD."""
+    end = time.time() + deadline_s
+    while time.time() < end:
+        if not stream_state()["publishing"]:
+            return True
+        time.sleep(0.3)
+    return False
+
+
+def guest_publish(name, addr):
+    """on_publish for the guest app. 2xx accepts; anything else rejects."""
+    if not GUEST_ENABLED:
+        return 403
+    name = _guest_sanitize(name)
+    with _guest_lock:
+        if _guest["state"] in ("live", "handover"):
+            print(f"guest publish rejected (busy): {name} from {addr}", flush=True)
+            return 403
+        cd = _guest.get("cooldown_until")
+        if cd and time.time() < cd:
+            print(f"guest publish rejected (cooldown {round(cd - time.time())}s left): "
+                  f"{name} from {addr}", flush=True)
+            return 403
+        resumed_session = _guest["state"] == "grace"
+        # claim the slot as "handover" before the slow unwind: a concurrent
+        # second publish is rejected rather than racing us, and the status
+        # pages can show "switching over" instead of pretending it is live.
+        # A grace reconnect keeps the session clock AND any pending operator
+        # kill: disconnecting must not launder a kill away.
+        start = _guest["start"] if resumed_session and _guest["start"] else time.time()
+        keep_kill = _guest["kill"] if resumed_session else False
+        if _guest_timer[0]:
+            _guest_timer[0].cancel(); _guest_timer[0] = None
+        _guest.update(state="handover", name=name, addr=addr, start=start,
+                      last_seen=time.time(), grace_started=None, kill=keep_kill,
+                      terminating=None, cooldown_until=None)
+        _guest_save()
+    # Loop handover, serialised against source_start via _start_lock so a
+    # visitor's start cannot interleave with the stop and connect the loop
+    # underneath a freshly admitted guest. The stop is UNCONDITIONAL: a loop
+    # container that was just started but whose ffmpeg has not yet reached
+    # earshot is invisible to the stat probe, and skipping the stop for it was
+    # exactly the two-writers hole. The whole hold stays under nginx-rtmp's
+    # ~10 s netcall patience: docker stop -t 3 (<=3.5 s) + unwind (<=4 s).
+    with _start_lock:
+        source_stop("guest handover", kill_after_s=3)
+        settled = _earshot_unwound(HANDOVER_S) and not source_container(running_only=True)
+    if not settled:
+        # could not clear the slot in time: refuse this publish but leave the
+        # slot in grace with the loop already stopping, so an immediate manual
+        # retry succeeds and an abandoned attempt still resumes the loop.
+        with _guest_lock:
+            _guest.update(state="grace", name=None, addr=None, start=None,
+                          grace_started=time.time())
+            _guest_save()
+            _grace_timer_arm(GUEST_GRACE_S)
+        print(f"guest handover timed out; slot in grace ({name} from {addr})", flush=True)
+        _refresh_pub_endpoint()
+        return 503
+    # handover complete: flip to live, but only if the slot still belongs to
+    # this publish (a pusher that died mid-unwind has already moved it to
+    # grace via on_publish_done; do not resurrect it)
+    with _guest_lock:
+        if _guest["state"] == "handover" and _guest["name"] == name:
+            _guest.update(state="live", last_seen=time.time())
+            _guest_save()
+        else:
+            print(f"guest vanished during handover: {name}", flush=True)
+            return 201          # its session is already closing; nothing to hold
+    print(f"guest publishing: {name} from {addr}"
+          + (" (reconnect)" if resumed_session else ""), flush=True)
+    _refresh_pub_endpoint()
+    return 201
+
+
+def guest_done(name):
+    """on_publish_done: enter the reconnect grace, or end at once if this
+    session was being terminated (cap hit or operator kill)."""
+    if not GUEST_ENABLED:
+        return 200
+    name = _guest_sanitize(name)
+    ended = None
+    with _guest_lock:
+        if _guest["state"] not in ("live", "handover") \
+                or (_guest["name"] and name != _guest["name"]):
+            return 200                      # stale/zombie notification
+        if _guest["terminating"]:
+            ended = _guest["terminating"]
+            _guest_end_locked(ended)
+        else:
+            _guest.update(state="grace", grace_started=time.time())
+            _guest_save()
+            _grace_timer_arm(GUEST_GRACE_S)
+            print(f"guest disconnected: {name}; grace {GUEST_GRACE_S}s", flush=True)
+    if ended:
+        _resume_after_guest()
+    else:
+        _refresh_pub_endpoint()
+    return 200
+
+
+def guest_update(name):
+    """on_update liveness ping. Non-2xx here makes nginx-rtmp drop the
+    publisher: the enforcement point for the cap and the kill button."""
+    if not GUEST_ENABLED:
+        return 200
+    name = _guest_sanitize(name)
+    with _guest_lock:
+        if _guest["state"] == "live":
+            if _guest["name"] and name != _guest["name"]:
+                # a publisher we did not admit (state lost + restored session):
+                # drop it rather than let it shadow the tracked one
+                return 403
+            _guest["last_seen"] = time.time()
+            if _guest["kill"]:
+                _guest["terminating"] = "operator kill"
+                _guest_save()
+                return 403
+            if _guest["start"] and time.time() - _guest["start"] > GUEST_MAX_S:
+                _guest["terminating"] = "session cap"
+                _guest_save()
+                return 403
+            _guest_save()
+            return 200
+        if _guest["state"] == "free":
+            # an update with no session: either telemetry lost its state (wiped
+            # volume) with a genuine publisher still up, or a stale/forged ping.
+            # Only adopt when ingest actually shows a guest publisher, so a
+            # delayed ping cannot conjure a phantom session that blocks the slot.
+            if not _ingest_guest_publishing():
+                return 200
+            _guest.update(state="live", name=name, start=time.time(),
+                          last_seen=time.time())
+            _guest_save()
+            print(f"guest session adopted (no state): {name}", flush=True)
+            return 200
+        # grace, but a publisher is pinging: the done that opened this grace
+        # raced a still-live session. Re-adopt it (same clock) so the grace
+        # timer cannot expire under an active publisher and restart the loop
+        # beside it. Verified against ingest so a delayed ping cannot revive
+        # a session whose publisher is truly gone.
+        if _guest["state"] == "grace":
+            if not _ingest_guest_publishing():
+                return 200
+            if _guest_timer[0]:
+                _guest_timer[0].cancel(); _guest_timer[0] = None
+            _guest.update(state="live", name=name, last_seen=time.time(),
+                          grace_started=None,
+                          start=_guest["start"] or time.time())
+            _guest_save()
+            print(f"guest re-adopted from grace on update ping: {name}", flush=True)
+    return 200
+
+
+def guest_kill():
+    """Dashboard button. A live publisher is dropped at its next update ping
+    (<= 10 s); a grace slot is reclaimed immediately."""
+    if not GUEST_ENABLED:
+        return {"ok": False, "state": "disabled"}
+    ended = None
+    with _guest_lock:
+        if _guest["state"] in ("live", "handover"):
+            _guest["kill"] = True
+            _guest_save()
+            return {"ok": True, "state": "ending", "within_s": 10}
+        if _guest["state"] == "grace":
+            ended = "operator kill"
+            _guest_end_locked(ended)
+    if ended:
+        _resume_after_guest()
+        return {"ok": True, "state": "ended"}
+    return {"ok": True, "state": "free"}
+
+
+def _guest_boot():
+    """Reload persisted state and reconcile it against reality: a session that
+    died while telemetry was down must not hold the slot forever."""
+    if not GUEST_ENABLED:
+        return
+    try:
+        st = json.loads(GSTATE.read_text())
+        with _guest_lock:
+            _guest.update({k: st.get(k, _guest[k]) for k in _guest})
+    except Exception:
+        return
+    with _guest_lock:
+        if _guest["state"] in ("live", "handover"):
+            if not _ingest_guest_publishing():
+                _guest.update(state="grace", grace_started=time.time())
+                _guest_save()
+                _grace_timer_arm(GUEST_GRACE_S)
+                print("guest session not found on ingest after restart; grace", flush=True)
+            elif _guest["state"] == "handover":
+                # publisher exists and we died mid-flip: it is effectively live
+                _guest.update(state="live", last_seen=time.time())
+                _guest_save()
+        elif _guest["state"] == "grace" and _guest["grace_started"]:
+            left = GUEST_GRACE_S - (time.time() - _guest["grace_started"])
+            _grace_timer_arm(max(0.5, left))
 
 
 def stream_format():
@@ -646,8 +1094,15 @@ def collect_once():
     _note_live(strm["live"])            # keep readiness tracked even if nobody polls /api/live
     s["on_demand"] = IDLE_STOP_MIN > 0
     s["idle_stop_min"] = IDLE_STOP_MIN
-    s["source_running"] = bool(container_named(ps, SOURCE_SVC))
+    # via source_container, not container_named: a one-off `compose run` pusher
+    # (pipeline/guest tests) also carries the loop-source service label and
+    # would read as the source running while the real one is stopped
+    s["source_running"] = bool(source_container(running_only=True))
     s["alerts_active"] = evaluate_alerts(s)
+    guest_tick()                        # backstop for the grace/cap timers
+    ep = guest_public()
+    if ep:
+        s["endpoint"] = {**ep, "addr": _guest.get("addr")}   # addr: private page only
     auto_idle(strm, vw.get("any", vw["now"]))
     # Read back after the decision so the panel shows the current countdown
     # rather than last cycle's.
@@ -668,7 +1123,9 @@ def collect_once():
            "audio_channels": fmt["audio_channels"], "spatial_audio": fmt["spatial_audio"],
            "on_demand": s["on_demand"], "idle_stop_min": IDLE_STOP_MIN,
            "source_running": s["source_running"], "viewers": s["viewers"]["now"],
-           "countries": s["viewers"].get("countries", {}), "uptime_s": s["system"]["uptime_s"]}
+           "countries": s["viewers"].get("countries", {}), "uptime_s": s["system"]["uptime_s"],
+           **({"endpoint": ep} if ep else {})}
+    _pub_cache[0] = pub               # for out-of-cycle endpoint refreshes
     PUB.write_text(json.dumps(pub))   # in-place: stable inode for the hoast-player bind mount
 
 
@@ -697,8 +1154,30 @@ def serve():
             self.wfile.write(b)
 
         def do_GET(self):
-            if self.path.split("?")[0] == "/api/live":
+            p, _, q = self.path.partition("?")
+            if p == "/api/live":
                 return self._json(200, live_probe())
+            # nginx-rtmp notify callbacks for the guest app, proxied here by
+            # rtmp-ingest (notify_method get). The status code IS the answer:
+            # 2xx allows the publish / keeps the stream, anything else rejects
+            # or drops it.
+            if p.startswith("/rtmp/guest/"):
+                args = urllib.parse.parse_qs(q)
+                name = (args.get("name") or [""])[0]
+                addr = (args.get("addr") or [""])[0]
+                call = (args.get("call") or [""])[0]
+                act = p.rsplit("/", 1)[-1]
+                if act == "publish":
+                    return self._json(guest_publish(name, addr), {})
+                if act == "done":
+                    return self._json(guest_done(name), {})
+                if act == "update":
+                    # on_update fires for PLAYERS too (call=update_play); only
+                    # a publisher's ping may drive session liveness, or a mere
+                    # viewer would keep a dead session alive or get adopted
+                    if call and call != "update_publish":
+                        return self._json(200, {})
+                    return self._json(guest_update(name), {})
             return super().do_GET()
 
         def do_POST(self):
@@ -711,6 +1190,10 @@ def serve():
             # everyone else.
             if p == "/api/stop":
                 return self._json(200, source_stop("manual"))
+            # End the current guest session (dashboard button). Same trust
+            # boundary as /api/stop: this port only.
+            if p == "/api/guest/kill":
+                return self._json(200, guest_kill())
             return self._json(404, {"ok": False, "error": "not found"})
 
     with socketserver.ThreadingTCPServer(("", PORT), H) as srv:
@@ -750,6 +1233,7 @@ def main():
                 return m.group(1) + json.dumps(box) + m.group(3)
             html = re.sub(r'(window\.__BOX__\s*=\s*)(\{.*\})(;)', _box, html, count=1)
         (DATA/"index.html").write_text(html)
+    _guest_boot()      # restore a guest session across telemetry restarts
     threading.Thread(target=serve, daemon=True).start()
     while True:
         try:

@@ -97,6 +97,15 @@
     <nav class="ctl-nav" id="boxNav"></nav>
   </div>
 
+  <!-- Guest test endpoint: state + the one manual override. Ending a session
+       answers the next on_update ping with a non-2xx, so it takes effect
+       within ~10 s. The guest name is pusher-chosen input: textContent only. -->
+  <div class="ctl" id="guestRow" hidden>
+    <span class="ctl-lbl">Guest endpoint</span>
+    <span class="ctl-msg" id="guestState">…</span>
+    <button id="btnGuestKill" class="btn btn-stop" hidden>End session</button>
+  </div>
+
   <div class="grid">
     <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
     <div class="tile"><div class="k">Viewers now</div><div class="v" id="viewers">—</div><div class="s" id="viewersSub">&nbsp;</div></div>
@@ -256,6 +265,26 @@ async function tick(){
     ab.style.display="block"; ab.textContent = "⚠ active: " + s.alerts_active.join(", ").replace(/_/g," ");
   } else ab.style.display="none";
 
+  // guest endpoint row (name/addr are pusher input: textContent only).
+  // No endpoint field at all = GUEST_ENABLED off: the row stays hidden.
+  const ep = s.endpoint || null;
+  const gr = $('guestRow'), gs = $('guestState'), gk = $('btnGuestKill');
+  if (gr) gr.hidden = !ep;
+  if (gs && ep) {
+    if (ep.state === 'live') {
+      const mins = ep.remaining_s != null ? Math.max(0, Math.round(ep.remaining_s/60)) : null;
+      gs.textContent = 'in use: ' + (ep.name || '?') + (ep.addr ? ' from ' + ep.addr : '')
+        + (mins != null ? ' · ' + (mins >= 60 ? Math.floor(mins/60)+'h'+String(mins%60).padStart(2,'0') : mins+' min') + ' left' : '');
+    } else if (ep.state === 'handover') {
+      gs.textContent = 'switching over: ' + (ep.name || '?');
+    } else if (ep.state === 'grace') {
+      gs.textContent = 'reconnect window' + (ep.remaining_s != null ? ' (' + ep.remaining_s + 's)' : '');
+    } else {
+      gs.textContent = ep.cooldown_s ? ('free (cooldown ' + ep.cooldown_s + 's)') : 'free';
+    }
+  }
+  if (gk) gk.hidden = !(ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace'));
+
   // stream tile
   const live = s.stream && s.stream.live;
   const sb=$('streamBadge');
@@ -353,6 +382,20 @@ function wireCtl(id, path, verb){
 }
 wireCtl('btnStart', '/api/start', 'start');
 wireCtl('btnStop', '/api/stop', 'stop');
+
+// End the current guest session. Shares wireCtl's POST/feedback pattern but
+// writes into its own row so the loop-source message is not overwritten.
+(function(){
+  var b = $('btnGuestKill'); if(!b) return;
+  b.addEventListener('click', function(){
+    b.disabled = true;
+    fetch('/api/guest/kill', {method:'POST'}).then(r=>r.json())
+      .then(r=>{ $('guestState').textContent = r.state === 'ending'
+                   ? 'ending (within ~' + (r.within_s || 10) + 's)...' : (r.state || 'ok'); tick(); })
+      .catch(e=>{ $('guestState').textContent = 'kill failed: ' + e.message; })
+      .then(()=>{ setTimeout(function(){ b.disabled = false; }, 1500); });
+  });
+})();
 
 // Branded launcher buttons in the loop-source row (right side). The link list is
 // baked into the image; collect.py rewrites the host (and optionally the links)

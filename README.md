@@ -113,8 +113,65 @@ The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default
 `hoast_demo`), which is exactly what the bundled player page requests. The
 manifest name is `DASH_NAME`, independent of `STREAM_KEY`: a custom stream key
 no longer moves the manifest URL, so you can rotate the key without editing the
-player. Only edit `services/hoast-player/index.html` if you set a custom
-`DASH_NAME`.
+player. A custom `DASH_NAME` needs no player edit either: the page asks
+telemetry (`/api/live`) which manifest the box is writing and falls back to
+`hoast_demo.mpd` only when telemetry is absent.
+
+## Guest test endpoint
+
+Anyone with an ambisonic microphone rig and OBS Music Edition can test their
+stream against this stack without standing up their own server: a keyless RTMP
+application that borrows the whole pipeline for the duration of a session.
+
+**Disabled by default.** Most deployments are a single private publisher and
+should never expose a keyless application; set `GUEST_ENABLED=1` to opt in.
+Off, the `guest` application does not exist in the ingest config and the
+status pages carry no trace of it.
+
+| Setting | Value |
+|---|---|
+| Server | `rtmp://<host>:1935/guest` |
+| Stream key | anything you like (it names your session in the status pages) |
+| Audio / video | same requirements as the `live` application above |
+
+How it behaves:
+
+- **First come, first served, one publisher at a time.** A second concurrent
+  push is rejected outright (OBS shows "Failed to connect"), not queued. There
+  is deliberately no reservation or key system; contention shows up in the
+  telemetry history instead.
+- While a guest publishes, the demo loop pauses and the public player page
+  serves the guest's stream: watching your own test is just the normal player
+  URL, shareable as-is.
+- **Reconnect window:** if the publisher disconnects, the slot is held for
+  `GUEST_GRACE_S` (default 120 s). Reconnect within it and the session
+  continues; otherwise the session ends and the demo loop returns to its
+  normal on-demand behaviour.
+- **Session cap:** an actively publishing guest may run `GUEST_MAX_S`
+  (default 3 h, long enough for a rehearsal or a real event). The cap is
+  enforced within one liveness-ping interval (~10 s), so it is soft by up to
+  that much. Reconnecting does not reset the clock.
+- **Cooldown after a forced end:** when a session is ended by the cap or by
+  the dashboard's End session button (not by a natural stop), guest publishes
+  are refused for `GUEST_COOLDOWN_S` (default 300 s, which outlasts OBS's
+  default auto-reconnect budget). Without it, an auto-reconnecting encoder
+  would re-claim the freed slot in seconds, turning the cap into a duty cycle
+  and the kill button into a two-second blip.
+- The `:8090` dashboard shows the session (name, source address, time left)
+  and has an **End session** button; the public player page shows only
+  endpoint state, sanitised name and time left.
+- **Fail-closed:** if telemetry is down, guest publishes are rejected while
+  the token-authed `live` application and the demo loop keep working.
+- The owner path is unaffected: pushing with the stream key to `/live` does
+  not consult the arbiter. Do not do both at once; check the dashboard (or
+  press End session) before an owner broadcast.
+
+**Network prerequisite:** the guest endpoint is only as public as TCP port
+1935. On the demo box, inbound 1935 from outside the faculty network is not
+open yet (pending a the faculty admin request), so for now guests on the LAN or the
+box's Tailscale network can use it (`example-host:1935`) while the public
+internet cannot. The only thing to request from network admins is: inbound
+TCP 1935 to the box. Everything else ships in this compose file.
 
 ## On-demand VOD clips
 

@@ -212,6 +212,7 @@
         <summary>Server status <span class="live-dot" id="stDot"></span></summary>
         <div class="status-grid">
           <div class="cell"><div class="k">Broadcast</div><div class="v"><span class="stat-badge sb-off" id="stLive">&hellip;</span></div></div>
+          <div class="cell"><div class="k">Test endpoint</div><div class="v" id="stGuest">&hellip;</div></div>
           <div class="cell"><div class="k">Viewers now</div><div class="v" id="stViewers">&hellip;</div></div>
           <div class="cell"><div class="k">Resolution</div><div class="v" id="stRes">&hellip;</div></div>
           <div class="cell"><div class="k">Bitrate</div><div class="v" id="stBr">&hellip;</div></div>
@@ -345,6 +346,38 @@
                     ? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
                     : '#b9bfc7';
             }
+            // The manifest to play comes from the probe, not a baked-in stream
+            // name, so this page serves whichever stream currently owns the box.
+            if (p.mpd) window.__MPD__ = p.mpd;
+            setGuestCell(p.endpoint);
+        }
+
+        // Guest test endpoint state. The name is attacker-controlled input
+        // (any RTMP pusher chooses it); it is sanitised server-side AND only
+        // ever inserted here via textContent, never innerHTML.
+        function setGuestCell(ep) {
+            var el = document.getElementById('stGuest');
+            if (!el) return;
+            // no endpoint field at all = feature disabled on this deployment:
+            // the cell disappears rather than advertising a dead endpoint
+            var cell = el.closest ? el.closest('.cell') : null;
+            if (!ep) { if (cell) cell.hidden = true; return; }
+            if (cell) cell.hidden = false;
+            if (!ep.state || ep.state === 'free') {
+                el.textContent = ep.cooldown_s ? 'free (cooldown ' + ep.cooldown_s + 's)' : 'free';
+                return;
+            }
+            var mins = ep.remaining_s != null ? Math.max(0, Math.round(ep.remaining_s / 60)) : null;
+            if (ep.state === 'guest' || ep.state === 'live') {
+                el.textContent = 'in use' + (ep.name ? ' (' + ep.name + ')' : '')
+                    + (mins != null ? ', ~' + (mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min') + ' left' : '');
+            } else if (ep.state === 'handover') {
+                el.textContent = 'switching over...';
+            } else if (ep.state === 'grace') {
+                el.textContent = 'reconnect window' + (ep.remaining_s != null ? ' (' + ep.remaining_s + ' s)' : '');
+            } else {
+                el.textContent = ep.state;
+            }
         }
 
         function schedule(ms) {
@@ -392,7 +425,9 @@
             stopWaiting();
             schedule(10000);        // keep probing, slower: the badge must stay honest
             var g = document.getElementById('gate'); if (g) g.hidden = true;
-            hoast360.initialize("/dash/hoast_demo.mpd", "/irs/", 3);
+            // Whichever manifest the box is currently writing (from /api/live);
+            // the literal is only the fallback for a stack without telemetry.
+            hoast360.initialize(window.__MPD__ || "/dash/hoast_demo.mpd", "/irs/", 3);
         }
 
         function pollGate() {
@@ -711,6 +746,9 @@
               badge.className = "stat-badge "+(live?"sb-live":"sb-off");
               document.getElementById('stDot').style.background = live?getComputedStyle(document.documentElement).getPropertyValue('--accent').trim():"#b9bfc7";
             }
+            // Endpoint cell from the status file too, so it renders even when
+            // /api/live is unreachable (uses the shared textContent-only setter).
+            if (s.endpoint && typeof setGuestCell === 'function') setGuestCell(s.endpoint);
             var cc=s.countries||{}, ccs=Object.keys(cc).map(function(k){return k+" "+cc[k];}).join(" · ");
             set('stViewers',(s.viewers||0)+(ccs?"  ("+ccs+")":""));
             set('stRes',s.resolution||"-"); set('stBr',s.bitrate||"-"); set('stUp',dur(s.uptime_s));

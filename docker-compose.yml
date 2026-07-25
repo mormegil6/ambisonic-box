@@ -82,6 +82,9 @@ services:
       context: ./services/rtmp-ingest
     environment:
       - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+      # keyless guest test endpoint (rtmp://<host>:1935/guest); OFF by default,
+      # see the README's guest section before enabling
+      - GUEST_ENABLED=${GUEST_ENABLED:-0}
     ports:
       - "1935:1935"   # the only public ingest; OBS ME pushes here
     depends_on:
@@ -173,6 +176,16 @@ services:
       # Seconds of manifest a player needs before it can start. Must exceed the
       # player's live delay (30 s), or dash.js fails on the short timeline.
       - TEL_READY_S=${TEL_READY_S:-35}
+      # Guest test endpoint (rtmp://<host>:1935/guest/<any-name>, no key).
+      # Master switch (must match rtmp-ingest's), reconnect window after a
+      # guest disconnects, and the absolute session cap (enforced within
+      # ~10 s of expiry, via the on_update ping).
+      - GUEST_ENABLED=${GUEST_ENABLED:-0}
+      - GUEST_GRACE_S=${GUEST_GRACE_S:-120}
+      - GUEST_MAX_S=${GUEST_MAX_S:-10800}
+      # after a cap/kill-forced end, refuse guest publishes this long, so an
+      # auto-reconnecting encoder cannot re-claim the slot instantly
+      - GUEST_COOLDOWN_S=${GUEST_COOLDOWN_S:-300}
     volumes:
       # read health/logs, and start/stop the loop source for on-demand idling
       - /var/run/docker.sock:/var/run/docker.sock

@@ -5,6 +5,10 @@ FROM alpine:3.22
 RUN apk add --no-cache nginx nginx-mod-rtmp gettext
 
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
+# guest endpoint snippets; the entrypoint includes them only when
+# GUEST_ENABLED=1 (default: empty includes, no keyless application)
+COPY guest-rtmp.conf /etc/nginx/guest-rtmp.conf.in
+COPY guest-http.conf /etc/nginx/guest-http.conf.in
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
