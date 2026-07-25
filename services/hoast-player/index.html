@@ -236,7 +236,7 @@
             <button id="gnLangPl" type="button" title="Polski" aria-label="Polski">&#x1F1F5;&#x1F1F1;</button>
           </span>
         </summary>
-        <p id="guestNoticeFull"></p>
+        <div id="guestNoticeFull"></div>
         <p id="guestNoticeAffil" hidden></p>
         <p><button id="guestReportBtn" type="button" hidden></button></p>
       </details>
@@ -442,19 +442,24 @@
             if (badge) badge.textContent = subst(t.short);
             var ff = document.getElementById('guestNoticeFull');
             if (ff) {
-                // textContent-plus-anchors: emails become mailto links with
-                // plain text nodes around them; still no innerHTML here
-                var full = subst(t.full);
+                // one real <p> per blank-line-separated block (normal
+                // paragraph rhythm instead of pre-line gaps), emails as
+                // mailto links built from text nodes; still no innerHTML
                 ff.textContent = '';
-                var re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, last = 0, m;
-                while ((m = re.exec(full))) {
-                    ff.appendChild(document.createTextNode(full.slice(last, m.index)));
-                    var a = document.createElement('a');
-                    a.href = 'mailto:' + m[0]; a.textContent = m[0];
-                    ff.appendChild(a);
-                    last = m.index + m[0].length;
-                }
-                ff.appendChild(document.createTextNode(full.slice(last)));
+                subst(t.full).split(/\n{2,}/).forEach(function (block) {
+                    if (!block.trim()) return;
+                    var p = document.createElement('p');
+                    var re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, last = 0, m;
+                    while ((m = re.exec(block))) {
+                        p.appendChild(document.createTextNode(block.slice(last, m.index)));
+                        var a = document.createElement('a');
+                        a.href = 'mailto:' + m[0]; a.textContent = m[0];
+                        p.appendChild(a);
+                        last = m.index + m[0].length;
+                    }
+                    p.appendChild(document.createTextNode(block.slice(last)));
+                    ff.appendChild(p);
+                });
             }
             ['En', 'Pl'].forEach(function (k) {
                 var b = document.getElementById('gnLang' + k);
