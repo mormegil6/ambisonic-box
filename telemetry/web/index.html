@@ -60,6 +60,9 @@
   footer{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:18px;text-align:center}
   .stale{color:var(--amb)!important}
   .ctl{display:flex;align-items:center;gap:10px;margin:12px 0;flex-wrap:wrap}
+  /* author display rules beat the UA's [hidden] display:none; without this,
+     every hidden .ctl row (bans, guest on disabled deployments) still shows */
+  [hidden]{display:none!important}
   .ctl-lbl{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.7px}
   .btn{font:600 13px var(--sans);cursor:pointer;padding:6px 16px;border-radius:7px;
        border:1px solid var(--line);background:var(--panel2);color:var(--txt)}
@@ -124,12 +127,14 @@
   <!-- Service restarts. Two-click confirm; earshot only ships paired with
        ingest (a lone earshot restart silently breaks the relay: nginx-rtmp
        resolves the push hostname once at startup). -->
-  <div class="ctl">
+  <div class="ctl" style="align-items:flex-start">
     <span class="ctl-lbl">Restart</span>
-    <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
-    <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
-    <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
-    <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
+    <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+      <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
+      <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
+      <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
+      <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
+    </div>
     <span class="ctl-msg" id="restartMsg"></span>
   </div>
 
