@@ -1565,6 +1565,22 @@ def vod_origin_probe():
     if not VOD_PROBE_URL:
         return None
     out = {"ok": False, "code": None, "checked": now_iso(), "url": VOD_PROBE_URL}
+    # Self-announcing DNS pin: if the probe hostname is overridden in this
+    # container's /etc/hosts (extra_hosts in an override), say so in the
+    # panel on every view. A workaround that only lives in docs rots
+    # silently; one the dashboard keeps naming gets removed when its reason
+    # (the originating ticket) closes.
+    try:
+        host = urllib.parse.urlparse(VOD_PROBE_URL).hostname or ""
+        pins = []
+        for line in open("/etc/hosts"):
+            p = line.split()
+            if len(p) >= 2 and host and host in p[1:]:
+                pins.append(p[0])
+        if pins:
+            out["pinned_ips"] = pins
+    except Exception:
+        pass
     try:
         # Cloudflare's bot rules 403 the default Python-urllib agent
         req = urllib.request.Request(VOD_PROBE_URL, method="HEAD",

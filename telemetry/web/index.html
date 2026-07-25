@@ -346,8 +346,18 @@ function renderReach(s){
     }
   }
   if (vh) {
-    vh.hidden = !(vo && !vo.ok);
-    if (vo && !vo.ok) vh.textContent = 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.';
+    var pinNote = (vo && vo.pinned_ips && vo.pinned_ips.length)
+      ? 'DNS PIN ACTIVE: this container resolves the VOD origin via pinned IPs ('
+        + vo.pinned_ips.join(', ') + '), a temporary DNS workaround. '
+        + 'When its reason ends, REMOVE the extra_hosts lines from the override; '
+        + 'a forgotten pin rots silently when Cloudflare renumbers.'
+      : '';
+    var failNote = (vo && !vo.ok)
+      ? 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.'
+      : '';
+    var note = [pinNote, failNote].filter(Boolean).join(' ');
+    vh.hidden = !note;
+    if (note) { vh.textContent = note; vh.style.color = (pinNote && !failNote) ? 'var(--amb)' : ''; }
   }
 }
 
