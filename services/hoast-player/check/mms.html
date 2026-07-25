@@ -42,6 +42,12 @@
   16-sine test signal. Nothing is recorded or uploaded.</p>
 
   <button id="runBtn" type="button">Run the test</button>
+  <p class="detail" style="margin:8px 0 0">Diagnostic variants:
+    <a href="?notap">no Web Audio tap</a> ·
+    <a href="?audioel">&lt;audio&gt; element</a> ·
+    <a href="?plain">plain src, no MSE</a> ·
+    <a href="?">standard</a></p>
+  <button id="kickBtn" type="button" hidden>Tap to start playback (fresh gesture)</button>
   <div class="verdict" id="verdict" hidden></div>
   <div class="card" hidden id="barsCard"><div class="detail">Per-channel signal level (RMS), channels 1..32:</div>
     <div class="bars" id="bars"></div></div>
@@ -83,7 +89,10 @@ function runTest() {
   var mime = 'audio/webm; codecs="opus"';
   log('isTypeSupported(' + mime + ')', Api.isTypeSupported ? Api.isTypeSupported(mime) : 'n/a');
 
-  var el = document.createElement('video');
+  var Q = new URLSearchParams(location.search);
+  var MODE = { notap: Q.has('notap'), audioel: Q.has('audioel'), plain: Q.has('plain') };
+  if (MODE.notap || MODE.audioel || MODE.plain) log('mode', JSON.stringify(MODE));
+  var el = document.createElement(MODE.audioel ? 'audio' : 'video');
   el.setAttribute('playsinline', '');
   el.disableRemotePlayback = true;      // REQUIRED for MMS in WebKit
   el.loop = true;                       // 1 s asset: loop it so the analysers
@@ -91,8 +100,8 @@ function runTest() {
   // rendered but offscreen: display:none media is throttled in WebKit
   el.style.cssText = 'position:fixed;left:-9999px;width:2px;height:2px;opacity:0';
   document.body.appendChild(el);
-  ['playing', 'waiting', 'stalled', 'ended', 'error'].forEach(function (evn) {
-    el.addEventListener(evn, function () { log('element event', evn + ' (t=' + el.currentTime.toFixed(2) + ')'); });
+  ['playing', 'waiting', 'stalled', 'ended', 'error', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough'].forEach(function (evn) {
+    el.addEventListener(evn, function () { log('element event', evn + ' (t=' + el.currentTime.toFixed(2) + ', rs=' + el.readyState + ')'); });
   });
 
   // Audio graph BEFORE play (we are inside the user gesture): element ->
@@ -105,23 +114,57 @@ function runTest() {
   // otherwise and play() on a captured element then hangs forever
   ctx.resume().then(function () { log('AudioContext state', ctx.state); },
                     function (e) { log('AudioContext resume failed', e.message); });
-  var src;
-  try { src = ctx.createMediaElementSource(el); }
-  catch (e) { return verdict(false, 'createMediaElementSource failed: ' + e.message); }
+  var src = null;
+  if (!MODE.notap) {
+    try { src = ctx.createMediaElementSource(el); }
+    catch (e) { return verdict(false, 'createMediaElementSource failed: ' + e.message); }
+  } else {
+    log('tap', 'SKIPPED (no createMediaElementSource); this run only proves playback, not channel delivery');
+    el.volume = 0.05;
+  }
   var NCH = 32;
   var splitter = ctx.createChannelSplitter(NCH);
-  try { src.channelCountMode = 'max'; src.channelInterpretation = 'discrete'; } catch (e) {}
-  src.connect(splitter);
   var analysers = [];
   for (var i = 0; i < NCH; i++) {
     var an = ctx.createAnalyser(); an.fftSize = 2048;
     splitter.connect(an, i);
     analysers.push(an);
   }
-  var mon = ctx.createGain(); mon.gain.value = 0.03;
-  src.connect(mon); mon.connect(ctx.destination);
+  if (src) {
+    try { src.channelCountMode = 'max'; src.channelInterpretation = 'discrete'; } catch (e) {}
+    src.connect(splitter);
+    var mon = ctx.createGain(); mon.gain.value = 0.03;
+    src.connect(mon); mon.connect(ctx.destination);
+  }
+
+  var kick = document.getElementById('kickBtn');
+  kick.hidden = true;
+  kick.onclick = function () {
+    kick.hidden = true;
+    log('kick', 'manual play() inside a fresh gesture');
+    ctx.resume().catch(function () {});
+    el.play().then(function () { log('kick play', 'started'); sampleLoop(); },
+                   function (e) { log('kick play refused', e.name + ' ' + e.message); });
+  };
+
+  if (MODE.plain) {
+    // no MSE at all: does this WebKit play the file natively? Separates
+    // container/codec support from the MSE/MMS pipeline question.
+    log('plain', 'el.src = opus-16ch.webm directly');
+    el.src = 'opus-16ch.webm';
+    var settledP = false;
+    setTimeout(function () {
+      if (!settledP) { verdict(false, 'plain playback never settled within 6 s (rs=' + el.readyState + ')'); kick.hidden = false; }
+    }, 6000);
+    el.play().then(function () { settledP = true; log('play', 'started'); sampleLoop(); },
+                   function (e) { settledP = true; verdict(false, 'plain play() refused: ' + e.name + ' ' + e.message); kick.hidden = false; });
+    return;
+  }
 
   var ms = new Api();
+  ['startstreaming', 'endstreaming'].forEach(function (evn) {
+    try { ms.addEventListener(evn, function () { log('mms event', evn); }); } catch (e) {}
+  });
   el.src = URL.createObjectURL(ms);
   ms.addEventListener('sourceopen', function () {
     log('sourceopen', 'ok');
@@ -135,15 +178,21 @@ function runTest() {
         sb.addEventListener('updateend', function done() {
           sb.removeEventListener('updateend', done);
           try { ms.endOfStream(); } catch (e) {}
-          log('appended', 'endOfStream');
+          try {
+            log('appended', 'endOfStream; buffered ranges: ' + sb.buffered.length
+                + (sb.buffered.length ? ' [0..' + sb.buffered.end(0).toFixed(2) + 's]' : ''));
+          } catch (e) { log('appended', 'endOfStream (buffered unreadable: ' + e.message + ')'); }
           // watchdog: a play() that never settles is itself a result worth
           // reporting (seen on Safari when the context was not resumed in
           // the gesture), not a silent hang
           var settled = false;
           setTimeout(function () {
-            if (!settled) verdict(false, 'element.play() never settled within 6 s '
-              + '(readyState ' + el.readyState + ', currentTime ' + el.currentTime.toFixed(2)
-              + ', ctx ' + ctx.state + '). WebKit media pipeline stalled.');
+            if (!settled) {
+              verdict(false, 'element.play() never settled within 6 s '
+                + '(readyState ' + el.readyState + ', currentTime ' + el.currentTime.toFixed(2)
+                + ', ctx ' + ctx.state + '). Try the fresh-gesture button below.');
+              kick.hidden = false;
+            }
           }, 6000);
           el.play().then(function () { settled = true; log('play', 'started'); sampleLoop(); },
                          function (e) { settled = true; verdict(false, 'element.play() refused: ' + e.message); });
