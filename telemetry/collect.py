@@ -20,7 +20,22 @@ from datetime import datetime
 from pathlib import Path
 
 HOST     = os.environ.get("TEL_HOST", "example-host")
-PROJECT  = os.environ.get("COMPOSE_PROJECT_NAME", "hoa360")
+def _own_project():
+    """The compose project this telemetry container actually belongs to, read
+    from its own labels (hostname == container id). The env var is only a
+    fallback: it cannot see a `docker compose -p <name>` override, and a
+    hardcoded value once broke loop control under any renamed project."""
+    try:
+        import socket
+        out = sh(f"docker inspect {socket.gethostname()} "
+                 "--format '{{index .Config.Labels \"com.docker.compose.project\"}}'").strip()
+        if out and out != "<no value>":
+            return out
+    except Exception:
+        pass
+    return os.environ.get("COMPOSE_PROJECT_NAME", "hoa360")
+
+PROJECT  = _own_project()
 DATA     = Path(os.environ.get("TEL_DATA", "/data"))          # persisted volume + web root
 DASH     = Path(os.environ.get("TEL_DASH", "/dash"))          # shared dash-output (ro)
 THERMAL  = os.environ.get("TEL_THERMAL", "/sys/class/thermal/thermal_zone0/temp")  # container sees host sysfs

@@ -192,7 +192,12 @@ services:
       context: ./telemetry
     image: hoa360-telemetry:local
     environment:
-      - COMPOSE_PROJECT_NAME=hoa360
+      # Interpolated, not hardcoded: a hardcoded project name broke telemetry's
+      # container control (loop start/stop, guest handover) the moment the
+      # stack ran under any other project name. collect.py additionally
+      # self-derives the project from its own container's compose label, which
+      # also covers `docker compose -p <name>` (no env var involved).
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-hoa360}
       - TEL_HOST=${TEL_HOST:-hoa360}
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:-}   # so it can report resolution/bitrate
       - BOT_TOKEN=${BOT_TOKEN:-}         # optional: Telegram alerts (unset = disabled)
