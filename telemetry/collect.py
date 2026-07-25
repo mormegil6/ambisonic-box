@@ -1585,6 +1585,9 @@ def vod_origin_probe():
             note = os.environ.get("TEL_PIN_NOTE", "")
             if note:
                 out["pin_note"] = note
+            url = os.environ.get("TEL_PIN_URL", "")
+            if url:
+                out["pin_url"] = url
     except Exception:
         pass
     try:

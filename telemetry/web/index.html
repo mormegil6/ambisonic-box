@@ -159,6 +159,7 @@
       <span class="chip" id="vodOriginChip" hidden></span>
     </div>
     <div class="ctl-msg" id="vodOriginHint" hidden style="margin-top:6px"></div>
+    <div id="pinHint" hidden style="margin-top:4px;font-size:10px;line-height:1.4;color:var(--amb);opacity:.85;font-family:var(--mono)"></div>
   </section>
 
   <section>
@@ -346,18 +347,32 @@ function renderReach(s){
     }
   }
   if (vh) {
-    var pinNote = (vo && vo.pinned_ips && vo.pinned_ips.length)
-      ? 'DNS PIN ACTIVE: this container resolves the VOD origin via pinned IPs ('
-        + vo.pinned_ips.join(', ') + ') from an extra_hosts override. Remove the '
-        + 'override when its reason ends; a forgotten pin rots silently when the '
-        + 'CDN renumbers.' + (vo.pin_note ? ' [' + vo.pin_note + ']' : '')
-      : '';
     var failNote = (vo && !vo.ok)
       ? 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.'
       : '';
-    var note = [pinNote, failNote].filter(Boolean).join(' ');
-    vh.hidden = !note;
-    if (note) { vh.textContent = note; vh.style.color = (pinNote && !failNote) ? 'var(--amb)' : ''; }
+    vh.hidden = !failNote;
+    if (failNote) vh.textContent = failNote;
+  }
+  var ph = $('pinHint');
+  if (ph) {
+    var pinned = vo && vo.pinned_ips && vo.pinned_ips.length;
+    ph.hidden = !pinned;
+    if (pinned) {
+      ph.textContent = '';
+      ph.appendChild(document.createTextNode(
+        'DNS pin active: VOD origin resolves via pinned IPs (' + vo.pinned_ips.join(', ')
+        + ') from an extra_hosts override. Remove the override when its reason ends; '
+        + 'a forgotten pin rots silently when the CDN renumbers. '));
+      if (vo.pin_note && vo.pin_url) {
+        var a = document.createElement('a');
+        a.href = vo.pin_url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = vo.pin_note;
+        a.style.color = 'var(--amb)';
+        ph.appendChild(a);
+      } else if (vo.pin_note) {
+        ph.appendChild(document.createTextNode('[' + vo.pin_note + ']'));
+      }
+    }
   }
 }
 
