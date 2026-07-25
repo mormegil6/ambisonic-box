@@ -11,6 +11,17 @@
 
 name: hoa360
 
+# Bounded container logs for every deployment (json-file has NO limits by
+# default, so stdout grows forever). ~100 MB cap per service. Deployments
+# that make a TIME-based retention promise (the guest disclaimer's 30 days)
+# switch the driver to journald in their override and cap retention on the
+# host; size caps alone cannot honour a days-based claim.
+x-logging: &bounded-logs
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
 
   earshot:
@@ -81,6 +92,7 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+    logging: *bounded-logs
 
   rtmp-ingest:
     # NOTE: nginx-rtmp resolves the `push rtmp://earshot...` hostname ONCE at
@@ -104,6 +116,7 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
+    logging: *bounded-logs
 
   loop-source:
     # reuses the earshot image: Envelop's PCE-aware ffmpeg guarantees the
@@ -140,6 +153,7 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    logging: *bounded-logs
 
   hoast-player:
     build:
@@ -157,6 +171,7 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
+    logging: *bounded-logs
 
   # Operations telemetry: private dashboard (:8090) + breakage-only Telegram
   # alerts + a curated public status.json for the player's status panel. Reads
@@ -204,6 +219,7 @@ services:
     depends_on:
       - hoast-player
     restart: unless-stopped
+    logging: *bounded-logs
 
   # VOD/lip-sync packaging utility (Phase 5) - NOT in the live path.
   # Usage: docker compose run --rm shaka <packager args>
