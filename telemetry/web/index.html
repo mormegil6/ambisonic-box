@@ -157,6 +157,7 @@
     <div class="svc">
       <span class="chip" id="tunnelChip" hidden></span>
       <span class="chip" id="vodOriginChip" hidden></span>
+      <span class="chip" id="backupChip" hidden></span>
     </div>
     <div class="ctl-msg" id="vodOriginHint" hidden style="margin-top:6px"></div>
     <div id="pinHint" hidden style="margin-top:4px;font-size:10px;line-height:1.4;color:var(--amb);opacity:.85;font-family:var(--mono)"></div>
@@ -352,6 +353,23 @@ function renderReach(s){
       : '';
     vh.hidden = !failNote;
     if (failNote) vh.textContent = failNote;
+  }
+  var bc = $('backupChip');
+  if (bc) {
+    var bk = s.backup;
+    bc.hidden = !bk;
+    if (bk) {
+      sec.hidden = false;
+      bc.textContent = '';
+      var d = document.createElement('span'); d.className = 'dot';
+      d.style.background = bk.stale ? col('--red') : col('--grn');
+      bc.appendChild(d);
+      bc.appendChild(document.createTextNode('backup '));
+      var st = document.createElement('span'); st.style.color = col('--dim');
+      st.textContent = bk.age_h == null ? 'never pulled'
+        : (bk.stale ? 'STALE: ' : 'last pull ') + bk.age_h + ' h ago';
+      bc.appendChild(st);
+    }
   }
   var ph = $('pinHint');
   if (ph) {

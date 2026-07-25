@@ -302,6 +302,13 @@ VOD_PROBE_URL = os.environ.get("VOD_PROBE_URL", "")
 CF_ANALYTICS_TOKEN = os.environ.get("CF_ANALYTICS_TOKEN", "")
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
 
+# Backup staleness: a marker file the PULL side stamps after each successful
+# run (trusted direction only; see the deployment's backup scripts). Env
+# absent = feature off. A silently dead backup defeats its purpose, so a
+# stale marker joins the debounced Telegram alerts.
+BACKUP_MARKER = os.environ.get("BACKUP_MARKER", "")
+BACKUP_MAX_AGE_H = int(os.environ.get("BACKUP_MAX_AGE_H", "48"))
+
 
 def timeline_depth():
     """Seconds of media the manifest actually advertises, summed over its
@@ -1663,6 +1670,19 @@ def cf_vod_analytics():
         return prev
 
 
+def backup_check():
+    if not BACKUP_MARKER:
+        return None
+    out = {"max_age_h": BACKUP_MAX_AGE_H, "age_h": None, "stale": True}
+    try:
+        age = time.time() - os.path.getmtime(BACKUP_MARKER)
+        out["age_h"] = round(age / 3600, 1)
+        out["stale"] = age > BACKUP_MAX_AGE_H * 3600
+    except OSError:
+        pass                     # marker missing: stale stays True
+    return out
+
+
 def evaluate_alerts(s):
     try:
         state = json.loads(STATE.read_text())
@@ -1685,6 +1705,7 @@ def evaluate_alerts(s):
         "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x)", "encoder keeping up again", s["encoder"]["speed"], "min"),
         "stream_stalled": (stalled, f"stream publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
         "tunnel_down":    (bool(s.get("tunnel")) and s["tunnel"]["connected"] is False, "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
+        "backup_stale":   (bool(s.get("backup")) and s["backup"]["stale"], f"telemetry backup STALE: last successful pull {(s.get('backup') or {}).get('age_h')} h ago (limit {BACKUP_MAX_AGE_H} h)", "backup pulls resumed", (s.get("backup") or {}).get("age_h"), "max"),
     }
     for key, (cond, problem, recovered, metric, worse) in conds.items():
         counts[key] = (counts.get(key, 0) + 1) if cond else 0
@@ -1773,6 +1794,9 @@ def collect_once():
     ca = cf_vod_analytics()
     if ca is not None:
         s["vod_analytics"] = ca
+    bk = backup_check()
+    if bk is not None:
+        s["backup"] = bk
         # persist for future analysis: one gauge row per FRESH poll (the
         # 5-min cache returns the same 'checked' between polls; stale rows
         # are skipped). Aggregate counts only, no personal data, keep forever
