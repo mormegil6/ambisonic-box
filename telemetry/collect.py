@@ -1430,14 +1430,19 @@ def codec_name(c):
 
 
 def telegram(msg):
-    # short actionable tail: where to act (Tailscale-only reach is implied
-    # by the hostname; a wordier note would just be noise on every alert)
-    _h = os.environ.get("TEL_HOST", "")
-    if _h and "8090" not in msg:
-        msg = f"{msg}\nhttp://{_h}:8090/"
     if not BOT or not CHAT:
         return
-    data = urllib.parse.urlencode({"chat_id": CHAT, "text": msg}).encode()
+    # Clients only auto-linkify public-TLD hostnames, so a bare
+    # http://example-host:8090/ stays plain text. An explicit HTML anchor
+    # becomes a text_link entity and renders as a link regardless of the
+    # hostname. parse_mode=HTML means the message body must be escaped.
+    import html as _html
+    text = _html.escape(msg)
+    _h = os.environ.get("TEL_HOST", "")
+    if _h and "8090" not in msg:
+        text = f'{text}\n<a href="http://{_h}:8090/">{_h} dashboard</a>'
+    data = urllib.parse.urlencode({"chat_id": CHAT, "text": text,
+                                   "parse_mode": "HTML"}).encode()
     try:
         urllib.request.urlopen(f"https://api.telegram.org/bot{BOT}/sendMessage", data=data, timeout=10)
     except Exception:
