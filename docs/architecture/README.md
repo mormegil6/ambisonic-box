@@ -22,23 +22,12 @@ The data-flow diagram embedded in the top-level `README.md`.
 ./build.sh
 ```
 
-Needs `node`/`npx`, `python3`, and a Chromium-based browser (path in
-`puppeteer-config.json`). Edit `architecture.mmd`, rerun, commit the outputs.
+Needs `node`/`npx`, `python3`, and a Chromium-based browser (path in `puppeteer-config.json`). Edit `architecture.mmd`, rerun, commit the outputs.
 
 ## Why a PNG in the README, not the SVG
 
-mermaid renders node and label text inside `<foreignObject>` (HTML). Browsers do
-not render foreignObject when an SVG is loaded through an `<img>` tag, so
-embedding `architecture.svg` directly would show the boxes and lines with no
-text. The README embeds `architecture.png`; the SVG remains the vector source.
+mermaid renders node and label text inside `<foreignObject>` (HTML). Browsers do not render foreignObject when an SVG is loaded through an `<img>` tag, so embedding `architecture.svg` directly would show the boxes and lines with no text. The README embeds `architecture.png`; the SVG remains the vector source.
 
 ## Why postprocess.py
 
-mermaid's dagre layout stacks everything top-to-bottom. `postprocess.py` keys off
-mermaid's stable element ids to: flank rtmp-ingest with OBS (left, external) and
-loop-source (right) on straight horizontal edges, place the viewer left of the
-box and centred under OBS, shrink the DOCKER COMPOSE box to its content with the
-title sitting on the top edge in a chip that breaks the border, and round the
-corners. It relies on the raw SVG having a single coordinate system, which is why
-the subgraph in `architecture.mmd` carries no `direction` (a nested one would
-give mermaid two coordinate systems).
+mermaid's dagre layout stacks everything top-to-bottom. `postprocess.py` keys off mermaid's stable element ids to: flank rtmp-ingest with OBS (left, external) and loop-source (right) on straight horizontal edges, place the viewer left of the box and centred under OBS, shrink the DOCKER COMPOSE box to its content with the title sitting on the top edge in a chip that breaks the border, and round the corners. It relies on the raw SVG having a single coordinate system, which is why the subgraph in `architecture.mmd` carries no `direction` (a nested one would give mermaid two coordinate systems).
