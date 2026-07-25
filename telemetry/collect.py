@@ -537,8 +537,41 @@ def _guest_save():
         pass
 
 
+# The public notice says connection details are retained for 30 days; this is
+# the code that makes that true for the moderation log (the one store where
+# guest publisher IPs persist). Container stdout logs rotate by size, not by
+# days; that residual is a known item for the final disclaimer wording.
+GUEST_RETENTION_S = int(os.environ.get("GUEST_RETENTION_DAYS", "30")) * 86400
+
+
+def _guest_log_prune():
+    """Drop session rows older than the retention window. Cheap: the file is a
+    few KB; called once per collect cycle."""
+    try:
+        if not GUESTCSV.exists():
+            return
+        cutoff = time.time() - GUEST_RETENTION_S
+        rows = GUESTCSV.read_text().splitlines()
+        kept = []
+        for r in rows:
+            try:
+                ts = datetime.fromisoformat(r.split(",", 1)[0]).timestamp()
+                if ts >= cutoff:
+                    kept.append(r)
+            except Exception:
+                kept.append(r)      # unparseable row: keep, never silently drop
+        if len(kept) != len(rows):
+            tmp = GUESTCSV.with_suffix(".csv.tmp")
+            tmp.write_text("\n".join(kept) + ("\n" if kept else ""))
+            tmp.replace(GUESTCSV)
+            print(f"guest log: pruned {len(rows) - len(kept)} row(s) past retention", flush=True)
+    except Exception:
+        pass
+
+
 def _guest_log(reason):
-    """One CSV row per finished session: contention and abuse stay visible."""
+    """One CSV row per finished session: contention and abuse stay visible
+    (within the retention window; see _guest_log_prune)."""
     try:
         start = _guest.get("start")
         dur = round(time.time() - start) if start else 0
@@ -1100,6 +1133,7 @@ def collect_once():
     s["source_running"] = bool(source_container(running_only=True))
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
+    _guest_log_prune()                  # honour the 30-day retention notice
     ep = guest_public()
     if ep:
         s["endpoint"] = {**ep, "addr": _guest.get("addr")}   # addr: private page only

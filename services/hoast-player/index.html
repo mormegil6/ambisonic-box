@@ -110,6 +110,11 @@
       .tabs a.on{background:var(--accent);border-color:var(--accent);color:#06231f}
       .clip-meta{font-size:13.5px;color:var(--body);opacity:.9;margin:12px 0 0}
       .clip-dl{font-size:13.5px;margin:8px 0 0}
+      /* guest-stream notice: visible only while a guest holds the endpoint */
+      .guest-notice{margin:10px 0 0;padding:10px 14px;border:1px solid #d29922;
+        border-radius:8px;background:rgba(210,153,34,.08);font-size:13px}
+      .guest-notice p{margin:4px 0;white-space:pre-line}
+      .guest-notice p:first-child{margin-top:0}
       /* loop toggle in the control bar (inline SVG, never a font glyph) */
       .vjs-loop-button{cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
       .vjs-loop-button svg{width:17px;height:17px}
@@ -201,6 +206,18 @@
       </div>
       <p class="hint" id="hint">Drag to look around; use headphones for the spatial audio.</p>
 
+      <!-- Guest-stream notice: filled from brand.json (guestDisclaimer, DRAFT
+           wording pending; affiliationNotice reserved) and shown only while a
+           guest session holds the endpoint. Right under the player on purpose:
+           this is where someone actually encounters unexpected content, not a
+           footer. All insertion is textContent. -->
+      <div class="guest-notice" id="guestNotice" hidden>
+        <p id="guestNoticeShort"><strong id="guestNoticeBadge"></strong></p>
+        <p id="guestNoticeFullEn"></p>
+        <p id="guestNoticeFullPl"></p>
+        <p id="guestNoticeAffil" hidden></p>
+      </div>
+
       <div class="tabs" id="clipTabs" hidden>
         <a data-clip="directions" href="/vod/?clip=directions">Directions</a>
         <a data-clip="colortones" href="/vod/?clip=colortones">Colortones (A/V sync)</a>
@@ -259,6 +276,10 @@
         .then(function (b) {
           if (!b) return;
           BRAND_DATA = b; showVodDownloads();   // first: immune to any later throw here
+          // Guest-stream notice (DRAFT wording lives in brand.json, rendered
+          // only while a guest session is active; see renderGuestNotice)
+          window.__GUEST_BRAND__ = { d: b.guestDisclaimer, a: b.affiliationNotice };
+          if (typeof renderGuestNotice === 'function') renderGuestNotice(window.__LAST_EP__);
           var lead = document.getElementById('aboutLead');
           if (b.lead && lead && MODE !== 'vod') lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
@@ -352,10 +373,36 @@
             setGuestCell(p.endpoint);
         }
 
+        // Guest-stream notice, shown ONLY while a guest session holds the
+        // endpoint (live/handover/grace). Text comes from brand.json
+        // (guestDisclaimer: {en:{short,full}, pl:{short,full}}; DRAFT wording,
+        // final text pending the university conversation and the report-button
+        // design). affiliationNotice is a reserved slot, empty until agreed.
+        // All insertion is textContent.
+        function renderGuestNotice(ep) {
+            window.__LAST_EP__ = ep;
+            var box = document.getElementById('guestNotice');
+            if (!box) return;
+            var gb = window.__GUEST_BRAND__;
+            var active = ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace');
+            if (!gb || !gb.d || !active) { box.hidden = true; return; }
+            var en = gb.d.en || {}, pl = gb.d.pl || {};
+            var badge = document.getElementById('guestNoticeBadge');
+            if (badge) badge.textContent = [en.short, pl.short].filter(Boolean).join(' · ');
+            var fe = document.getElementById('guestNoticeFullEn');
+            if (fe) fe.textContent = en.full || '';
+            var fp = document.getElementById('guestNoticeFullPl');
+            if (fp) fp.textContent = pl.full || '';
+            var af = document.getElementById('guestNoticeAffil');
+            if (af) { af.textContent = gb.a || ''; af.hidden = !gb.a; }
+            box.hidden = false;
+        }
+
         // Guest test endpoint state. The name is attacker-controlled input
         // (any RTMP pusher chooses it); it is sanitised server-side AND only
         // ever inserted here via textContent, never innerHTML.
         function setGuestCell(ep) {
+            renderGuestNotice(ep);
             var el = document.getElementById('stGuest');
             if (!el) return;
             // no endpoint field at all = feature disabled on this deployment:
