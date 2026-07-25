@@ -242,6 +242,21 @@ function runTest() {
   // measured only after it ended (the first harness version's mistake).
   var rmsMax = null;
   function sampleLoop() {
+    if (MODE.notap) {
+      // no graph in this mode: an unconnected splitter always reads zero,
+      // so measuring it produced bogus CAPTURE SILENT verdicts on healthy
+      // browsers. Playback progress + the operator's ears are the evidence.
+      setTimeout(function () {
+        if (el.currentTime > 0.3 || el.readyState === 4) {
+          verdict(true, 'PLAYBACK OK (' + variantName + '): decoded and played to '
+            + el.currentTime.toFixed(2) + ' s. Channel delivery is deliberately NOT '
+            + 'measured in no-tap mode; the audible tones are the evidence.');
+        } else {
+          verdict(false, 'no-tap playback never progressed (rs=' + el.readyState + ')');
+        }
+      }, 2500);
+      return;
+    }
     var buf = new Float32Array(2048);
     var n = 0;
     var iv = setInterval(function () {
