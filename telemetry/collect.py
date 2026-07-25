@@ -676,6 +676,25 @@ def geo_cc(ip):
         return "--"
 
 
+def anon_ip(ip):
+    """Truncate, do not erase: keep the network part so long-term statistics
+    can still see repeat networks and ban-evasion patterns (operator decision
+    2026-07-25, disclaimer updated to match). v4 keeps /24 (a.b.c.x), v6
+    keeps /48 (x:x:x::x). Idempotent; rows already fully redacted to "-"
+    stay "-" (that data is gone). Truncated values can never equal a real
+    address, so ban enforcement stays inert on them by construction."""
+    if not ip or ip in ("-", "") or ip.endswith(".x") or ip.endswith("::x"):
+        return ip
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return "-"
+    if addr.version == 4:
+        return ".".join(ip.split(".")[:3]) + ".x"
+    hexts = addr.exploded.split(":")[:3]
+    return ":".join(h.lstrip("0") or "0" for h in hexts) + "::x"
+
+
 def _redact_csv(path, ip_cols):
     """Shared redactor: IP columns expire past the retention window, rows
     stay as anonymised statistics."""
@@ -693,8 +712,8 @@ def _redact_csv(path, ip_cols):
                 old = False
             if old:
                 for c in ip_cols:
-                    if len(p) > c and p[c] not in ("-", ""):
-                        p[c] = "-"; changed += 1
+                    if len(p) > c and p[c] not in ("-", "") and not p[c].endswith((".x", "::x")):
+                        p[c] = anon_ip(p[c]); changed += 1
             out.append(",".join(p))
         if changed:
             tmp = path.with_suffix(".csv.tmp")
@@ -719,10 +738,10 @@ def _guest_log_expire_ips():
         for r in rows:
             p = r.split(",")
             # rows are ts,name,addr,cc,dur,reason (legacy rows lack cc)
-            if len(p) >= 5 and p[2] not in ("-", ""):
+            if len(p) >= 5 and p[2] not in ("-", "") and not p[2].endswith((".x", "::x")):
                 try:
                     if datetime.fromisoformat(p[0]).timestamp() < cutoff:
-                        p[2] = "-"
+                        p[2] = anon_ip(p[2])
                         changed += 1
                 except Exception:
                     pass            # unparseable timestamp: leave untouched
@@ -1160,8 +1179,8 @@ def _bans_expire():
                 old = False
             if not old:
                 continue
-            if r["ip"] not in ("-", ""):
-                r["ip"] = "-"; changed += 1
+            if r["ip"] not in ("-", "") and not r["ip"].endswith((".x", "::x")):
+                r["ip"] = anon_ip(r["ip"]); changed += 1
             if r["state"] == "active":
                 r["state"] = "expired"; changed += 1
         if changed:
