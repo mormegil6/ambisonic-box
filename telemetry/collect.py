@@ -1276,10 +1276,11 @@ def guest_report(reporter_ip, reporter_cc):
     if alert:
         elapsed = dur_short(now - start) if start else "?"
         started = datetime.fromtimestamp(start).astimezone().isoformat(timespec="seconds") if start else "?"
+        # no dashboard mention in the body: the telegram() tail appends the
+        # actual link, and its 8090-dedup guard must not be tripped here
         telegram(f"guest stream REPORTED: '{name}' from {addr} ({pub_cc}), "
                  f"started {started}, running {elapsed}. "
-                 f"Reporter: {reporter_ip} ({rep_cc}). Reports so far: {n}. "
-                 f"Act on the :8090 dashboard (End session).")
+                 f"Reporter: {reporter_ip} ({rep_cc}). Reports so far: {n}.")
     return 200, {"ok": True, "reported": True}
 
 
