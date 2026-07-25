@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MMS multichannel Opus test</title>
+  <style>
+    :root { --ok:#0b8a43; --bad:#c62828; --dim:#666;
+            --bg:#fff; --fg:#1c1c1c; --card-bg:#fafafa; --card-border:#ddd;
+            --btn-bg:#f2f2f2; --btn-border:#bbb; --verdict-bg:#eee; }
+    @media (prefers-color-scheme: dark) {
+      :root { --dim:#aaa; --bg:#161616; --fg:#e8e8e8; --card-bg:#222;
+              --card-border:#3a3a3a; --btn-bg:#2c2c2c; --btn-border:#484848;
+              --verdict-bg:#242424; }
+    }
+    body { margin:0; padding:22px 18px 60px; font:17px/1.55 -apple-system, BlinkMacSystemFont,
+           "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--fg); background:var(--bg); }
+    main { max-width:640px; margin:0 auto; }
+    h1 { font-size:23px; margin:0 0 6px; }
+    .sub { color:var(--dim); font-size:15px; margin:0 0 18px; }
+    .verdict { font-size:20px; font-weight:700; padding:14px 16px; border-radius:10px;
+               margin:0 0 18px; background:var(--verdict-bg); }
+    .verdict.ok { background:rgba(11,138,67,.14); color:var(--ok); }
+    .verdict.bad { background:rgba(198,40,40,.14); color:var(--bad); }
+    .card { border:1px solid var(--card-border); border-radius:10px; padding:12px 16px;
+            margin:0 0 12px; background:var(--card-bg); }
+    .detail { color:var(--dim); font-size:14.5px; word-break:break-word; }
+    button { font:600 17px inherit; padding:12px 22px; border-radius:10px;
+             border:1px solid var(--btn-border); background:var(--btn-bg); color:inherit;
+             width:100%; margin-top:8px; cursor:pointer; }
+    pre { white-space:pre-wrap; word-break:break-word; font-size:12.5px; color:var(--dim); margin:14px 0 0; }
+    .bars { display:flex; gap:2px; height:52px; align-items:flex-end; margin:8px 0 2px; }
+    .bars i { flex:1; background:var(--ok); min-height:2px; opacity:.85; border-radius:2px 2px 0 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ManagedMediaSource multichannel Opus test</h1>
+  <p class="sub">The deciding test for iPhone support: does WebKit's own streaming API
+  (ManagedMediaSource) deliver DECODABLE 16-channel Opus into Web Audio, or is its
+  <code>isTypeSupported</code> merely optimistic? One tap; the tone you may faintly hear is the
+  16-sine test signal. Nothing is recorded or uploaded.</p>
+
+  <button id="runBtn" type="button">Run the test</button>
+  <div class="verdict" id="verdict" hidden></div>
+  <div class="card" hidden id="barsCard"><div class="detail">Per-channel signal level (RMS), channels 1..32:</div>
+    <div class="bars" id="bars"></div></div>
+  <button id="copyBtn" type="button" hidden>Copy the result</button>
+  <pre id="raw"></pre>
+</main>
+
+<script>
+'use strict';
+// Feed a 16-channel Opus WebM (the /check asset, one distinct sine per
+// channel) through ManagedMediaSource (or classic MSE as the desktop
+// control), tap the media element with createMediaElementSource, and COUNT
+// the channels that actually carry signal. 16 bars = the dashjs5/video.js8
+// migration has a real endpoint on iPhone; fewer = WebKit downmixed or
+// failed, and the migration loses its main justification.
+var LOG = [];
+function log(k, v) { LOG.push(k + ': ' + v); render(); }
+function render() { document.getElementById('raw').textContent = LOG.join('\n'); }
+
+function verdict(ok, text) {
+  var v = document.getElementById('verdict');
+  v.hidden = false;
+  v.className = 'verdict ' + (ok === true ? 'ok' : ok === false ? 'bad' : '');
+  v.textContent = text;
+  document.getElementById('copyBtn').hidden = false;
+}
+
+function runTest() {
+  document.getElementById('runBtn').disabled = true;
+  LOG = [];
+  log('test', 'MMS multichannel Opus ' + new Date().toISOString());
+  log('userAgent', navigator.userAgent);
+
+  var MMS = window.ManagedMediaSource, MSE = window.MediaSource;
+  var Api = MMS || MSE;
+  var apiName = MMS ? 'ManagedMediaSource' : (MSE ? 'MediaSource (control fallback)' : 'none');
+  log('api', apiName);
+  if (!Api) return verdict(false, 'Neither ManagedMediaSource nor MediaSource exists here; nothing to test.');
+  var mime = 'audio/webm; codecs="opus"';
+  log('isTypeSupported(' + mime + ')', Api.isTypeSupported ? Api.isTypeSupported(mime) : 'n/a');
+
+  var el = document.createElement('video');
+  el.setAttribute('playsinline', '');
+  el.disableRemotePlayback = true;      // REQUIRED for MMS in WebKit
+  el.style.display = 'none';
+  document.body.appendChild(el);
+
+  // Audio graph BEFORE play (we are inside the user gesture): element ->
+  // splitter -> 32 analysers, plus a near-silent monitor so iOS keeps the
+  // pipeline "audible". OfflineAudioContext will not do here; the element
+  // path needs a real context.
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var ctx = new AC();
+  log('AudioContext state', ctx.state);
+  var src;
+  try { src = ctx.createMediaElementSource(el); }
+  catch (e) { return verdict(false, 'createMediaElementSource failed: ' + e.message); }
+  var NCH = 32;
+  var splitter = ctx.createChannelSplitter(NCH);
+  try { src.channelCountMode = 'max'; src.channelInterpretation = 'discrete'; } catch (e) {}
+  src.connect(splitter);
+  var analysers = [];
+  for (var i = 0; i < NCH; i++) {
+    var an = ctx.createAnalyser(); an.fftSize = 2048;
+    splitter.connect(an, i);
+    analysers.push(an);
+  }
+  var mon = ctx.createGain(); mon.gain.value = 0.03;
+  src.connect(mon); mon.connect(ctx.destination);
+
+  var ms = new Api();
+  el.src = URL.createObjectURL(ms);
+  ms.addEventListener('sourceopen', function () {
+    log('sourceopen', 'ok');
+    var sb;
+    try { sb = ms.addSourceBuffer(mime); }
+    catch (e) { return verdict(false, 'addSourceBuffer refused ' + mime + ': ' + e.name + ' ' + e.message); }
+    fetch('opus-16ch.webm', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('asset HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(function (buf) {
+        log('asset', buf.byteLength + ' bytes fetched');
+        sb.addEventListener('updateend', function done() {
+          sb.removeEventListener('updateend', done);
+          try { ms.endOfStream(); } catch (e) {}
+          log('appended', 'endOfStream');
+          el.play().then(function () { log('play', 'started'); setTimeout(measure, 1200); },
+                         function (e) { verdict(false, 'element.play() refused: ' + e.message); });
+        });
+        sb.addEventListener('error', function () {
+          verdict(false, 'SourceBuffer error while appending (decode rejected). el.error: '
+            + (el.error ? el.error.code + ' ' + (el.error.message || '') : 'none'));
+        });
+        sb.appendBuffer(buf);
+      })
+      .catch(function (e) { verdict(false, 'asset fetch failed: ' + e.message); });
+  });
+  el.addEventListener('error', function () {
+    if (el.error) log('element error', el.error.code + ' ' + (el.error.message || ''));
+  });
+
+  function measure() {
+    ctx.resume().catch(function () {});
+    var buf = new Float32Array(2048);
+    var rms = [];
+    for (var i = 0; i < NCH; i++) {
+      analysers[i].getFloatTimeDomainData(buf);
+      var s = 0; for (var j = 0; j < buf.length; j++) s += buf[j] * buf[j];
+      rms.push(Math.sqrt(s / buf.length));
+    }
+    var active = rms.filter(function (x) { return x > 0.005; }).length;
+    var peak = Math.max.apply(null, rms) || 1;
+    var bars = document.getElementById('bars');
+    bars.textContent = '';
+    rms.forEach(function (x) {
+      var b = document.createElement('i');
+      b.style.height = Math.max(2, Math.round(48 * x / peak)) + 'px';
+      if (x <= 0.005) b.style.opacity = '0.15';
+      bars.appendChild(b);
+    });
+    document.getElementById('barsCard').hidden = false;
+    log('decoded duration', el.duration + ' s, currentTime ' + el.currentTime.toFixed(2));
+    log('channels with signal', active + ' of ' + NCH + ' probed');
+    log('rms (first 18)', rms.slice(0, 18).map(function (x) { return x.toFixed(3); }).join(','));
+    if (active >= 16) {
+      verdict(true, 'PASS: ' + apiName + ' delivered ' + active
+        + ' discrete audio channels into Web Audio. The migration path to iPhone is real.');
+    } else if (active >= 1) {
+      verdict(false, 'PARTIAL: audio decodes but only ' + active
+        + ' channel(s) reach Web Audio (downmix). isTypeSupported was optimistic; iPhone stays blocked.');
+    } else {
+      verdict(false, 'FAIL: appended and played, but no signal reached Web Audio. el.error: '
+        + (el.error ? el.error.code : 'none') + ', readyState ' + el.readyState);
+    }
+    el.pause();
+  }
+}
+
+document.getElementById('runBtn').addEventListener('click', runTest);
+document.getElementById('copyBtn').addEventListener('click', function () {
+  var btn = this, t = LOG.join('\n');
+  function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy the result'; }, 1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, done);
+  else done();
+});
+</script>
+</body>
+</html>
