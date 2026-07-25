@@ -115,6 +115,9 @@
         border-radius:8px;background:rgba(210,153,34,.08);font-size:13px}
       .guest-notice p{margin:4px 0;white-space:pre-line}
       .guest-notice p:first-child{margin-top:0}
+      .guest-notice button{font:600 13.5px var(--sans);padding:7px 14px;border-radius:7px;
+        border:1px solid #d29922;background:transparent;color:inherit;cursor:pointer}
+      .guest-notice button:disabled{opacity:.6;cursor:default}
       /* loop toggle in the control bar (inline SVG, never a font glyph) */
       .vjs-loop-button{cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
       .vjs-loop-button svg{width:17px;height:17px}
@@ -216,6 +219,15 @@
         <p id="guestNoticeFullEn"></p>
         <p id="guestNoticeFullPl"></p>
         <p id="guestNoticeAffil" hidden></p>
+        <p><button id="guestReportBtn" type="button" hidden>Report this stream / Zgłoś transmisję</button></p>
+      </div>
+      <!-- Why the last guest session ended (visible ~10 min): OBS reports a
+           successful connection even when the transcode stalls on a wrong
+           audio layout, so without this line the commonest failure is
+           invisible to the person who caused it. Static text, both languages;
+           mechanical message, not branding. -->
+      <div class="guest-notice" id="guestEndReason" hidden>
+        <p id="guestEndReasonText"></p>
       </div>
 
       <div class="tabs" id="clipTabs" hidden>
@@ -395,6 +407,24 @@
             if (fp) fp.textContent = pl.full || '';
             var af = document.getElementById('guestNoticeAffil');
             if (af) { af.textContent = gb.a || ''; af.hidden = !gb.a; }
+            var rb = document.getElementById('guestReportBtn');
+            if (rb) rb.hidden = false;
+            box.hidden = false;
+        }
+
+        // Why the last session ended, shown while the endpoint is free again
+        // (surfaced by telemetry for ~10 minutes; mechanical text, EN+PL)
+        function renderGuestEndReason(ep) {
+            var box = document.getElementById('guestEndReason');
+            if (!box) return;
+            var show = ep && ep.state === 'free' && ep.last_end_reason
+                       && ep.last_end_reason.indexOf('playable output') !== -1;
+            if (!show) { box.hidden = true; return; }
+            document.getElementById('guestEndReasonText').textContent =
+                'The last test stream ended automatically: it produced no playable output. '
+                + 'The endpoint needs 16-channel (3rd-order ambisonic) audio; plain stereo or mono will not play. / '
+                + 'Ostatnia transmisja testowa zako\u0144czy\u0142a si\u0119 automatycznie: nie wygenerowa\u0142a odtwarzalnego strumienia. '
+                + 'Punkt ko\u0144cowy wymaga d\u017awi\u0119ku 16-kana\u0142owego (ambisonia 3. rz\u0119du); zwyk\u0142e stereo lub mono nie zadzia\u0142a.';
             box.hidden = false;
         }
 
@@ -403,6 +433,7 @@
         // ever inserted here via textContent, never innerHTML.
         function setGuestCell(ep) {
             renderGuestNotice(ep);
+            renderGuestEndReason(ep);
             var el = document.getElementById('stGuest');
             if (!el) return;
             // no endpoint field at all = feature disabled on this deployment:
@@ -543,6 +574,25 @@
                 .catch(function () { show('gateErr'); })
                 .then(function () { if (btn) btn.disabled = false; });
         }
+
+        (function () {
+            var rb = document.getElementById('guestReportBtn');
+            if (!rb) return;
+            rb.addEventListener('click', function () {
+                rb.disabled = true;
+                fetch('/api/guest/report', { method: 'POST' })
+                    .then(function (r) { return r.json().catch(function () { return {}; }); })
+                    .then(function (b) {
+                        rb.textContent = (b && b.ok)
+                            ? 'Reported. Thank you. / Zg\u0142oszono. Dzi\u0119kujemy.'
+                            : 'Report already received. / Zg\u0142oszenie ju\u017c przyj\u0119te.';
+                    })
+                    .catch(function () {
+                        rb.textContent = 'Could not send the report. / Nie uda\u0142o si\u0119 wys\u0142a\u0107 zg\u0142oszenia.';
+                        rb.disabled = false;
+                    });
+            });
+        })();
 
         function init() {
             // Probed in the HOAST360 constructor, before anything is fetched. Acting

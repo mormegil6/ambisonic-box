@@ -531,11 +531,27 @@ INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 HANDOVER_S    = 4
 GSTATE  = DATA/"guest_state.json"
 GUESTCSV = DATA/"guest_sessions.csv"
+# Abuse reports (the player's report button). Same redaction regime as the
+# session log: rows persist as statistics, IP columns expire.
+REPORTCSV = DATA/"guest_reports.csv"
+REPORT_IP_MAX = 3            # accepted reports per reporter IP...
+REPORT_IP_WINDOW_S = 1800    # ...per this window
+REPORT_COOLDOWN_S = 900      # one alert per session per this window
+# A stalled guest transcode (wrong audio layout, most likely stereo/mono
+# OBS) is ended automatically this long after the handover if no playable
+# segment has appeared. Deliberately NO publish cooldown afterwards: the
+# commonest cause is an innocent misconfiguration the pusher should be able
+# to fix and retry immediately.
+GUEST_STALL_S = 45
 
 _guest_lock = threading.Lock()
 _guest = {"state": "free", "name": None, "addr": None, "start": None,
           "last_seen": None, "grace_started": None, "kill": False,
-          "terminating": None, "cooldown_until": None}
+          "terminating": None, "cooldown_until": None,
+          "reports": 0, "last_report_alert": None,
+          "last_end": None, "last_end_reason": None}
+_reporters = {}              # reporter ip -> [accepted-report epochs]
+_stall_timer = [None]
 _guest_timer = [None]      # the pending grace-expiry threading.Timer
 _resume_flag = [False]     # a resume attempt is owed (retried from guest_tick)
 _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint updates
@@ -628,10 +644,40 @@ def geo_cc(ip):
         return "--"
 
 
+def _redact_csv(path, ip_cols):
+    """Shared redactor: IP columns expire past the retention window, rows
+    stay as anonymised statistics."""
+    try:
+        if not path.exists():
+            return
+        cutoff = time.time() - GUEST_RETENTION_S
+        rows = path.read_text().splitlines()
+        out, changed = [], 0
+        for r in rows:
+            p = r.split(",")
+            try:
+                old = datetime.fromisoformat(p[0]).timestamp() < cutoff
+            except Exception:
+                old = False
+            if old:
+                for c in ip_cols:
+                    if len(p) > c and p[c] not in ("-", ""):
+                        p[c] = "-"; changed += 1
+            out.append(",".join(p))
+        if changed:
+            tmp = path.with_suffix(".csv.tmp")
+            tmp.write_text("\n".join(out) + "\n")
+            tmp.replace(path)
+            print(f"{path.name}: redacted {changed} IP field(s) past retention", flush=True)
+    except Exception:
+        pass
+
+
 def _guest_log_expire_ips():
     """Redact the IP column of rows older than the retention window; the rows
     themselves stay forever as anonymised statistics (timestamp, name,
     country, duration, end reason). Cheap: a few KB once per collect cycle."""
+    _redact_csv(REPORTCSV, [2, 4])     # publisher ip, reporter ip
     try:
         if not GUESTCSV.exists():
             return
@@ -689,6 +735,11 @@ def guest_public():
     cd = st.get("cooldown_until")
     if st["state"] == "free" and cd and now < cd:
         out["cooldown_s"] = round(cd - now)
+    # surfaced for 10 minutes so the pusher can see WHY their session ended
+    # (OBS reports a successful connection either way, so without this the
+    # commonest failure, wrong audio layout, is also the most confusing)
+    if st.get("last_end") and now - st["last_end"] < 600 and st.get("last_end_reason"):
+        out["last_end_reason"] = st["last_end_reason"]
     return out
 
 
@@ -721,13 +772,19 @@ def _guest_end_locked(reason):
     _guest_log(reason)
     if _guest_timer[0]:
         _guest_timer[0].cancel(); _guest_timer[0] = None
-    # forced endings arm the cooldown; a natural stop (grace expiry) does not
+    # forced endings arm the cooldown; a natural stop (grace expiry) does
+    # not, and neither does a stalled transcode: that is usually an innocent
+    # misconfiguration whose fix should be retryable immediately
     cooldown = (time.time() + GUEST_COOLDOWN_S
                 if reason in ("session cap", "operator kill") and GUEST_COOLDOWN_S > 0
                 else None)
+    if _stall_timer[0]:
+        _stall_timer[0].cancel(); _stall_timer[0] = None
     _guest.update(state="free", name=None, addr=None, start=None,
                   last_seen=None, grace_started=None, kill=False,
-                  terminating=None, cooldown_until=cooldown)
+                  terminating=None, cooldown_until=cooldown,
+                  reports=0, last_report_alert=None,
+                  last_end=time.time(), last_end_reason=reason)
     _guest_save()
     _resume_flag[0] = True
     print(f"guest session ended ({reason})"
@@ -879,6 +936,7 @@ def guest_publish(name, addr):
             return 201          # its session is already closing; nothing to hold
     print(f"guest publishing: {name} from {addr}"
           + (" (reconnect)" if resumed_session else ""), flush=True)
+    _guest_stall_arm()
     _refresh_pub_endpoint()
     return 201
 
@@ -923,7 +981,9 @@ def guest_update(name):
                 return 403
             _guest["last_seen"] = time.time()
             if _guest["kill"]:
-                _guest["terminating"] = "operator kill"
+                # never clobber a reason set by whoever armed the kill (the
+                # stall detector rides the same flag with its own reason)
+                _guest["terminating"] = _guest["terminating"] or "operator kill"
                 _guest_save()
                 return 403
             if _guest["start"] and time.time() - _guest["start"] > GUEST_MAX_S:
@@ -980,6 +1040,115 @@ def guest_kill():
         _resume_after_guest()
         return {"ok": True, "state": "ended"}
     return {"ok": True, "state": "free"}
+
+
+def _guest_stall_arm():
+    """One-shot check GUEST_STALL_S after a session goes live: if no playable
+    segment has appeared, the transcoder is stalled (in practice: the pusher
+    sent stereo/mono where 16-channel audio is required) and the session would
+    otherwise squat the slot for the full cap with nothing playing. End it and
+    surface the reason (drill finding: the commonest real failure was also the
+    most confusing, because OBS reports a successful connection)."""
+    if _stall_timer[0]:
+        _stall_timer[0].cancel()
+    def check():
+        with _guest_lock:
+            if _guest["state"] != "live":
+                return
+            age = segment_age()
+            if age is not None and age < SEG_STALE_S:
+                return              # segments flowing; healthy session
+            _guest["terminating"] = "no playable output (16-channel audio required)"
+            _guest["kill"] = True   # dropped at the next update ping
+            _guest_save()
+        print("guest transcode stalled; ending the session "
+              "(wrong audio layout is the usual cause)", flush=True)
+        telegram(f"guest stream '{_guest.get('name')}' ended automatically: "
+                 "no playable output (wrong audio layout?)")
+    t = threading.Timer(GUEST_STALL_S, check)
+    t.daemon = True
+    t.start()
+    _stall_timer[0] = t
+
+
+def guest_report(reporter_ip, reporter_cc):
+    """The player's report button. Rate limits: nginx already brakes per
+    viewer IP; here, at most REPORT_IP_MAX accepted per reporter IP per
+    window, and one Telegram alert per session per REPORT_COOLDOWN_S with an
+    escalating count. Reporter IPs land in guest_reports.csv under the same
+    30-day redaction as everything else."""
+    if not GUEST_ENABLED:
+        return 404, {"ok": False}
+    now = time.time()
+    with _guest_lock:
+        if _guest["state"] not in ("live", "handover", "grace"):
+            return 409, {"ok": False, "reason": "no active session"}
+        hits = [t for t in _reporters.get(reporter_ip, []) if now - t < REPORT_IP_WINDOW_S]
+        if len(hits) >= REPORT_IP_MAX:
+            return 429, {"ok": False, "reason": "already reported"}
+        hits.append(now)
+        _reporters[reporter_ip] = hits
+        _guest["reports"] += 1
+        n = _guest["reports"]
+        alert = (_guest["last_report_alert"] is None
+                 or now - _guest["last_report_alert"] > REPORT_COOLDOWN_S)
+        if alert:
+            _guest["last_report_alert"] = now
+        name, addr, start = _guest.get("name"), _guest.get("addr"), _guest.get("start")
+        _guest_save()
+    pub_cc = geo_cc(addr or "")
+    rep_cc = reporter_cc or geo_cc(reporter_ip or "")
+    try:
+        with open(REPORTCSV, "a") as f:
+            f.write(f"{now_iso()},{name},{addr},{pub_cc},{reporter_ip},{rep_cc},{1 if alert else 0}\n")
+    except Exception:
+        pass
+    if alert:
+        elapsed = dur_short(now - start) if start else "?"
+        started = datetime.fromtimestamp(start).astimezone().isoformat(timespec="seconds") if start else "?"
+        telegram(f"guest stream REPORTED: '{name}' from {addr} ({pub_cc}), "
+                 f"started {started}, running {elapsed}. "
+                 f"Reporter: {reporter_ip} ({rep_cc}). Reports so far: {n}. "
+                 f"Act on the :8090 dashboard (End session).")
+    return 200, {"ok": True, "reported": True}
+
+
+# Service restarts from the dashboard. Same trust boundary as /api/stop.
+# earshot is only offered TOGETHER with ingest: nginx-rtmp resolves the push
+# hostname once at startup, so a lone earshot restart silently breaks the
+# relay (the standing rule, now encoded rather than remembered).
+RESTARTABLE = {"rtmp-ingest": ["rtmp-ingest"],
+               "hoast-player": ["hoast-player"],
+               "telemetry": ["telemetry"],
+               "earshot-ingest": ["earshot", "rtmp-ingest"]}
+
+
+def _service_container(svc):
+    out = sh(f'docker ps -a --filter "label=com.docker.compose.project={PROJECT}" '
+             f'--filter "label=com.docker.compose.service={svc}" '
+             f'--filter "label=com.docker.compose.oneoff=False" --format "{{{{.Names}}}}"')
+    lines = [l for l in out.strip().splitlines() if l.strip()]
+    return lines[0] if lines else ""
+
+
+def restart_services(key):
+    plan = RESTARTABLE.get(key)
+    if not plan:
+        return {"ok": False, "error": "unknown service"}
+    names = [(_service_container(svc), svc) for svc in plan]
+    missing = [svc for (n, svc) in names if not n]
+    if missing:
+        return {"ok": False, "error": "container not found: " + ", ".join(missing)}
+    def do():
+        for n, svc in names:
+            sh(f"docker restart {n}", t=90)
+            print(f"dashboard restart: {svc} ({n})", flush=True)
+    if key == "telemetry":
+        # respond first, restart ourselves after the reply has left
+        threading.Timer(0.5, do).start()
+        return {"ok": True, "state": "restarting", "note": "telemetry back in ~10 s"}
+    do()
+    return {"ok": True, "state": "restarted", "services": plan}
 
 
 def _guest_boot():
@@ -1319,6 +1488,18 @@ def serve():
             # boundary as /api/stop: this port only.
             if p == "/api/guest/kill":
                 return self._json(200, guest_kill())
+            # Abuse report, proxied from the public player with the real
+            # reporter identity in headers (nginx cf-aware maps)
+            if p == "/api/guest/report":
+                code, body = guest_report(
+                    self.headers.get("X-Viewer-IP", self.client_address[0]),
+                    self.headers.get("X-Viewer-CC", ""))
+                return self._json(code, body)
+            # Dashboard service restarts (private port only). earshot ships
+            # only as the earshot-ingest pair; see RESTARTABLE.
+            if p == "/api/restart":
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                return self._json(200, restart_services((q.get("svc") or [""])[0]))
             return self._json(404, {"ok": False, "error": "not found"})
 
     with socketserver.ThreadingTCPServer(("", PORT), H) as srv:

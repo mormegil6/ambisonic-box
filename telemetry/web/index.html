@@ -106,6 +106,18 @@
     <button id="btnGuestKill" class="btn btn-stop" hidden>End session</button>
   </div>
 
+  <!-- Service restarts. Two-click confirm; earshot only ships paired with
+       ingest (a lone earshot restart silently breaks the relay: nginx-rtmp
+       resolves the push hostname once at startup). -->
+  <div class="ctl">
+    <span class="ctl-lbl">Restart</span>
+    <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
+    <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
+    <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
+    <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
+    <span class="ctl-msg" id="restartMsg"></span>
+  </div>
+
   <div class="grid">
     <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
     <div class="tile"><div class="k">Viewers now</div><div class="v" id="viewers">—</div><div class="s" id="viewersSub">&nbsp;</div></div>
@@ -252,6 +264,7 @@ async function tick(){
   catch(e){ $('updated').textContent = "unreachable"; $('updated').className="updated stale";
             $('statusDot').style.background=col('--dim'); return; }
 
+  window.__LAST_STATS__ = s;
   const healthy = s.all_healthy && (!s.alerts_active || s.alerts_active.length===0);
   $('statusDot').style.background = healthy ? col('--grn') : col('--red');
   $('host').textContent = s.host || "";
@@ -382,6 +395,39 @@ function wireCtl(id, path, verb){
 }
 wireCtl('btnStart', '/api/start', 'start');
 wireCtl('btnStop', '/api/stop', 'stop');
+
+// Service restarts: first click arms, second within 5 s confirms. The armed
+// label spells out consequences: a live guest session dies with the restart,
+// earshot+ingest drops the stream for ~40 s, telemetry goes dark for ~10 s.
+(function(){
+  var armed = null, timer = null;
+  function disarm(){ if(armed){ armed.textContent = armed.dataset.label; armed = null; }
+                     if(timer){ clearTimeout(timer); timer = null; } }
+  document.querySelectorAll('.rsvc').forEach(function(b){
+    b.dataset.label = b.textContent;
+    b.addEventListener('click', function(){
+      if (armed !== b) {
+        disarm();
+        var warn = 'confirm: restart ' + b.dataset.label;
+        var ep = window.__LAST_STATS__ && window.__LAST_STATS__.endpoint;
+        if (ep && (ep.state === 'live' || ep.state === 'handover')) warn += ' (kills the guest session)';
+        if (b.dataset.svc === 'earshot-ingest') warn += ' (stream restarts, ~40 s)';
+        if (b.dataset.svc === 'telemetry') warn += ' (dashboard back in ~10 s)';
+        b.textContent = warn;
+        armed = b;
+        timer = setTimeout(disarm, 5000);
+        return;
+      }
+      disarm();
+      $('restartMsg').textContent = 'restarting ' + b.dataset.svc + '...';
+      fetch('/api/restart?svc=' + b.dataset.svc, {method:'POST'}).then(r=>r.json())
+        .then(r=>{ $('restartMsg').textContent = r.ok ? (r.note || 'done') : ('failed: ' + (r.error||'')); tick(); })
+        .catch(e=>{ $('restartMsg').textContent = b.dataset.svc === 'telemetry'
+                      ? 'telemetry restarting (expected drop), back in ~10 s'
+                      : 'failed: ' + e.message; });
+    });
+  });
+})();
 
 // End the current guest session. Shares wireCtl's POST/feedback pattern but
 // writes into its own row so the loop-source message is not overwritten.

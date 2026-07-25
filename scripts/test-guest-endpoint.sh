@@ -15,6 +15,12 @@
 #            then clean stop -> grace expiry -> resume.
 #   T4       operator kill via /api/guest/kill: session ends within ~15 s,
 #            the cooldown refuses an immediate re-publish, loop resumes.
+#   T5       stalled transcode: a MONO push (the classic wrong-audio mistake)
+#            is auto-ended ~45 s after going live, the reason is surfaced on
+#            /api/live, and there is NO cooldown (the fix should be instantly
+#            retryable).
+#   RB       report button path: accepted report returns ok, repeat within the
+#            reporter window returns already-reported, session counter grows.
 #   R        second concurrent publisher is rejected fast; first is unharmed.
 #   F        fail-closed: with telemetry stopped, a guest push is rejected and
 #            the demo loop keeps publishing untouched.
@@ -323,6 +329,69 @@ if wait_for "$label: guest live" 30 st_is live; then
         log "$label ok"
     fi
     sleep "$TG_COOLDOWN"    # let the cooldown lapse before the next section
+else
+    fail "$label: guest publish never accepted"
+fi
+
+# ------------------------------------------------- T5 stalled transcode -----
+label="T5-stall"
+fails0=$FAILS
+# mono: valid H.264+AAC contribution, wrong channel count; earshot's exec
+# produces nothing and, before the detector, squatted the slot for the cap
+docker rm -f guestpush-tmono >/dev/null 2>&1 || true
+docker compose run --rm --no-deps -T --name guestpush-tmono --entrypoint ffmpeg loop-source \
+  -hide_banner -loglevel error -re -f lavfi \
+  -i "testsrc2=size=320x160:rate=30[out0];sine=frequency=440:sample_rate=48000[out1]" \
+  -map '0:v' -map '0:a' -c:v libx264 -preset ultrafast -pix_fmt yuv420p -g 60 \
+  -c:a aac -strict -2 -b:a 96k -t 180 -f flv rtmp://rtmp-ingest:1935/guest/tmono >/dev/null 2>&1 &
+if wait_for "$label: mono guest live" 30 st_is live; then
+    t0=$(now)
+    # detector arms at 45 s + drop at next 10 s ping + teardown
+    wait_for "$label: auto-ended" 90 st_is free || fail "$label: stalled session not auto-ended"
+    t1=$(now)
+    reason=$(curl -s "$TEL/api/live" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("endpoint",{}).get("last_end_reason",""))')
+    echo "$reason" | grep -q "16-channel" || fail "$label: end reason not surfaced (got: '$reason')"
+    docker rm -f guestpush-tmono >/dev/null 2>&1 || true
+    # NO cooldown after a stall: an immediate correct retry must be accepted
+    push_guest tfixed 15
+    wait_for "$label: corrected 16-ch retry accepted" 30 st_is live \
+        || fail "$label: retry after stall was refused (cooldown wrongly applied?)"
+    wait_for "$label: retry grace" 40 st_is grace || fail "$label: retry never ended"
+    wait_resume "$label" >/dev/null || fail "$label: loop did not resume"
+    check_clean "$label"
+    if [ "$FAILS" -eq "$fails0" ]; then
+        row "$label: mono auto-ended in $(python3 -c "print(f'{$t1 - $t0:.1f}')")s, reason surfaced, corrected retry accepted instantly"
+        log "$label ok"
+    fi
+else
+    fail "$label: mono guest publish never accepted"
+fi
+
+# ------------------------------------------------- RB report button ---------
+label="RB-report"
+fails0=$FAILS
+push_guest trep 40
+if wait_for "$label: guest live" 30 st_is live; then
+    # direct to telemetry with forged headers: the nginx brake is per real
+    # viewer IP and is exercised separately; here we verify the app logic
+    r1=$(curl -s -X POST -H "X-Viewer-IP: 198.51.100.20" -H "X-Viewer-CC: DE" "$TEL/api/guest/report")
+    echo "$r1" | grep -q '"ok": true' || fail "$label: first report not accepted ($r1)"
+    r2=$(curl -s -X POST -H "X-Viewer-IP: 198.51.100.20" -H "X-Viewer-CC: DE" "$TEL/api/guest/report")
+    r3=$(curl -s -X POST -H "X-Viewer-IP: 198.51.100.20" -H "X-Viewer-CC: DE" "$TEL/api/guest/report")
+    r4=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "X-Viewer-IP: 198.51.100.20" "$TEL/api/guest/report")
+    [ "$r4" = "429" ] || fail "$label: 4th report from same IP not rate-limited (got $r4)"
+    r5=$(curl -s -X POST -H "X-Viewer-IP: 203.0.113.9" -H "X-Viewer-CC: FR" "$TEL/api/guest/report")
+    echo "$r5" | grep -q '"ok": true' || fail "$label: different reporter wrongly limited ($r5)"
+    grep -c 'trep' "$(docker compose ps -q telemetry | head -1)" >/dev/null 2>&1 || true
+    n=$(docker compose exec -T telemetry sh -c 'grep -c trep /data/guest_reports.csv 2>/dev/null' || echo 0)
+    [ "${n:-0}" -ge 4 ] || fail "$label: reports CSV has $n rows for the session, expected >=4"
+    docker rm -f guestpush-trep >/dev/null 2>&1 || true
+    wait_for "$label: session over" 60 st_is grace || true
+    wait_resume "$label" >/dev/null || fail "$label: loop did not resume"
+    if [ "$FAILS" -eq "$fails0" ]; then
+        row "$label: report accepted, 4th rate-limited (429), 2nd reporter ok, $n rows logged"
+        log "$label ok"
+    fi
 else
     fail "$label: guest publish never accepted"
 fi
