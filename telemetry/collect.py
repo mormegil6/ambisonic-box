@@ -1432,17 +1432,17 @@ def codec_name(c):
 def telegram(msg):
     if not BOT or not CHAT:
         return
-    # Clients only auto-linkify public-TLD hostnames, so a bare
-    # http://example-host:8090/ stays plain text. An explicit HTML anchor
-    # becomes a text_link entity and renders as a link regardless of the
-    # hostname. parse_mode=HTML means the message body must be escaped.
-    import html as _html
-    text = _html.escape(msg)
-    _h = os.environ.get("TEL_HOST", "")
-    if _h and "8090" not in msg:
-        text = f'{text}\n<a href="http://{_h}:8090/">{_h} dashboard</a>'
-    data = urllib.parse.urlencode({"chat_id": CHAT, "text": text,
-                                   "parse_mode": "HTML"}).encode()
+    # Dashboard link tail. Telegram only auto-linkifies hostnames with a
+    # real TLD (IPs work, bare "example-host" never does), so deployments
+    # set TEL_DASH_URL to a resolvable full URL (e.g. the Tailscale MagicDNS
+    # name); plain text needs no parse_mode and nothing to escape.
+    tail = os.environ.get("TEL_DASH_URL", "")
+    if not tail:
+        _h = os.environ.get("TEL_HOST", "")
+        tail = f"http://{_h}:8090/" if _h else ""
+    if tail and "8090" not in msg:
+        msg = f"{msg}\n{tail}"
+    data = urllib.parse.urlencode({"chat_id": CHAT, "text": msg}).encode()
     try:
         urllib.request.urlopen(f"https://api.telegram.org/bot{BOT}/sendMessage", data=data, timeout=10)
     except Exception:
