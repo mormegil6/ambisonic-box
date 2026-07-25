@@ -5,28 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spatial audio capability check</title>
   <style>
-    :root { --ok:#0b8a43; --bad:#c62828; --dim:#666; }
-    body { margin:0; padding:22px 18px 60px; font:17px/1.55 -apple-system, BlinkMacSystemFont,
-           "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:#1c1c1c; background:#fff; }
+    /* All theming via variables so rule order cannot mix light and dark:
+       the dark block only reassigns variables. */
+    :root { --ok:#0b8a43; --bad:#c62828; --dim:#666;
+            --bg:#fff; --fg:#1c1c1c; --card-bg:#fafafa; --card-border:#ddd;
+            --btn-bg:#f2f2f2; --btn-border:#bbb; --verdict-bg:#eee; }
     @media (prefers-color-scheme: dark) {
-      body { background:#161616; color:#e8e8e8; } .card { background:#222; border-color:#3a3a3a; }
-      :root { --dim:#aaa; }
+      :root { --dim:#aaa; --bg:#161616; --fg:#e8e8e8; --card-bg:#222;
+              --card-border:#3a3a3a; --btn-bg:#2c2c2c; --btn-border:#484848;
+              --verdict-bg:#242424; }
     }
+    body { margin:0; padding:22px 18px 60px; font:17px/1.55 -apple-system, BlinkMacSystemFont,
+           "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--fg); background:var(--bg); }
     main { max-width:640px; margin:0 auto; }
     h1 { font-size:24px; margin:0 0 6px; }
     .sub { color:var(--dim); font-size:15px; margin:0 0 18px; }
     .verdict { font-size:21px; font-weight:700; padding:14px 16px; border-radius:10px;
-               margin:0 0 18px; background:#eee; }
-    .verdict.ok { background:rgba(11,138,67,.12); color:var(--ok); }
-    .verdict.bad { background:rgba(198,40,40,.12); color:var(--bad); }
-    .card { border:1px solid #ddd; border-radius:10px; padding:12px 16px; margin:0 0 12px;
-            background:#fafafa; }
+               margin:0 0 18px; background:var(--verdict-bg); }
+    .verdict.ok { background:rgba(11,138,67,.14); color:var(--ok); }
+    .verdict.bad { background:rgba(198,40,40,.14); color:var(--bad); }
+    .card { border:1px solid var(--card-border); border-radius:10px; padding:12px 16px;
+            margin:0 0 12px; background:var(--card-bg); color:var(--fg); }
     .card b { font-size:16.5px; }
     .ok { color:var(--ok); } .bad { color:var(--bad); }
     .detail { color:var(--dim); font-size:14.5px; word-break:break-word; }
-    button { font:600 17px inherit; padding:12px 22px; border-radius:10px; border:1px solid #bbb;
-             background:#f2f2f2; color:inherit; width:100%; margin-top:8px; cursor:pointer; }
-    @media (prefers-color-scheme: dark) { button { background:#2c2c2c; border-color:#484848; } }
+    button { font:600 17px inherit; padding:12px 22px; border-radius:10px;
+             border:1px solid var(--btn-border); background:var(--btn-bg); color:inherit;
+             width:100%; margin-top:8px; cursor:pointer; }
     button:active { opacity:.7; }
     #copyBtn.done { border-color:var(--ok); color:var(--ok); }
     pre { white-space:pre-wrap; word-break:break-word; font-size:12.5px; color:var(--dim);
@@ -68,7 +73,7 @@ function render(out) {
     var b1 = document.createElement('b'); b1.textContent = title + ': ';
     var b2 = document.createElement('b');
     b2.className = ok === true ? 'ok' : ok === false ? 'bad' : '';
-    b2.textContent = ok === true ? 'works' : ok === false ? 'FAILED' : String(ok);
+    b2.textContent = ok === true ? 'works' : ok === false ? 'FAILED' : '';
     var d = document.createElement('div'); d.className = 'detail'; d.textContent = detail || '';
     el.appendChild(b1); el.appendChild(b2); el.appendChild(d);
     cards.appendChild(el);
@@ -87,7 +92,7 @@ function render(out) {
       p.managedMediaSource.present
         ? 'audio/webm opus: ' + p.managedMediaSource.webmOpus + ' | audio/mp4 opus: ' + p.managedMediaSource.mp4Opus
         : 'not present in this browser');
-  add('Audio output channels (this device)', undefined, 'maxChannelCount: ' + p.maxChannelCount);
+  add('Audio output channels (this device)', null, 'maxChannelCount: ' + p.maxChannelCount);
 
   var v = document.getElementById('verdict');
   var canDecode = p.opus16.ok;
