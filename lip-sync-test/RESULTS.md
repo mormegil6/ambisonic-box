@@ -17,9 +17,9 @@
 | Variant | baked-in A-V start offset | audio PTO (Opus pre-skip) | A/V drift over 20 s |
 |---|---|---|---|
 | 0.5 s | 0.000 ms | 7 ms (uniform) | none |
-| 1 s | 0.000 ms | 7 ms (uniform) | none |
-| 2 s | 0.000 ms | 7 ms (uniform) | none |
-| 4 s | 0.000 ms | 7 ms (uniform) | none |
+| 1 s   | 0.000 ms | 7 ms (uniform) | none |
+| 2 s   | 0.000 ms | 7 ms (uniform) | none |
+| 4 s   | 0.000 ms | 7 ms (uniform) | none |
 
 **Segment duration does not measurably affect A/V sync** in the combined-MPD path: audio and video share one media element clock under MSE, Shaka preserved timestamps exactly (0.000 ms start offset everywhere), and the only nonzero timing term - `presentationTimeOffset="7000"` (7 ms, timescale 10^6) on audio - is the standard Opus codec-delay compensation, identical in all variants. Per-track buffer fill stayed bounded (audio <= ~2 s ahead of video, no growth), i.e. fill granularity, not drift.
 
@@ -28,9 +28,9 @@
 | Variant | 90 s package size | effective video bitrate | stalls (typ.) | mean video buffer |
 |---|---|---|---|---|
 | 0.5 s | 465 MB | ~43 Mbps | 2-4 | 0.4-0.6 s |
-| 1 s | 125 MB | ~11 Mbps | 1 | 3-5 s |
-| 2 s | 87 MB | ~7.5 Mbps | 1 | 9-12 s |
-| 4 s | 69 MB | ~5.8 Mbps | 1 | 15-20 s |
+| 1 s   | 125 MB | ~11 Mbps | 1 | 3-5 s |
+| 2 s   |  87 MB | ~7.5 Mbps | 1 | 9-12 s |
+| 4 s   |  69 MB | ~5.8 Mbps | 1 | 15-20 s |
 
 ![Segment-duration trade-off: bitrate and buffer depth vs segment duration](segment-tradeoff.png)
 
