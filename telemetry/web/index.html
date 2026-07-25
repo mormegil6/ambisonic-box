@@ -280,6 +280,16 @@ async function tick(){
   catch(e){ $('updated').textContent = "unreachable"; $('updated').className="updated stale";
             $('statusDot').style.background=col('--dim'); return; }
 
+  // stats.json is a once-per-collect-cycle snapshot (up to 60 s old), which
+  // froze the guest countdowns and let ended sessions linger here for up to
+  // a minute. /api/live computes endpoint state per request; overlay it,
+  // keeping stats-only private fields (addr) from the snapshot.
+  try {
+    const ld = await (await fetch("api/live?_="+Date.now(), {cache:"no-store"})).json();
+    if (ld && ld.endpoint) s.endpoint = { ...(s.endpoint||{}), ...ld.endpoint };
+    else if (ld && !ld.endpoint) delete s.endpoint;
+  } catch(e) {}
+
   window.__LAST_STATS__ = s;
   const noAlerts = !s.alerts_active || s.alerts_active.length===0;
   const healthy = s.all_healthy && noAlerts;
