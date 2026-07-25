@@ -90,7 +90,7 @@ video early by the same amount. These two directives start the relayed video at
 a keyframe and hold audio until video flows, so the tracks start together and no
 edit box is written at all. Measured: empty edits on 10/10 joins without them,
 `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 with them. See
-`docs/PAPER-NOTES.md` §12.
+the measurement notes being written up for publication (see the top-level README, Documentation).
 
 ### 5. `entrypoint.sh` + both nginx confs: `DASH_NAME` default and validation
 

@@ -40,7 +40,7 @@ end yet; the components are proven, the integration is not. Raising the *live*
 path is a different matter - it needs a contribution format that can carry 25
 channels (a wider-layout AAC encoder, or moving ingest off RTMP to SRT/WebRTC
 with Opus), which is architectural rather than configuration. See
-[docs/PAPER-NOTES.md](docs/PAPER-NOTES.md) §15 for the measurements.
+the measurement notes (below, Documentation) for the numbers behind this.
 
 **Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single
 source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a
@@ -244,7 +244,7 @@ this repo generates) emits the directions pair.
 
 The player side-loads these as native `<track>` elements rather than reading a
 DASH `text` AdaptationSet, which renders unreliably through videojs-contrib-dash
-(see [docs/PAPER-NOTES.md](docs/PAPER-NOTES.md) §14). `services/hoast-player/nginx.conf`
+(measured; see the note on the measurement notes under Documentation). `services/hoast-player/nginx.conf`
 must therefore type `.vtt` as `text/vtt` in the `/vod-dash/` location; the
 default `application/octet-stream` makes stricter browsers refuse the track.
 
@@ -330,7 +330,7 @@ and adjust. The base stack runs without it.
 
 ## Documentation
 
-- [docs/PAPER-NOTES.md](docs/PAPER-NOTES.md): measured results from the live path (transcode thermals, codec constraints, 360 complexity, AV1 viability)
+- Measurement notes: the detailed measured results behind this README (transcode thermals, codec constraints, segment-duration trade-offs, A/V-sync mechanism, AV1 viability) are being written up for publication and are deliberately not in the repo. This README will carry the citation and the tagged commit once the papers are out.
 - [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches

@@ -46,7 +46,7 @@ video element / drawing buffer / decoded video-frame dimensions, aspect, and
 issues, and because it needs no dev console it is the way to read that state on a
 phone. It does not affect playback and is off by default.
 
-Audio-path flags (see `docs/PAPER-NOTES.md` §12 for the mechanism). The player
+Audio-path flags (mechanism measured in the publication notes; see the README's Documentation section). The player
 compensates for a video edit list Chromium's MSE ignores by driving the audio
 itself (the SegmentAudioFeed), on **desktop Chromium** only; Firefox and mobile
 use the legacy element audio.

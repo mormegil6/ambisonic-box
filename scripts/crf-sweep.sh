@@ -4,9 +4,9 @@
 # Encodes one segment of a source at a list of CRF values and reports the
 # resulting video bitrate + size, plus the delivery bitrate once the 16-channel
 # Opus track (1024 kbit/s, mapping_family 255) is added. This regenerates the
-# data behind docs/PAPER-NOTES.md section 7 ("Perceived quality is capture-bound,
+# data behind the capture-bound quality finding in the publication notes ("Perceived quality is capture-bound,
 # not bitrate-bound"), so the raw encodes never need to be kept: run it, read the
-# table, record the conclusion in PAPER-NOTES, delete the out-dir.
+# table, record the conclusion in the publication notes (kept outside the repo until published), delete the out-dir.
 #
 # Perceptual assessment is manual and in the target player, in the viewport (a
 # viewer sees ~1/8 of the equirect frame magnified) - not a VMAF number. The
@@ -28,7 +28,7 @@ ENC="${4:-libx264}"
 SCALE="${5:-4096:2048}"
 SECS="${6:-60}"
 SS="${7:-0}"
-OPUS_KBPS=1024                 # 16-ch Opus, mapping_family 255 (see PAPER-NOTES section 7)
+OPUS_KBPS=1024                 # 16-ch Opus, mapping_family 255 (rationale in the publication notes)
 
 case "$ENC" in
   libx264|libx265) PRESET="-preset medium" ;;
@@ -54,4 +54,4 @@ for crf in $CRFS; do
 done
 echo
 echo "Assess perceptually in the player, in the viewport. Then record the finding"
-echo "in docs/PAPER-NOTES.md and delete $OUT/ - the numbers, not the files, are the artefact."
+echo "in the publication notes and delete $OUT/ - the numbers, not the files, are the artefact."

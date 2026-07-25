@@ -1,7 +1,7 @@
 # tests/av-sync/ - browser A/V-sync measurement tools
 
 Console-pasted instruments built during the DASH A/V-desync investigation
-(see `docs/PAPER-NOTES.md`, section 12). Open the HOAST360 player page and paste
+(measured for publication; the top-level README's Documentation section will carry the citation). Open the HOAST360 player page and paste
 one of these into the browser console. They need the colour+tone A/V-sync clip
 (generate it with `scripts/make-colortones.sh`) playing.
 
