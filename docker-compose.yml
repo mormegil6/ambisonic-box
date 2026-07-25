@@ -99,30 +99,27 @@ services:
 
   loop-source:
     # reuses the earshot image: Envelop's PCE-aware ffmpeg guarantees the
-    # 16-ch AAC headers earshot decodes, with the same multi-arch story
+    # 16-ch AAC headers earshot decodes, with the same multi-arch story.
+    # Entrypoint logic lives in services/loop-source/ (mounted): demo-content
+    # policy (synthesise a spherical placeholder when demo.mp4 is missing,
+    # fetch the VOD masters from the pinned release), then the -c copy loop.
     image: hoa360-earshot:local
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        if [ ! -f /content/demo.mp4 ]; then
-          echo "[loop-source] /content/demo.mp4 not found - idling."
-          echo "[loop-source] Prepare it once from your master recording (H.264 + 16-ch AAC),"
-          echo "[loop-source] see .env.example for the exact command."
-          exec sleep 2147483647
-        fi
-        # Publish under a fixed, non-secret stream name (${DASH_NAME:-hoast_demo})
-        # and pass STREAM_KEY as ?token= instead of using the key AS the stream
-        # name. rtmp-ingest accepts either, but a clean name keeps the secret out
-        # of the RTMP publish/relay log lines (which print the stream name); the
-        # token itself is suppressed by access_log off on the /auth location.
-        echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo} (token auth)"
-        exec ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -i /content/demo.mp4 \
-          -c copy -f flv "rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo}?token=$${STREAM_KEY}"
+    entrypoint: ["/bin/sh", "/opt/loop-source/entrypoint.sh"]
     environment:
       - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+      # Demo content, ON by default: synthesise content/demo.mp4 in-container
+      # when missing (no network involved) and fetch the two VOD reference
+      # masters from the pinned vod-clips-v1 release (~373 MB once, background,
+      # SHA-256-pinned, fail-soft). 0 = neither: the loop idles until you
+      # provide content/demo.mp4 yourself.
+      - DEMO_CONTENT=${DEMO_CONTENT:-1}
+      # Release base override; used by the test harness with a fixture server
+      - DEMO_BASE_URL=${DEMO_BASE_URL:-}
     volumes:
-      - ./content:/content:ro
+      # rw: the entrypoint writes the synthesised demo.mp4 and the fetched
+      # VOD masters here (was ro when loop-source only ever read demo.mp4)
+      - ./content:/content
+      - ./services/loop-source:/opt/loop-source:ro
     depends_on:
       rtmp-ingest:
         condition: service_healthy

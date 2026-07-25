@@ -93,11 +93,14 @@ docker compose up -d --build
 # (Earshot monitor: http://localhost:8081/webtools)
 ```
 
-Without `content/demo.mp4` the stack still runs and you can push to it live
-(next section), or synthesise a placeholder loop with
-`scripts/make-demo-loop.sh` (testsrc2 video + a 16-channel sine bed, one
-pitch per channel). `loop-source` checks for the file once at startup. If you
-add `demo.mp4` later, run `docker compose restart loop-source`.
+Without `content/demo.mp4` the stack still demos itself: on first start
+loop-source synthesises a spherical placeholder in-container (black sphere
+with a test-pattern screen at the front, and a 440 Hz source orbiting the
+listener in 3rd-order Ambisonics, so looking around audibly works) and
+fetches the two `/vod/` reference masters from the pinned `vod-clips-v1`
+release (~373 MB once, background, SHA-256 verified, fail-soft). Set
+`DEMO_CONTENT=0` to do neither, or replace `content/demo.mp4` with a real
+master any time (`docker compose restart loop-source` picks it up).
 
 ## Stream your own content
 

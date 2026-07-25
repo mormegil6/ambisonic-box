@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Synthesise a placeholder content/demo.mp4 so loop-source has something to
-# publish: ffmpeg's testsrc2 pattern + a 16-channel AAC (PCE) bed of sines,
-# 200..1700 Hz, one per channel in the hexadecagonal layout, so every
-# ambisonic channel carries its own identifiable pitch.
+# Synthesise the spherical placeholder demo loop: a black equirectangular
+# sphere with the testsrc2 pattern as a ~90x45 degree screen at the front, and
+# ONE 440 Hz source encoded to 3rd-order Ambisonics (SN3D/ACN) orbiting the
+# listener with an elevation wobble, so the HOA rendering is audibly real.
 #
-# This is a stand-in for deployments without a real master recording (and the
-# pre-flight of scripts/test-guest-endpoint.sh); it is NOT the reference
-# content. For a real demo loop prepare a proper H.264 + 16-ch AAC master
-# instead (.env.example, "Demo content").
+# The graph is shared with the loop-source entrypoint (which synthesises the
+# same file in-container when DEMO_CONTENT=1 and demo.mp4 is missing), so this
+# utility and a fresh deployment produce the identical file. This is a
+# stand-in, not the reference content; for a real demo loop prepare a proper
+# H.264 + 16-ch AAC master instead (.env.example, "Demo content").
 #
 # Uses the earshot image's ffmpeg: the 16-channel AAC needs its PCE-aware
-# build, stock ffmpeg will not write those headers. Builds the image first if
-# it is missing.
+# build. Builds the image first if it is missing.
 #
 # Usage: scripts/make-demo-loop.sh [-o OUT] [-t SECONDS] [--force]
-#   defaults: content/demo.mp4, 60 s. Refuses to overwrite without --force,
-#   so it can never clobber a real master by accident.
+#   defaults: content/demo.mp4, 60 s. Durations that are multiples of 30 s
+#   loop seamlessly (orbit, wobble and carrier all complete integer cycles).
+#   Refuses to overwrite without --force, so it can never clobber a real
+#   master by accident.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -35,25 +37,22 @@ if [ -f "$OUT" ] && [ "$FORCE" != "1" ]; then
     echo "[make-demo-loop] $OUT exists; use --force to overwrite" >&2
     exit 1
 fi
+if [ $((SECS % 30)) -ne 0 ]; then
+    echo "[make-demo-loop] note: $SECS s is not a multiple of 30; the loop point will have a small spatial jump" >&2
+fi
 
-# one lavfi graph: testsrc2 video + 16 sines joined as a hexadecagonal bed
-GRAPH="testsrc2=size=640x320:rate=30[out0];"
-LABELS=""
-for i in $(seq 0 15); do
-    GRAPH="${GRAPH}sine=frequency=$((200 + i * 100)):sample_rate=48000[s$i];"
-    LABELS="${LABELS}[s$i]"
-done
-GRAPH="${GRAPH}${LABELS}join=inputs=16:channel_layout=hexadecagonal[out1]"
+DEMO_DUR=$SECS
+. services/loop-source/demo-graph.sh
 
 docker image inspect hoa360-earshot:local >/dev/null 2>&1 \
     || docker compose build earshot
 
 OUTDIR=$(cd "$(dirname "$OUT")" && pwd)
 OUTNAME=$(basename "$OUT")
+# shellcheck disable=SC2086   # DEMO_ENC word-splitting is intentional
 docker run --rm -v "$OUTDIR:/outdir" --entrypoint ffmpeg hoa360-earshot:local \
-    -hide_banner -loglevel error -y -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
-    -c:v libx264 -preset veryfast -pix_fmt yuv420p -b:v 1M -g 60 -keyint_min 60 \
-    -c:a aac -strict -2 -ac 16 -b:a 512k -t "$SECS" -movflags +faststart \
-    "/outdir/$OUTNAME"
+    -hide_banner -loglevel error -y \
+    -filter_complex "$DEMO_GRAPH" -map '[out0]' -map '[out1]' \
+    $DEMO_ENC -t "$SECS" "/outdir/$OUTNAME"
 
-echo "[make-demo-loop] wrote $OUT (${SECS}s, testsrc2 + 16-ch AAC PCE sine bed)"
+echo "[make-demo-loop] wrote $OUT (${SECS}s: black sphere + front test screen, orbiting 3OA tone)"
