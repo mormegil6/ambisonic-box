@@ -87,12 +87,17 @@ RUN cd /tmp/FFmpeg-${FFMPEG_VERSION} && \
   sed -i "/suggestedPresentationDelay=/s|c->last_duration / AV_TIME_BASE|FFMAX(c->last_duration / AV_TIME_BASE, ${DASH_SPD_FLOOR})|" libavformat/dashenc.c && \
   grep -F "FFMAX(c->last_duration / AV_TIME_BASE, ${DASH_SPD_FLOOR})" libavformat/dashenc.c
 
+# --enable-nonfree gates GPL-incompatible libraries (e.g. libfdk_aac); this build
+# links none of them, so the flag is a no-op that only marks the binary
+# non-redistributable. Default on (behaviour unchanged); ENABLE_NONFREE=0 drops
+# it for a redistributable build.
+ARG ENABLE_NONFREE=1
 # Compile ffmpeg.
 RUN cd /tmp/FFmpeg-${FFMPEG_VERSION} && \
    ./configure \
    --enable-version3 \
    --enable-gpl \
-   --enable-nonfree \
+   $( [ "${ENABLE_NONFREE}" = "1" ] && printf '%s' '--enable-nonfree' ) \
    --enable-small \
    --enable-libx264 \
    --enable-libopus \
