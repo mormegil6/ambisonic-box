@@ -286,6 +286,68 @@ function sparkline(svg, vals, color){
   return "max "+Math.round(hi);   // for the caption row, not the plot
 }
 
+function renderReachDone(){}
+
+// Reachability chips (rendered only when the deployment runs the probes),
+// each with a re-check button that fires both probes immediately instead of
+// waiting out the collect cycle.
+function renderReach(s){
+  const sec = $('reachSec'), tc = $('tunnelChip'), vc = $('vodOriginChip'), vh = $('vodOriginHint');
+  if (!sec) return;
+  const tn = s.tunnel, vo = s.vod_origin;
+  if (!tn && !vo) { sec.hidden = true; return; }
+  sec.hidden = false;
+  function probeBtn(){
+    const b = document.createElement('button');
+    b.className = 'rsv'; b.title = 're-check now'; b.innerHTML = '&#x21bb;';
+    b.addEventListener('click', function(ev){
+      ev.stopPropagation(); b.disabled = true;
+      fetch('/api/probe', {method:'POST'}).then(r=>r.json()).then(function(r){
+        const cur = window.__LAST_STATS__ || {};
+        if (r.tunnel) cur.tunnel = r.tunnel;
+        if (r.vod_origin) cur.vod_origin = r.vod_origin;
+        renderReach(cur);
+      }).catch(function(){ b.disabled = false; });
+    });
+    return b;
+  }
+  if (tc) {
+    tc.hidden = !tn;
+    if (tn) {
+      tc.textContent = '';
+      const d = document.createElement('span'); d.className = 'dot';
+      d.style.background = tn.connected ? col('--grn') : (tn.connected === false ? col('--red') : col('--amb'));
+      tc.appendChild(d);
+      tc.appendChild(document.createTextNode('tunnel '));
+      const st = document.createElement('span'); st.style.color = col('--dim');
+      st.textContent = tn.connected
+        ? 'connected · ' + tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
+        : (tn.connected === false ? 'DISCONNECTED' : 'metrics unreachable');
+      tc.appendChild(st);
+      tc.appendChild(probeBtn());
+    }
+  }
+  if (vc) {
+    vc.hidden = !vo;
+    if (vo) {
+      vc.textContent = '';
+      const d = document.createElement('span'); d.className = 'dot';
+      d.style.background = vo.ok ? col('--grn') : col('--red');
+      vc.appendChild(d);
+      vc.appendChild(document.createTextNode('VOD origin (R2) '));
+      const st = document.createElement('span'); st.style.color = col('--dim');
+      st.textContent = (vo.ok ? 'reachable' : 'UNREACHABLE (HTTP ' + (vo.code || 'no route/DNS') + ')')
+        + ' · checked ' + (vo.checked || '').slice(11, 19);
+      vc.appendChild(st);
+      vc.appendChild(probeBtn());
+    }
+  }
+  if (vh) {
+    vh.hidden = !(vo && !vo.ok);
+    if (vo && !vo.ok) vh.textContent = 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.';
+  }
+}
+
 async function tick(){
   let s;
   try{ s = await (await fetch("stats.json?_="+Date.now(),{cache:"no-store"})).json(); }
@@ -344,46 +406,9 @@ async function tick(){
   if (gb) gb.hidden = !(ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace'));
   renderBans(s);
 
-  // reachability chips (only when the deployment runs the probes)
-  (function(){
-    const sec = $('reachSec'), tc = $('tunnelChip'), vc = $('vodOriginChip'), vh = $('vodOriginHint');
-    const tn = s.tunnel, vo = s.vod_origin;
-    if (!tn && !vo) { sec.hidden = true; return; }
-    sec.hidden = false;
-    if (tc) {
-      tc.hidden = !tn;
-      if (tn) {
-        tc.textContent = '';
-        const d = document.createElement('span'); d.className = 'dot';
-        d.style.background = tn.connected ? col('--grn') : (tn.connected === false ? col('--red') : col('--amb'));
-        tc.appendChild(d);
-        tc.appendChild(document.createTextNode('tunnel '));
-        const st = document.createElement('span'); st.style.color = col('--dim');
-        st.textContent = tn.connected
-          ? 'connected · ' + tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
-          : (tn.connected === false ? 'DISCONNECTED' : 'metrics unreachable');
-        tc.appendChild(st);
-      }
-    }
-    if (vc) {
-      vc.hidden = !vo;
-      if (vo) {
-        vc.textContent = '';
-        const d = document.createElement('span'); d.className = 'dot';
-        d.style.background = vo.ok ? col('--grn') : col('--red');
-        vc.appendChild(d);
-        vc.appendChild(document.createTextNode('VOD origin (R2) '));
-        const st = document.createElement('span'); st.style.color = col('--dim');
-        st.textContent = (vo.ok ? 'reachable' : 'UNREACHABLE (HTTP ' + (vo.code || 'timeout') + ')')
-          + ' · checked ' + (vo.checked || '').slice(11, 19);
-        vc.appendChild(st);
-      }
-    }
-    if (vh) {
-      vh.hidden = !(vo && !vo.ok);
-      if (vo && !vo.ok) vh.textContent = 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.';
-    }
-  })();
+  renderReach(s);
+
+  renderReachDone();
 
   // stream tile
   const live = s.stream && s.stream.live;

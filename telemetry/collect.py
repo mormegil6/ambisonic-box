@@ -1762,6 +1762,11 @@ def serve():
                 return self._json(code, body)
             # Dashboard service restarts (private port only). earshot ships
             # only as the earshot-ingest pair; see RESTARTABLE.
+            # on-demand reachability re-check (dashboard button): runs both
+            # probes now and returns fresh results without waiting a cycle
+            if p == "/api/probe":
+                return self._json(200, {"tunnel": tunnel_probe(),
+                                        "vod_origin": vod_origin_probe()})
             if p == "/api/restart":
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 return self._json(200, restart_services((q.get("svc") or [""])[0]))
