@@ -86,8 +86,14 @@ function runTest() {
   var el = document.createElement('video');
   el.setAttribute('playsinline', '');
   el.disableRemotePlayback = true;      // REQUIRED for MMS in WebKit
-  el.style.display = 'none';
+  el.loop = true;                       // 1 s asset: loop it so the analysers
+                                        // sample DURING playback, not after it
+  // rendered but offscreen: display:none media is throttled in WebKit
+  el.style.cssText = 'position:fixed;left:-9999px;width:2px;height:2px;opacity:0';
   document.body.appendChild(el);
+  ['playing', 'waiting', 'stalled', 'ended', 'error'].forEach(function (evn) {
+    el.addEventListener(evn, function () { log('element event', evn + ' (t=' + el.currentTime.toFixed(2) + ')'); });
+  });
 
   // Audio graph BEFORE play (we are inside the user gesture): element ->
   // splitter -> 32 analysers, plus a near-silent monitor so iOS keeps the
@@ -95,7 +101,10 @@ function runTest() {
   // path needs a real context.
   var AC = window.AudioContext || window.webkitAudioContext;
   var ctx = new AC();
-  log('AudioContext state', ctx.state);
+  // resume INSIDE the user gesture: WebKit keeps the context suspended
+  // otherwise and play() on a captured element then hangs forever
+  ctx.resume().then(function () { log('AudioContext state', ctx.state); },
+                    function (e) { log('AudioContext resume failed', e.message); });
   var src;
   try { src = ctx.createMediaElementSource(el); }
   catch (e) { return verdict(false, 'createMediaElementSource failed: ' + e.message); }
@@ -127,8 +136,17 @@ function runTest() {
           sb.removeEventListener('updateend', done);
           try { ms.endOfStream(); } catch (e) {}
           log('appended', 'endOfStream');
-          el.play().then(function () { log('play', 'started'); setTimeout(measure, 1200); },
-                         function (e) { verdict(false, 'element.play() refused: ' + e.message); });
+          // watchdog: a play() that never settles is itself a result worth
+          // reporting (seen on Safari when the context was not resumed in
+          // the gesture), not a silent hang
+          var settled = false;
+          setTimeout(function () {
+            if (!settled) verdict(false, 'element.play() never settled within 6 s '
+              + '(readyState ' + el.readyState + ', currentTime ' + el.currentTime.toFixed(2)
+              + ', ctx ' + ctx.state + '). WebKit media pipeline stalled.');
+          }, 6000);
+          el.play().then(function () { settled = true; log('play', 'started'); sampleLoop(); },
+                         function (e) { settled = true; verdict(false, 'element.play() refused: ' + e.message); });
         });
         sb.addEventListener('error', function () {
           verdict(false, 'SourceBuffer error while appending (decode rejected). el.error: '
@@ -142,15 +160,27 @@ function runTest() {
     if (el.error) log('element error', el.error.code + ' ' + (el.error.message || ''));
   });
 
-  function measure() {
-    ctx.resume().catch(function () {});
+  // Rolling measurement DURING (looped) playback: sample every 250 ms for
+  // 3 s and keep each channel's maximum RMS, so a 1 s asset can never be
+  // measured only after it ended (the first harness version's mistake).
+  var rmsMax = null;
+  function sampleLoop() {
     var buf = new Float32Array(2048);
-    var rms = [];
-    for (var i = 0; i < NCH; i++) {
-      analysers[i].getFloatTimeDomainData(buf);
-      var s = 0; for (var j = 0; j < buf.length; j++) s += buf[j] * buf[j];
-      rms.push(Math.sqrt(s / buf.length));
-    }
+    var n = 0;
+    var iv = setInterval(function () {
+      var rms = [];
+      for (var i = 0; i < NCH; i++) {
+        analysers[i].getFloatTimeDomainData(buf);
+        var s = 0; for (var j = 0; j < buf.length; j++) s += buf[j] * buf[j];
+        rms.push(Math.sqrt(s / buf.length));
+      }
+      rmsMax = rmsMax ? rmsMax.map(function (x, i) { return Math.max(x, rms[i]); }) : rms;
+      if (++n >= 12) { clearInterval(iv); measure(); }
+    }, 250);
+  }
+
+  function measure() {
+    var rms = rmsMax || [];
     var active = rms.filter(function (x) { return x > 0.005; }).length;
     var peak = Math.max.apply(null, rms) || 1;
     var bars = document.getElementById('bars');
