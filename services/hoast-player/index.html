@@ -665,8 +665,12 @@
                     .then(function (r) { return r.json().catch(function () { return {}; }); })
                     .then(function (b) {
                         rb.dataset.state = 'done';
+                        // three honest outcomes: accepted, rate-limited, or the
+                        // stale-tab race where the session ended before the tap
                         rb.textContent = (b && b.ok)
                             ? (pl ? 'Zg\u0142oszono. Dzi\u0119kujemy.' : 'Reported. Thank you.')
+                            : (b && b.reason === 'no active session')
+                            ? (pl ? 'Transmisja ju\u017c si\u0119 zako\u0144czy\u0142a; nie ma czego zg\u0142osi\u0107.' : 'The stream has already ended; nothing to report.')
                             : (pl ? 'Zg\u0142oszenie ju\u017c przyj\u0119te.' : 'Report already received.');
                     })
                     .catch(function () {
