@@ -46,7 +46,10 @@
     <a href="?notap">no Web Audio tap</a> ·
     <a href="?audioel">&lt;audio&gt; element</a> ·
     <a href="?plain">plain src, no MSE</a> ·
-    <a href="?">standard</a></p>
+    <a href="?">standard</a><br>
+    Stereo control (same paths, 2-channel asset):
+    <a href="?stereo">via MMS/MSE</a> ·
+    <a href="?stereo&plain">plain src</a></p>
   <button id="kickBtn" type="button" hidden>Tap to start playback (fresh gesture)</button>
   <div class="verdict" id="verdict" hidden></div>
   <div class="card" hidden id="barsCard"><div class="detail">Per-channel signal level (RMS), channels 1..32:</div>
@@ -90,8 +93,15 @@ function runTest() {
   log('isTypeSupported(' + mime + ')', Api.isTypeSupported ? Api.isTypeSupported(mime) : 'n/a');
 
   var Q = new URLSearchParams(location.search);
-  var MODE = { notap: Q.has('notap'), audioel: Q.has('audioel'), plain: Q.has('plain') };
-  if (MODE.notap || MODE.audioel || MODE.plain) log('mode', JSON.stringify(MODE));
+  var MODE = { notap: Q.has('notap'), audioel: Q.has('audioel'), plain: Q.has('plain'),
+               stereo: Q.has('stereo') };
+  var ASSET = MODE.stereo ? 'opus-2ch.webm' : 'opus-16ch.webm';
+  var NEED = MODE.stereo ? 2 : 16;
+  // every run names its variant, so pasted results are self-identifying
+  var variantName = [MODE.plain ? 'plain-src' : null, MODE.notap ? 'no-tap' : null,
+                     MODE.audioel ? 'audio-el' : null, MODE.stereo ? 'STEREO-CONTROL' : '16ch']
+                    .filter(Boolean).join('+') || 'standard';
+  log('variant', variantName + (MODE.plain || MODE.notap || MODE.audioel ? '' : ' (standard path)'));
   var el = document.createElement(MODE.audioel ? 'audio' : 'video');
   el.setAttribute('playsinline', '');
   el.disableRemotePlayback = true;      // REQUIRED for MMS in WebKit
@@ -150,8 +160,8 @@ function runTest() {
   if (MODE.plain) {
     // no MSE at all: does this WebKit play the file natively? Separates
     // container/codec support from the MSE/MMS pipeline question.
-    log('plain', 'el.src = opus-16ch.webm directly');
-    el.src = 'opus-16ch.webm';
+    log('plain', 'el.src = ' + ASSET + ' directly');
+    el.src = ASSET;
     var settledP = false;
     setTimeout(function () {
       if (!settledP) { verdict(false, 'plain playback never settled within 6 s (rs=' + el.readyState + ')'); kick.hidden = false; }
@@ -171,7 +181,7 @@ function runTest() {
     var sb;
     try { sb = ms.addSourceBuffer(mime); }
     catch (e) { return verdict(false, 'addSourceBuffer refused ' + mime + ': ' + e.name + ' ' + e.message); }
-    fetch('opus-16ch.webm', { cache: 'no-store' })
+    fetch(ASSET, { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('asset HTTP ' + r.status); return r.arrayBuffer(); })
       .then(function (buf) {
         log('asset', buf.byteLength + ' bytes fetched');
@@ -244,9 +254,10 @@ function runTest() {
     log('decoded duration', el.duration + ' s, currentTime ' + el.currentTime.toFixed(2));
     log('channels with signal', active + ' of ' + NCH + ' probed');
     log('rms (first 18)', rms.slice(0, 18).map(function (x) { return x.toFixed(3); }).join(','));
-    if (active >= 16) {
-      verdict(true, 'PASS: ' + apiName + ' delivered ' + active
-        + ' discrete audio channels into Web Audio. The migration path to iPhone is real.');
+    if (active >= NEED) {
+      verdict(true, 'PASS (' + variantName + '): ' + apiName + ' delivered ' + active
+        + ' discrete audio channel(s) into Web Audio.'
+        + (MODE.stereo ? ' Stereo control works; the 16-channel result is the verdict.' : ' The migration path to iPhone is real.'));
     } else if (active >= 1) {
       verdict(false, 'PARTIAL: audio decodes but only ' + active
         + ' channel(s) reach Web Audio (downmix). isTypeSupported was optimistic; iPhone stays blocked.');
