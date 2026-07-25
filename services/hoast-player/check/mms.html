@@ -41,14 +41,16 @@
   <code>isTypeSupported</code> merely optimistic? One tap; the tone you may faintly hear is the
   16-sine test signal. Nothing is recorded or uploaded.</p>
 
-  <p class="detail" style="margin:0 0 8px">Variant (pick first, then run):
-    <a href="?">standard</a> ·
-    <a href="?notap">no Web Audio tap</a> ·
-    <a href="?audioel">&lt;audio&gt; element</a> ·
-    <a href="?plain">plain src, no MSE</a><br>
-    Stereo control (2-channel asset):
-    <a href="?stereo">via MMS/MSE</a> ·
-    <a href="?stereo&plain">plain src</a></p>
+  <p class="detail" style="margin:0 0 8px">Codec (pick first, then run):
+    <a href="?">16ch mf255 (standard)</a> ·
+    <a href="?mf2"><b>16ch AMBISONICS mf2</b></a> ·
+    <a href="?stereo">stereo mf255</a> ·
+    <a href="?mf0">stereo mf0 (plain)</a><br>
+    Path variants (combine with any codec):
+    <a href="?plain">plain src</a> ·
+    <a href="?mf2&plain">mf2+plain</a> ·
+    <a href="?mf0&plain">mf0+plain</a> ·
+    <a href="?notap">no tap</a></p>
   <button id="runBtn" type="button">Run the test</button>
   <button id="kickBtn" type="button" hidden>Tap to start playback (fresh gesture)</button>
   <div class="verdict" id="verdict" hidden></div>
@@ -94,13 +96,22 @@ function runTest() {
 
   var Q = new URLSearchParams(location.search);
   var MODE = { notap: Q.has('notap'), audioel: Q.has('audioel'), plain: Q.has('plain'),
-               stereo: Q.has('stereo') };
-  var ASSET = MODE.stereo ? 'opus-2ch.webm' : 'opus-16ch.webm';
-  var NEED = MODE.stereo ? 2 : 16;
+               stereo: Q.has('stereo'), mf0: Q.has('mf0'), mf2: Q.has('mf2') };
+  // Codec matrix: the original assets are ALL mapping_family 255 (independent
+  // channels), which CoreAudio may reject as a class; mf0 is plain stereo
+  // (the true control) and mf2 is the ambisonics mapping family (RFC 8486,
+  // ACN/SN3D - literally designed for our layout). If Safari plays mf2, the
+  // iPhone path reopens via a pipeline re-encode.
+  var ASSET = MODE.mf2 ? 'opus-16ch-mf2.webm'
+            : MODE.mf0 ? 'opus-2ch-mf0.webm'
+            : MODE.stereo ? 'opus-2ch.webm' : 'opus-16ch.webm';
+  var NEED = (MODE.mf0 || MODE.stereo) ? 2 : 16;
   // every run names its variant, so pasted results are self-identifying
   var variantName = [MODE.plain ? 'plain-src' : null, MODE.notap ? 'no-tap' : null,
-                     MODE.audioel ? 'audio-el' : null, MODE.stereo ? 'STEREO-CONTROL' : '16ch']
-                    .filter(Boolean).join('+') || 'standard';
+                     MODE.audioel ? 'audio-el' : null,
+                     MODE.mf2 ? '16ch-AMBISONICS-mf2' : MODE.mf0 ? 'stereo-mf0' :
+                     MODE.stereo ? 'stereo-mf255' : '16ch-mf255']
+                    .filter(Boolean).join('+');
   log('variant', variantName + (MODE.plain || MODE.notap || MODE.audioel ? '' : ' (standard path)'));
   var el = document.createElement(MODE.audioel ? 'audio' : 'video');
   el.setAttribute('playsinline', '');
