@@ -257,8 +257,8 @@ default `application/octet-stream` makes stricter browsers refuse the track.
 | Variable | Default | Purpose |
 |---|---|---|
 | `STREAM_KEY` | `hoast_demo` | Publish auth at rtmp-ingest: stream name or `?token=` must match |
-| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `STREAM_KEY` so the key is rotatable. Must match the name hardcoded in `services/hoast-player/index.html` |
-| `FFMPEG_FLAGS` | VP9 realtime, 2 s segments | Video policy of the earshot transcode; audio is always 16-ch Opus. `-c:v copy` fallback documented in `.env.example` |
+| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `STREAM_KEY` so the key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
+| `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |
 
 Copy `.env.example` to `.env` to override either.
 
@@ -315,15 +315,16 @@ Ubuntu Server 22.04.
 
 **Azure Container Apps:** build and push images (`docker buildx build
 --platform linux/amd64`), mount `dash-output` as ephemeral storage, expose
-8080 (player) and 1935 (ingest, TCP). For events, point OBS at the ingress
-and keep `FFMPEG_FLAGS` at the VP9 default.
+8080 (player) and 1935 (ingest, TCP). For events, point OBS at the ingress;
+opt into the VP9 `FFMPEG_FLAGS` line from `.env.example` if you want all-WebM
+delivery and have the CPU for it.
 
 **Raspberry Pi 5 (ARM64, experimental):** all base images are multi-arch and
 earshot builds from source, so `docker buildx build --platform linux/arm64`
-works; realtime VP9 encoding is the bottleneck. If the Pi cannot keep up, set
-`FFMPEG_FLAGS` to the `-c:v copy` fallback (video segments become MP4,
-audio stays Opus/WebM), or use a bigger machine; the Pi target is a
-nice-to-have, not a requirement.
+works, and the default `-c:v copy` passthrough is exactly what a Pi wants.
+Realtime VP9 (the `.env.example` opt-in) is the bottleneck; if enabled and the
+Pi cannot keep up, return to the default or use a bigger machine. The Pi
+target is a nice-to-have, not a requirement.
 
 **Per-host overrides:** deployment-specific settings (bind the telemetry
 dashboard to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry

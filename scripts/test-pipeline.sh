@@ -88,6 +88,26 @@ case "$FFMPEG_FLAGS" in
 esac
 log "codec policy: $VIDEO_CODEC (effective FFMPEG_FLAGS: $FFMPEG_FLAGS)"
 
+# ------------------------------------------ docs-agreement guard ------------
+# The default codec policy once lived in three places that drifted apart, and
+# the shipped stack failed this very script as a result. The compose fallback
+# is canonical; everything else must reference it or agree with it. This guard
+# checks the CANONICAL DEFAULT (not the deployment's override), so it holds on
+# hosts with a custom .env too, and fails the test the moment drift returns.
+canonical=$(grep -o 'FFMPEG_FLAGS=\${FFMPEG_FLAGS:--[^}]*}' docker-compose.yml \
+    | head -1 | sed 's/^FFMPEG_FLAGS=${FFMPEG_FLAGS:-//; s/}$//')
+[ -n "$canonical" ] || pre "docs guard: no FFMPEG_FLAGS fallback found in docker-compose.yml"
+case "$canonical" in
+    *"-c:v copy"*)   want_readme="H.264 passthrough" ;;
+    *"libvpx-vp9"*)  want_readme="VP9" ;;
+    *) pre "docs guard: compose fallback has an unrecognised codec: $canonical" ;;
+esac
+grep -q "currently \*\*${want_readme}\*\*" README.md \
+    || pre "docs guard: README's stated default ('currently **...**') does not match the compose fallback ($want_readme)"
+grep -q '^FFMPEG_FLAGS=' .env.example \
+    && pre "docs guard: .env.example has an ACTIVE FFMPEG_FLAGS line; overrides there must stay commented"
+log "docs guard: compose fallback, README and .env.example agree ($want_readme default)"
+
 fetch_stat() { curl -sf --max-time 5 http://localhost:8081/stat 2>/dev/null; }
 
 # ---------------------------------------------------------------- cleanup ---
