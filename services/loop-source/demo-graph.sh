@@ -2,12 +2,15 @@
 # loop-source entrypoint (in-container synthesis) and scripts/make-demo-loop.sh
 # (host utility), so both produce the identical file.
 #
-# Video: a black equirectangular canvas with the testsrc2 pattern centred as a
-# ~90x45 degree "screen" at the front direction. The player textures the frame
-# onto its sphere, so this reads as a flat test screen floating in front of
-# the viewer, black everywhere else, instead of a flat pattern smeared around
-# the whole sphere. No text labels: the PCE ffmpeg build has no freetype; the
-# proper orientation card remains scripts/make-360-testcard.py.
+# Video: the testsrc2 pattern as a genuinely FLAT screen inside the sphere.
+# v360 treats the pattern as a rectilinear (gnomonic, input=flat) image with a
+# 60x30 degree field of view and maps it into the equirectangular frame; after
+# the player textures the sphere, straight edges render straight, like a
+# planar screen floating at the front direction, black everywhere else.
+# (Pasting the rectangle into the equirect canvas directly gives a
+# constant-angular-size patch instead, which the viewport shows as a bowed,
+# theatre-curved band.) No text labels: the PCE ffmpeg build has no freetype;
+# the proper orientation card remains scripts/make-360-testcard.py.
 #
 # Audio: ONE mono 440 Hz source encoded to 3rd-order Ambisonics (SN3D/ACN,
 # AmbiX) with time-varying gains via aeval: it orbits the listener once every
@@ -53,8 +56,9 @@ _E14="${_A}*1.9364917*cos(2*${_TH})*sin(${_PH})*cos(${_PH})*cos(${_PH})"
 _E15="${_A}*0.7905694*cos(3*${_TH})*cos(${_PH})*cos(${_PH})*cos(${_PH})"
 
 DEMO_GRAPH="color=c=black:size=2048x1024:rate=30:duration=${DEMO_DUR}[bg];\
-testsrc2=size=512x256:rate=30:duration=${DEMO_DUR}[pat];\
-[bg][pat]overlay=x=768:y=384[out0];\
+testsrc2=size=512x256:rate=30:duration=${DEMO_DUR},format=rgba,\
+v360=input=flat:ih_fov=75:iv_fov=37.5:output=equirect:w=2048:h=1024:alpha_mask=1[scr];\
+[bg][scr]overlay=shortest=1[out0];\
 sine=frequency=440:sample_rate=48000:duration=${DEMO_DUR}[a0];\
 [a0]aeval=exprs='${_E0}|${_E1}|${_E2}|${_E3}|${_E4}|${_E5}|${_E6}|${_E7}|${_E8}|${_E9}|${_E10}|${_E11}|${_E12}|${_E13}|${_E14}|${_E15}':channel_layout=hexadecagonal[out1]"
 
