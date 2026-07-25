@@ -21,6 +21,10 @@ contributed *from here* and merged in July 2026:
 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
 | relative redirects (`absolute_redirect off`) | **merged**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) (`ac1dda7`) |
 
+A fifth change, the `ENABLE_NONFREE` build ARG (section 7 below), is
+contributed upstream as [#57](https://github.com/EnvelopSound/Earshot/pull/57)
+and not yet merged.
+
 So `src/` is content-equivalent to upstream master `ac1dda7` plus the local
 extras below - that master head includes `absolute_redirect off`
 ([#56](https://github.com/EnvelopSound/Earshot/pull/56), §6 below), contributed
@@ -38,8 +42,9 @@ and the local extras below would all have to be re-applied afterwards anyway.
 
 Sections 1, 2, 4 and 6 below are the changes now merged upstream - kept
 documented because they are still deviations from the *pinned* commit, and
-because sections 2 and 5 build on them. Sections 3 and 5, plus the refinement
-noted in 2, are the only things still genuinely ours.
+because sections 2 and 5 build on them. Section 7 is contributed but not yet
+merged (#57). Sections 3 and 5, plus the refinement noted in 2, are the only
+things still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -112,6 +117,16 @@ the HTTP server level makes the redirect relative, so the browser resolves it
 against the request URL and keeps the port. Contributed upstream as
 [#56](https://github.com/EnvelopSound/Earshot/pull/56) and merged on 2026-07-24
 (`ac1dda7`); applied here ahead of that merge.
+
+### 7. `src/Dockerfile`: `ENABLE_NONFREE` build ARG
+
+ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this
+build links no nonfree library (only libx264/libopus/libvpx), so the flag is
+a no-op licence stamp that blocks publishing a pre-built image. The ARG
+defaults to 1 (build unchanged); `--build-arg ENABLE_NONFREE=0` drops the
+flag for a redistributable, plain-GPLv3 image. Verified equivalent end to end
+(16-ch Opus hexadecagonal + VP9, full pipeline test). Contributed upstream as
+[#57](https://github.com/EnvelopSound/Earshot/pull/57) (open).
 
 ## What this service does in the stack
 
