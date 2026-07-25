@@ -326,7 +326,7 @@ function renderReach(s){
       tc.appendChild(document.createTextNode('tunnel '));
       const st = document.createElement('span'); st.style.color = col('--dim');
       st.textContent = tn.connected
-        ? 'connected · ' + tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
+        ? tn.conns + ' conns' + (tn.locations && tn.locations.length ? ' · ' + tn.locations.join(',') : '')
         : (tn.connected === false ? 'DISCONNECTED' : 'metrics unreachable');
       tc.appendChild(st);
       tc.appendChild(probeBtn());
@@ -339,10 +339,10 @@ function renderReach(s){
       const d = document.createElement('span'); d.className = 'dot';
       d.style.background = vo.ok ? col('--grn') : col('--red');
       vc.appendChild(d);
-      vc.appendChild(document.createTextNode('VOD origin (R2) '));
+      vc.appendChild(document.createTextNode('VOD origin '));
       const st = document.createElement('span'); st.style.color = col('--dim');
-      st.textContent = (vo.ok ? 'reachable' : 'UNREACHABLE (HTTP ' + (vo.code || 'no route/DNS') + ')')
-        + ' · checked ' + (vo.checked || '').slice(11, 19);
+      st.textContent = (vo.ok ? '' : 'UNREACHABLE (HTTP ' + (vo.code || 'no route/DNS') + ') · ')
+        + (vo.checked || '').slice(11, 16);
       vc.appendChild(st);
       vc.appendChild(probeBtn());
     }
@@ -367,7 +367,7 @@ function renderReach(s){
       bc.appendChild(document.createTextNode('backup '));
       var st = document.createElement('span'); st.style.color = col('--dim');
       st.textContent = bk.age_h == null ? 'never pulled'
-        : (bk.stale ? 'STALE: ' : 'last pull ') + bk.age_h + ' h ago';
+        : (bk.stale ? 'STALE: ' + bk.age_h + ' h ago' : bk.age_h + ' h ago');
       bc.appendChild(st);
     }
   }
