@@ -306,11 +306,18 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (b) {
           if (!b) return;
-          BRAND_DATA = b; showVodDownloads();   // first: immune to any later throw here
-          // Guest-stream notice (DRAFT wording lives in brand.json, rendered
-          // only while a guest session is active; see renderGuestNotice)
+          // Stash FIRST. This callback can run while the parser is still
+          // blocked downloading the hoast360 bundle, i.e. BEFORE the later
+          // script blocks exist: any unguarded cross-block call here throws
+          // and would abort the whole apply (which is exactly how the guest
+          // notice silently broke: showVodDownloads was not defined yet and
+          // the old catch ate the ReferenceError).
+          BRAND_DATA = b;
           window.__GUEST_BRAND__ = { d: b.guestDisclaimer, a: b.affiliationNotice };
           if (typeof renderGuestNotice === 'function') renderGuestNotice(window.__LAST_EP__);
+          if (typeof showVodDownloads === 'function') showVodDownloads();
+          // (the VOD page re-calls showVodDownloads itself, so nothing is
+          // lost when the guard skips it here)
           var lead = document.getElementById('aboutLead');
           if (b.lead && lead && MODE !== 'vod') lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
@@ -329,7 +336,7 @@
             document.head.appendChild(ic);
           }
         })
-        .catch(function () {});
+        .catch(function (e) { if (window.console) console.warn('brand.json apply failed:', e); });
 
       // Add a Copy button to each BibTeX block. navigator.clipboard needs a
       // secure context, so fall back to execCommand for plain-http (Tailscale).
@@ -434,7 +441,21 @@
             var badge = document.getElementById('guestNoticeBadge');
             if (badge) badge.textContent = subst(t.short);
             var ff = document.getElementById('guestNoticeFull');
-            if (ff) ff.textContent = subst(t.full);
+            if (ff) {
+                // textContent-plus-anchors: emails become mailto links with
+                // plain text nodes around them; still no innerHTML here
+                var full = subst(t.full);
+                ff.textContent = '';
+                var re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, last = 0, m;
+                while ((m = re.exec(full))) {
+                    ff.appendChild(document.createTextNode(full.slice(last, m.index)));
+                    var a = document.createElement('a');
+                    a.href = 'mailto:' + m[0]; a.textContent = m[0];
+                    ff.appendChild(a);
+                    last = m.index + m[0].length;
+                }
+                ff.appendChild(document.createTextNode(full.slice(last)));
+            }
             ['En', 'Pl'].forEach(function (k) {
                 var b = document.getElementById('gnLang' + k);
                 if (b) b.classList.toggle('on', lang === k.toLowerCase());
