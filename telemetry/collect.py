@@ -1579,6 +1579,12 @@ def vod_origin_probe():
                 pins.append(p[0])
         if pins:
             out["pinned_ips"] = pins
+            # optional deployment-specific context for the dashboard note
+            # (e.g. the ticket that justifies the pin); generic deployments
+            # simply have none
+            note = os.environ.get("TEL_PIN_NOTE", "")
+            if note:
+                out["pin_note"] = note
     except Exception:
         pass
     try:

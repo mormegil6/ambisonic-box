@@ -348,9 +348,9 @@ function renderReach(s){
   if (vh) {
     var pinNote = (vo && vo.pinned_ips && vo.pinned_ips.length)
       ? 'DNS PIN ACTIVE: this container resolves the VOD origin via pinned IPs ('
-        + vo.pinned_ips.join(', ') + '), a temporary DNS workaround. '
-        + 'When its reason ends, REMOVE the extra_hosts lines from the override; '
-        + 'a forgotten pin rots silently when Cloudflare renumbers.'
+        + vo.pinned_ips.join(', ') + ') from an extra_hosts override. Remove the '
+        + 'override when its reason ends; a forgotten pin rots silently when the '
+        + 'CDN renumbers.' + (vo.pin_note ? ' [' + vo.pin_note + ']' : '')
       : '';
     var failNote = (vo && !vo.ok)
       ? 'If this persists: remove vodBase from custom/brand.json and the player falls back to box-served VOD on the next page load.'
