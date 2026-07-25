@@ -281,8 +281,13 @@ async function tick(){
             $('statusDot').style.background=col('--dim'); return; }
 
   window.__LAST_STATS__ = s;
-  const healthy = s.all_healthy && (!s.alerts_active || s.alerts_active.length===0);
-  $('statusDot').style.background = healthy ? col('--grn') : col('--red');
+  const noAlerts = !s.alerts_active || s.alerts_active.length===0;
+  const healthy = s.all_healthy && noAlerts;
+  // amber when the only imperfection is a healthcheck still starting (the
+  // normal post-deploy state); red stays reserved for something broken
+  const onlyStarting = noAlerts && !s.all_healthy &&
+        (s.services||[]).every(x => x.healthy || x.health === 'starting');
+  $('statusDot').style.background = healthy ? col('--grn') : (onlyStarting ? col('--amb') : col('--red'));
   $('host').textContent = s.host || "";
   const stale = (Date.now()-new Date(s.ts).getTime())/1000 > 150;
   $('updated').textContent = "updated " + rel(s.ts);

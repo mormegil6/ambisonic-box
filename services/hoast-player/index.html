@@ -423,9 +423,10 @@
             if (!box) return;
             var gb = window.__GUEST_BRAND__;
             var active = ep && (ep.state === 'live' || ep.state === 'handover' || ep.state === 'grace');
-            if (!gb || !gb.d || !active) { box.hidden = true; return; }
+            if (!active) { box.hidden = true; return; }
+            var d = (gb && gb.d) || GN_DEFAULT;
             var lang = gnLang();
-            var t = gb.d[lang] || gb.d.en || {};
+            var t = d[lang] || d.en || {};
             // The disclaimer's numeric claims ({MAX_H}, {RETENTION_DAYS},
             // {BAN_DAYS}) interpolate from the running config via /api/live,
             // so the prose can never drift from what the arbiter enforces.
@@ -637,6 +638,19 @@
                 .catch(function () { show('gateErr'); })
                 .then(function () { if (btn) btn.disabled = false; });
         }
+
+        // Built-in generic disclaimer: a deployment that enables the guest
+        // endpoint gets a GDPR notice even with no brand.json at all. Every
+        // sentence describes stack behaviour, not a deployment (the numbers
+        // interpolate, and reporting happens via the button right below, so
+        // no contact address is needed). brand.json guestDisclaimer replaces
+        // this wholesale when present.
+        var GN_DEFAULT = {
+            en: { short: 'Open test endpoint: this stream was submitted by a third party.',
+                  full: 'Open test endpoint. Anyone may broadcast to this endpoint. Streams are submitted by third parties and are not reviewed before they appear. Sessions end automatically after {MAX_H} hours.\n\nTo report a stream, use the report button below. Reported streams are reviewed and removed where appropriate.\n\nConnection details, including IP address, are logged for the purpose of operating and moderating the service, and are retained for {RETENTION_DAYS} days.\n\nIf you report a stream, your IP address is logged with the report to prevent abuse of the reporting function, and is retained under the same {RETENTION_DAYS}-day rule.\n\nPublishers who misuse the endpoint may be blocked by network address for up to {BAN_DAYS} days.' },
+            pl: { short: 'Otwarty punkt testowy: ta transmisja pochodzi od osoby trzeciej.',
+                  full: 'Otwarty punkt testowy. Ka\u017cdy mo\u017ce nadawa\u0107 na ten punkt. Transmisje s\u0105 przesy\u0142ane przez osoby trzecie i nie s\u0105 sprawdzane przed ich pojawieniem si\u0119. Sesje ko\u0144cz\u0105 si\u0119 automatycznie po maksymalnie {MAX_H} godz.\n\nAby zg\u0142osi\u0107 transmisj\u0119, u\u017cyj przycisku poni\u017cej. Zg\u0142oszone transmisje s\u0105 sprawdzane i w uzasadnionych przypadkach usuwane.\n\nSzczeg\u00f3\u0142y po\u0142\u0105czenia, w tym adres IP, s\u0105 rejestrowane w celu obs\u0142ugi i moderacji us\u0142ugi oraz przechowywane przez {RETENTION_DAYS} dni.\n\nW przypadku zg\u0142oszenia transmisji adres IP zg\u0142aszaj\u0105cego jest rejestrowany wraz ze zg\u0142oszeniem w celu zapobiegania nadu\u017cyciom funkcji zg\u0142aszania i przechowywany zgodnie z t\u0105 sam\u0105 zasad\u0105 {RETENTION_DAYS} dni.\n\nNadawcy nadu\u017cywaj\u0105cy punktu ko\u0144cowego mog\u0105 zosta\u0107 zablokowani na podstawie adresu sieciowego na okres do {BAN_DAYS} dni.' }
+        };
 
         // Disclaimer language: one at a time, English default, choice kept per
         // browser. Flag clicks must not toggle the <details> they sit in.
