@@ -30,5 +30,7 @@
       "full": "Otwarty punkt testowy. Każdy może nadawać na ten punkt. Transmisje są przesyłane przez osoby trzecie i nie są sprawdzane przed ich pojawieniem się. Sesje kończą się automatycznie po trzech godzinach.\n\nAby zgłosić transmisję, napisz na adres <e-mail operatora>. Zgłoszone transmisje są sprawdzane i w uzasadnionych przypadkach usuwane.\n\nSzczegóły połączenia, w tym adres IP, są rejestrowane w celu obsługi i moderacji usługi oraz przechowywane przez 30 dni.\n\nW przypadku zgłoszenia transmisji adres IP zgłaszającego jest rejestrowany wraz ze zgłoszeniem w celu zapobiegania nadużyciom funkcji zgłaszania i przechowywany zgodnie z tą samą zasadą 30 dni."
     }
   },
-  "affiliationNotice": ""
+  "affiliationNotice": "",
+  "_comment_vodBase": "Optional VOD offload base URL, prepended to the /vod-dash/... paths (the remote must mirror that tree and serve CORS incl. the 'range' request header). Empty = serve VOD from this stack's own nginx, the default.",
+  "vodBase": ""
 }

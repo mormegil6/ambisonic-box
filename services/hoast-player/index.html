@@ -658,6 +658,18 @@
           .then(function (b) { if (b) { BRAND_DATA = b; } render(b); })
           .catch(function () { render(null); });
       }
+      // Optional VOD offload (R2/CDN): brand.json may set vodBase, e.g.
+      // "https://vod.bmroz.eu". It is PREPENDED to the /vod-dash/... paths,
+      // so the remote must mirror that tree. Empty or absent = same-origin,
+      // the box-served default. The page keeps COOP/COEP; a cross-origin
+      // base therefore requires CORS on the remote (dash.js XHRs need it
+      // anyway), including the 'range' request header for SegmentBase.
+      function vodUrl(path) {
+        var b = BRAND_DATA;
+        var base = (b && typeof b.vodBase === 'string') ? b.vodBase.replace(/\/+$/, '') : '';
+        return base + path;
+      }
+
       var CLIPS = {
         directions: {
           title: "Directions",
@@ -725,13 +737,30 @@
           return;
         }
 
-        hoast360.initialize('/vod-dash/' + clip + '/' + clip + '.mpd', '/irs/', 3);
-        wireVodLoop();
-        addLoopButton();
-        if (info.captions) addCaptions(info.captions);
-        showVodDownloads();
-        setTimeout(showVodDownloads, 1200);
-        setTimeout(showVodDownloads, 3000);
+        // vodBase must be known before the manifest URL is built. brand.json
+        // is same-origin and tiny, so the wait is milliseconds; the 1.5 s
+        // backstop means a missing or broken brand file can never block VOD
+        // (it just falls back to same-origin delivery).
+        var started = false;
+        function startClip() {
+          if (started) return; started = true;
+          hoast360.initialize(vodUrl('/vod-dash/' + clip + '/' + clip + '.mpd'), '/irs/', 3);
+          wireVodLoop();
+          addLoopButton();
+          if (info.captions) addCaptions(info.captions);
+          showVodDownloads();
+          setTimeout(showVodDownloads, 1200);
+          setTimeout(showVodDownloads, 3000);
+        }
+        if (BRAND_DATA) { startClip(); }
+        else {
+          fetch('/brand.json', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (b) { if (b) BRAND_DATA = b; })
+            .catch(function () {})
+            .then(startClip);
+          setTimeout(startClip, 1500);
+        }
       }
 
       // Loop the VOD. HTMLMediaElement.loop is unreliable through videojs-dash's
@@ -839,8 +868,15 @@
       function addCaptions(caps) {
         var p = hoast360.videoPlayer;
         if (!p || typeof p.addRemoteTextTrack !== 'function') return setTimeout(function () { addCaptions(caps); }, 400);
+        if (vodUrl('')) {
+          // cross-origin captions: without crossorigin=anonymous the browser
+          // drops <track> fetches SILENTLY (no console error); the segments
+          // themselves go through dash.js XHR and are unaffected
+          var v = document.querySelector('#hoast360-player video') || document.querySelector('video');
+          if (v) v.setAttribute('crossorigin', 'anonymous');
+        }
         caps.forEach(function (c, i) {
-          var el = p.addRemoteTextTrack({ kind: 'captions', src: c.src, srclang: c.lang, label: c.label, 'default': i === 0 }, true);
+          var el = p.addRemoteTextTrack({ kind: 'captions', src: vodUrl(c.src), srclang: c.lang, label: c.label, 'default': i === 0 }, true);
           if (i === 0 && el && el.track) el.track.mode = 'showing';
         });
       }

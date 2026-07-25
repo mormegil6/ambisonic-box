@@ -260,6 +260,20 @@ DASH `text` AdaptationSet, which renders unreliably through videojs-contrib-dash
 must therefore type `.vtt` as `text/vtt` in the `/vod-dash/` location; the
 default `application/octet-stream` makes stricter browsers refuse the track.
 
+## Optional: serving VOD from object storage
+
+By default the stack serves the on-demand clips itself (`/vod-dash/` out of
+`content/vod/dash`). If you front the player with a CDN, check its terms
+before leaving large video on that path: Cloudflare, for example, restricts
+serving large non-Cloudflare-hosted video through their proxy, which is why
+the reference deployment offloads VOD to a Cloudflare R2 bucket instead.
+
+To do the same: upload `content/vod/dash/` to a bucket under a `vod-dash/`
+prefix, attach a custom domain, allow CORS from your player origin including
+the `range` request header (DASH SegmentBase addresses by byte range), and
+set `vodBase` in `brand.json` to that domain. Removing the key falls back to
+box-served VOD instantly; the local copy and route stay in place either way.
+
 ## Configuration
 
 | Variable | Default | Purpose |
