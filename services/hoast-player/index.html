@@ -580,22 +580,38 @@
       // VOD download block (brand.json vodDownloads). Rendered from both the brand
       // fetch and initVod, so it applies whichever finishes last, on any URL.
       var BRAND_DATA = null;
+      // Default download links, derived from the same pinned release the
+      // DEMO_CONTENT fetch uses. KEEP IN SYNC with the asset list in
+      // services/loop-source/fetch-demo-content.sh (PLAN's re-upload checklist
+      // covers both). brand.json's vodDownloads overrides this wholesale.
+      var VOD_RELEASE = 'https://github.com/mormegil6/hoa-360-stream/releases/download/vod-clips-v1';
+      var VOD_RELEASE_PAGE = 'https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips-v1';
+      var VOD_DL_DEFAULT = '<strong>Download the masters:</strong> '
+        + '<a href="' + VOD_RELEASE + '/directions_8k360_16ch.webm">Directions (WebM)</a> &middot; '
+        + '<a href="' + VOD_RELEASE + '/colortones_8k360_16ch.webm">Colortones (WebM)</a> &middot; '
+        + '<a href="' + VOD_RELEASE_PAGE + '" target="_blank" rel="noopener">all files, captions &amp; test card</a>';
+
       function showVodDownloads() {
         var dl = document.getElementById('brandDownloads');
         if (!dl || MODE !== 'vod') return;
-        var render = function (b) { if (b && b.vodDownloads) { dl.innerHTML = b.vodDownloads; dl.hidden = false; } };
+        // Deployment override wins; the derived default renders otherwise,
+        // including when no brand.json exists at all (generic stack).
+        var render = function (b) {
+          dl.innerHTML = (b && b.vodDownloads) ? b.vodDownloads : VOD_DL_DEFAULT;
+          dl.hidden = false;
+        };
         if (BRAND_DATA) { render(BRAND_DATA); return; }
         // Data not delivered by the shared brand fetch yet: fetch our own copy so
         // this is independent of that chain's timing/exceptions on any URL.
         fetch('/brand.json', { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (b) { if (b) { BRAND_DATA = b; render(b); } })
-          .catch(function () {});
+          .then(function (b) { if (b) { BRAND_DATA = b; } render(b); })
+          .catch(function () { render(null); });
       }
       var CLIPS = {
         directions: {
           title: "Directions",
-          desc: "A 360° imaging test: six flat broadcast test cards arranged as the walls of a cube, so each arrives undistorted when you look at it — colour bars, grey scale, PLUGE, multiburst and a Siemens star per wall. Plus an ambisonic energy-visualisation overlay and spoken front/left/right/top read directions. 8K, 16-ch 3OA, looped to 2 min.",
+          desc: "A 360° imaging test: six flat broadcast test cards arranged as the walls of a cube, so each arrives undistorted when you look at it: colour bars, grey scale, PLUGE, multiburst and a Siemens star per wall. Plus an ambisonic energy-visualisation overlay and spoken front/left/right/top read directions. 8K, 16-ch 3OA, looped to 2 min.",
           meta: "8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · 2 min loop",
           captions: [
             { src: '/vod-dash/directions/captions_en.vtt', lang: 'en', label: 'English' },
@@ -699,7 +715,7 @@
         if (fs) cb.insertBefore(btn, fs); else cb.appendChild(btn);
       }
 
-      // Side-load caption/subtitle tracks as native video.js text tracks — the
+      // Side-load caption/subtitle tracks as native video.js text tracks - the
       // reliable path. DASH-embedded WebVTT (a text AdaptationSet) is handled
       // inconsistently by videojs-contrib-dash (the CC button appears but the
       // text never renders); pointing video.js straight at the .vtt files avoids

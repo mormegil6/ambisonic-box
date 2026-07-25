@@ -1,5 +1,5 @@
 {
-  "_comment": "Optional per-deployment branding, shared by the HOAST player landing page and the telemetry dashboard (:8090). Mount your filled copy at /brand.json (see docker-compose.override.yml.example). Every key is optional; when the file is absent both pages stay generic. Player text values are HTML.",
+  "_comment": "Optional per-deployment branding, shared by the HOAST player landing page and the telemetry dashboard (:8090). Mount your filled copy at /brand.json (see docker-compose.override.yml.example). Every key is optional; when the file is absent both pages stay generic. Player text values are HTML. vodDownloads OVERRIDES the built-in default download links (derived from the release pinned in services/loop-source/fetch-demo-content.sh); omit it to keep those.",
   "lead": "Describe this deployment: what the source is, and whether it is genuinely live or a replayed recording.",
   "reference": "<h2>Reference</h2><cite>A. Author, B. Author, &ldquo;Paper Title,&rdquo; in <em>Proc. Venue</em>, Year. <a href=\"https://example.org\" target=\"_blank\" rel=\"noopener\">Link</a>.</cite>",
   "copyright": "&copy; 2026 Your Name &middot; Your Institution.",
