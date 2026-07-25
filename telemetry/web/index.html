@@ -127,14 +127,12 @@
   <!-- Service restarts. Two-click confirm; earshot only ships paired with
        ingest (a lone earshot restart silently breaks the relay: nginx-rtmp
        resolves the push hostname once at startup). -->
-  <div class="ctl" style="align-items:flex-start">
+  <div class="ctl">
     <span class="ctl-lbl">Restart</span>
-    <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
-      <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
-      <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
-      <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
-      <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
-    </div>
+    <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
+    <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
+    <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
+    <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
     <span class="ctl-msg" id="restartMsg"></span>
   </div>
 
