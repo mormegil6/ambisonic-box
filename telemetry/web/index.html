@@ -22,7 +22,9 @@
   .updated{margin-left:auto;color:var(--dim);font-size:12px;font-family:var(--mono)}
   .alertbar{background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);
             color:#ffb3ae;border-radius:8px;padding:9px 13px;margin:12px 0;font-size:13px;display:none}
-  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));margin:14px 0}
+  /* 140px min so all six tiles (incl. the box's disk/uptime pair) hold one
+     line on a normal window instead of wrapping the sixth */
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:14px 0}
   .tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
   .tile .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.7px}
   .tile .v{font-size:27px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.1}
@@ -32,7 +34,11 @@
   .b-off{background:rgba(139,152,169,.14);color:var(--dim)}
   section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0}
   section h2{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 12px}
-  .svc{display:flex;flex-wrap:wrap;gap:8px}
+  .svc{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .rsv{font:600 11px system-ui;margin-left:2px;padding:1px 7px;border-radius:999px;
+       border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer}
+  .rsv:hover{color:var(--fg);border-color:var(--dim)}
+  .rsv.armed{color:var(--red);border-color:var(--red)}
   .chip{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
         border-radius:7px;padding:6px 11px;font-size:13px;font-family:var(--mono)}
   .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
@@ -127,14 +133,6 @@
   <!-- Service restarts. Two-click confirm; earshot only ships paired with
        ingest (a lone earshot restart silently breaks the relay: nginx-rtmp
        resolves the push hostname once at startup). -->
-  <div class="ctl">
-    <span class="ctl-lbl">Restart</span>
-    <button class="btn btn-stop rsvc" data-svc="rtmp-ingest">ingest</button>
-    <button class="btn btn-stop rsvc" data-svc="hoast-player">player</button>
-    <button class="btn btn-stop rsvc" data-svc="telemetry">telemetry</button>
-    <button class="btn btn-stop rsvc" data-svc="earshot-ingest">earshot + ingest</button>
-    <span class="ctl-msg" id="restartMsg"></span>
-  </div>
 
   <div class="grid">
     <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
@@ -359,11 +357,24 @@ async function tick(){
   $('encoder').style.color = e.behind ? col('--red') : (e.speed!=null?col('--grn'):col('--dim'));
   $('encoderSub').textContent = e.speed==null ? " " : (e.behind ? "behind realtime" : "keeping up");
 
-  // services
-  $('services').innerHTML = (s.services||[]).map(sv=>{
+  // services: pills in signal order (contribution -> transcode -> delivery),
+  // restart control integrated into each pill. earshot restarts only as the
+  // earshot+ingest pair (nginx-rtmp resolves its push target once at
+  // startup), and telemetry (this page) is appended so every restartable
+  // service lives in this one row.
+  const SVC_ORDER = {'rtmp-ingest':0,'earshot':1,'hoast-player':2};
+  const SVC_RESTART = {'rtmp-ingest':'rtmp-ingest','earshot':'earshot-ingest','hoast-player':'hoast-player'};
+  const svcs = (s.services||[]).slice().sort((a,b)=>(SVC_ORDER[a.name]??9)-(SVC_ORDER[b.name]??9));
+  $('services').innerHTML = (svcs.map(sv=>{
     const c = sv.healthy ? col('--grn') : col('--red');
-    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}<span style="color:${col('--dim')}">${sv.state||""}</span></span>`;
-  }).join("") || '<span class="chip">no services</span>';
+    const rk = SVC_RESTART[sv.name];
+    const rb = rk ? `<button class="rsv" data-svc="${rk}" title="restart">&#x21bb;</button>` : '';
+    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}<span style="color:${col('--dim')}">${sv.state||""}</span>${rb}</span>`;
+  }).join("") || '<span class="chip">no services</span>')
+  + `<span class="chip"><span class="dot" style="background:${col('--grn')}"></span>telemetry<span style="color:${col('--dim')}">this page</span><button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
+  + `<span class="ctl-msg" id="restartMsg"></span>`;
+  const rm = $('restartMsg'); if (rm && window.__RESTART_MSG__) rm.textContent = window.__RESTART_MSG__;
+  reapplyRestartArm();
 
   // stream detail
   $('res').textContent = s.resolution||"—";
@@ -417,38 +428,43 @@ function wireCtl(id, path, verb){
 wireCtl('btnStart', '/api/start', 'start');
 wireCtl('btnStop', '/api/stop', 'stop');
 
-// Service restarts: first click arms, second within 5 s confirms. The armed
-// label spells out consequences: a live guest session dies with the restart,
-// earshot+ingest drops the stream for ~40 s, telemetry goes dark for ~10 s.
-(function(){
-  var armed = null, timer = null;
-  function disarm(){ if(armed){ armed.textContent = armed.dataset.label; armed = null; }
-                     if(timer){ clearTimeout(timer); timer = null; } }
-  document.querySelectorAll('.rsvc').forEach(function(b){
-    b.dataset.label = b.textContent;
-    b.addEventListener('click', function(){
-      if (armed !== b) {
-        disarm();
-        var warn = 'confirm: restart ' + b.dataset.label;
-        var ep = window.__LAST_STATS__ && window.__LAST_STATS__.endpoint;
-        if (ep && (ep.state === 'live' || ep.state === 'handover')) warn += ' (kills the guest session)';
-        if (b.dataset.svc === 'earshot-ingest') warn += ' (stream restarts, ~40 s)';
-        if (b.dataset.svc === 'telemetry') warn += ' (dashboard back in ~10 s)';
-        b.textContent = warn;
-        armed = b;
-        timer = setTimeout(disarm, 5000);
-        return;
-      }
-      disarm();
-      $('restartMsg').textContent = 'restarting ' + b.dataset.svc + '...';
-      fetch('/api/restart?svc=' + b.dataset.svc, {method:'POST'}).then(r=>r.json())
-        .then(r=>{ $('restartMsg').textContent = r.ok ? (r.note || 'done') : ('failed: ' + (r.error||'')); tick(); })
-        .catch(e=>{ $('restartMsg').textContent = b.dataset.svc === 'telemetry'
-                      ? 'telemetry restarting (expected drop), back in ~10 s'
-                      : 'failed: ' + e.message; });
-    });
-  });
-})();
+// Service restarts, integrated into the service pills. First click arms the
+// little button (label swaps to a short consequence warning), second click
+// within 5 s fires. State lives outside the DOM and is re-applied after
+// every tick, because the pills re-render every cycle and would otherwise
+// silently disarm a pending confirm.
+var _rArm = { svc: null, until: 0 };
+function _rWarn(svc){
+  var ep = window.__LAST_STATS__ && window.__LAST_STATS__.endpoint;
+  var w = 'sure?';
+  if (ep && (ep.state === 'live' || ep.state === 'handover')) w += ' kills guest.';
+  if (svc === 'earshot-ingest') w += ' stream ~40s';
+  if (svc === 'telemetry') w += ' page ~10s';
+  return w;
+}
+function reapplyRestartArm(){
+  if (!_rArm.svc || Date.now() > _rArm.until) return;
+  var b = document.querySelector('.rsv[data-svc="' + _rArm.svc + '"]');
+  if (b) { b.textContent = _rWarn(_rArm.svc); b.classList.add('armed'); }
+}
+function _setMsg(t){ window.__RESTART_MSG__ = t; var m = $('restartMsg'); if (m) m.textContent = t; }
+document.getElementById('services').addEventListener('click', function(ev){
+  var b = ev.target.closest ? ev.target.closest('.rsv') : null;
+  if (!b) return;
+  var svc = b.dataset.svc;
+  if (_rArm.svc !== svc || Date.now() > _rArm.until) {
+    _rArm = { svc: svc, until: Date.now() + 5000 };
+    b.textContent = _rWarn(svc); b.classList.add('armed');
+    setTimeout(function(){ if (_rArm.svc === svc && Date.now() >= _rArm.until) { _rArm = { svc: null, until: 0 }; tick(); } }, 5200);
+    return;
+  }
+  _rArm = { svc: null, until: 0 };
+  _setMsg('restarting ' + svc + '...');
+  fetch('/api/restart?svc=' + svc, {method:'POST'}).then(r=>r.json())
+    .then(r=>{ _setMsg(r.ok ? (r.note || 'done') : ('failed: ' + (r.error||''))); setTimeout(function(){ _setMsg(''); }, 6000); tick(); })
+    .catch(e=>{ _setMsg(svc === 'telemetry' ? 'telemetry restarting, back in ~10 s' : 'failed: ' + e.message);
+                setTimeout(function(){ _setMsg(''); }, 8000); });
+});
 
 // Bans: active table (Unban per row) + collapsed read-only history.
 function renderBans(s){
