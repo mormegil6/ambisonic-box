@@ -41,15 +41,15 @@
   <code>isTypeSupported</code> merely optimistic? One tap; the tone you may faintly hear is the
   16-sine test signal. Nothing is recorded or uploaded.</p>
 
-  <button id="runBtn" type="button">Run the test</button>
-  <p class="detail" style="margin:8px 0 0">Diagnostic variants:
+  <p class="detail" style="margin:0 0 8px">Variant (pick first, then run):
+    <a href="?">standard</a> ·
     <a href="?notap">no Web Audio tap</a> ·
     <a href="?audioel">&lt;audio&gt; element</a> ·
-    <a href="?plain">plain src, no MSE</a> ·
-    <a href="?">standard</a><br>
-    Stereo control (same paths, 2-channel asset):
+    <a href="?plain">plain src, no MSE</a><br>
+    Stereo control (2-channel asset):
     <a href="?stereo">via MMS/MSE</a> ·
     <a href="?stereo&plain">plain src</a></p>
+  <button id="runBtn" type="button">Run the test</button>
   <button id="kickBtn" type="button" hidden>Tap to start playback (fresh gesture)</button>
   <div class="verdict" id="verdict" hidden></div>
   <div class="card" hidden id="barsCard"><div class="detail">Per-channel signal level (RMS), channels 1..32:</div>
