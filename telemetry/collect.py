@@ -1434,7 +1434,7 @@ def telegram(msg):
     # by the hostname; a wordier note would just be noise on every alert)
     _h = os.environ.get("TEL_HOST", "")
     if _h and "8090" not in msg:
-        msg = f"{msg}\nhttp://{_h}:8090"
+        msg = f"{msg}\nhttp://{_h}:8090/"
     if not BOT or not CHAT:
         return
     data = urllib.parse.urlencode({"chat_id": CHAT, "text": msg}).encode()
