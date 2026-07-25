@@ -112,7 +112,13 @@
       .clip-dl{font-size:13.5px;margin:8px 0 0}
       /* guest-stream notice: visible only while a guest holds the endpoint */
       [hidden]{display:none!important}
-      .guest-notice summary{cursor:pointer;display:flex;align-items:center;gap:10px;list-style-position:outside}
+      /* display:flex on summary kills the native disclosure triangle, so
+         draw our own and rotate it when open */
+      .guest-notice summary{cursor:pointer;display:flex;align-items:center;gap:10px;list-style:none}
+      .guest-notice summary::-webkit-details-marker{display:none}
+      .guest-notice summary::before{content:'\25B8';color:#d29922;font-size:13px;
+        transition:transform .15s;flex:0 0 auto}
+      details[open].guest-notice summary::before{transform:rotate(90deg)}
       .gn-flags{margin-left:auto;display:flex;gap:4px}
       .gn-flags button{font-size:17px;line-height:1;padding:2px 5px;border:1px solid transparent;
         border-radius:6px;background:transparent;cursor:pointer;opacity:.45;width:auto}

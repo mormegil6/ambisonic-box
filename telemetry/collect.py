@@ -101,6 +101,14 @@ def svc_label(row):
 def services(ps):
     rows = []
     for r in ps:
+        # compose-managed long-lived containers ONLY: compose bakes the
+        # service label into the IMAGE, so a stray `docker run` from e.g. the
+        # earshot image shows up wearing service=earshot (seen live as a
+        # doubled pill when a mock guest pusher ran from that image). The
+        # oneoff=False label exists only on real `up`-managed containers;
+        # same bug family as the arbiter's source_container filter.
+        if "com.docker.compose.oneoff=False" not in (r.get("Labels", "") or ""):
+            continue
         name = svc_label(r)
         if name in ("telemetry", "loop-source", "shaka"):   # self + non-core live path
             continue
