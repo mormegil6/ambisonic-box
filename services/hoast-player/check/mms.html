@@ -31,6 +31,8 @@
     pre { white-space:pre-wrap; word-break:break-word; font-size:12.5px; color:var(--dim); margin:14px 0 0; }
     .bars { display:flex; gap:2px; height:52px; align-items:flex-end; margin:8px 0 2px; }
     .bars i { flex:1; background:var(--ok); min-height:2px; opacity:.85; border-radius:2px 2px 0 0; }
+    .detail a.sel { font-weight:700; color:var(--ok); text-decoration:none;
+                    border:1px solid var(--ok); border-radius:6px; padding:1px 6px; }
   </style>
 </head>
 <body>
@@ -41,16 +43,16 @@
   <code>isTypeSupported</code> merely optimistic? One tap; the tone you may faintly hear is the
   16-sine test signal. Nothing is recorded or uploaded.</p>
 
-  <p class="detail" style="margin:0 0 8px">Codec (pick first, then run):
-    <a href="?">16ch mf255 (standard)</a> ·
-    <a href="?mf2"><b>16ch AMBISONICS mf2</b></a> ·
-    <a href="?stereo">stereo mf255</a> ·
-    <a href="?mf0">stereo mf0 (plain)</a><br>
-    Path variants (combine with any codec):
-    <a href="?plain">plain src</a> ·
-    <a href="?mf2&plain">mf2+plain</a> ·
-    <a href="?mf0&plain">mf0+plain</a> ·
-    <a href="?notap">no tap</a></p>
+  <p class="detail" style="margin:0 0 8px">Codec (pick first, then run; the selected one is highlighted):<br>
+    <a data-codec="mf255-16" href="?">16ch mf255 (standard)</a> ·
+    <a data-codec="mf2" href="?mf2">16ch AMBISONICS mf2</a> ·
+    <a data-codec="mf255-2" href="?stereo">stereo mf255</a> ·
+    <a data-codec="mf0" href="?mf0">stereo mf0 (plain)</a><br>
+    Path (keeps the selected codec):
+    <a data-path="" href="#">MSE/MMS + tap</a> ·
+    <a data-path="plain" href="#">plain src</a> ·
+    <a data-path="notap" href="#">no tap</a> ·
+    <a data-path="audioel" href="#">&lt;audio&gt; el</a></p>
   <button id="runBtn" type="button">Run the test</button>
   <button id="kickBtn" type="button" hidden>Tap to start playback (fresh gesture)</button>
   <div class="verdict" id="verdict" hidden></div>
@@ -113,6 +115,10 @@ function runTest() {
                      MODE.stereo ? 'stereo-mf255' : '16ch-mf255']
                     .filter(Boolean).join('+');
   log('variant', variantName + (MODE.plain || MODE.notap || MODE.audioel ? '' : ' (standard path)'));
+  log('asset', ASSET + ' = ' + (MODE.mf2 ? 'Opus mapping_family 2 (ambisonics, ACN/SN3D), 16 ch'
+      : MODE.mf0 ? 'Opus mapping_family 0 (plain stereo), 2 ch'
+      : MODE.stereo ? 'Opus mapping_family 255 (independent), 2 ch'
+      : 'Opus mapping_family 255 (independent), 16 ch'));
   var el = document.createElement(MODE.audioel ? 'audio' : 'video');
   el.setAttribute('playsinline', '');
   el.disableRemotePlayback = true;      // REQUIRED for MMS in WebKit
@@ -279,6 +285,31 @@ function runTest() {
     el.pause();
   }
 }
+
+// mark the selected codec and path, and make path links carry the codec
+(function () {
+  var q = new URLSearchParams(location.search);
+  var codec = q.has('mf2') ? 'mf2' : q.has('mf0') ? 'mf0' : q.has('stereo') ? 'mf255-2' : 'mf255-16';
+  var path = q.has('plain') ? 'plain' : q.has('notap') ? 'notap' : q.has('audioel') ? 'audioel' : '';
+  var codecParam = { 'mf2': 'mf2', 'mf0': 'mf0', 'mf255-2': 'stereo', 'mf255-16': '' }[codec];
+  document.querySelectorAll('a[data-codec]').forEach(function (a) {
+    a.classList.toggle('sel', a.dataset.codec === codec);
+    // codec links keep the current path
+    var parts = [];
+    if (a.dataset.codec === 'mf2') parts.push('mf2');
+    if (a.dataset.codec === 'mf0') parts.push('mf0');
+    if (a.dataset.codec === 'mf255-2') parts.push('stereo');
+    if (path) parts.push(path);
+    a.href = '?' + parts.join('&');
+  });
+  document.querySelectorAll('a[data-path]').forEach(function (a) {
+    a.classList.toggle('sel', a.dataset.path === path);
+    var parts = [];
+    if (codecParam) parts.push(codecParam);
+    if (a.dataset.path) parts.push(a.dataset.path);
+    a.href = '?' + parts.join('&');
+  });
+})();
 
 document.getElementById('runBtn').addEventListener('click', runTest);
 document.getElementById('copyBtn').addEventListener('click', function () {
