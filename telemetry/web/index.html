@@ -363,14 +363,22 @@ function renderReach(s){
         'DNS pin active: VOD origin resolves via pinned IPs (' + vo.pinned_ips.join(', ')
         + ') from an extra_hosts override. Remove the override when its reason ends; '
         + 'a forgotten pin rots silently when the CDN renumbers. '));
-      if (vo.pin_note && vo.pin_url) {
-        var a = document.createElement('a');
-        a.href = vo.pin_url; a.target = '_blank'; a.rel = 'noopener';
-        a.textContent = vo.pin_note;
-        a.style.color = 'var(--amb)';
-        ph.appendChild(a);
-      } else if (vo.pin_note) {
-        ph.appendChild(document.createTextNode('[' + vo.pin_note + ']'));
+      if (vo.pin_note) {
+        // TEL_PIN_NOTE may mark ONE [span] to become the anchor when
+        // TEL_PIN_URL is set; the rest stays plain text. No URL or no
+        // marker: the whole note is plain.
+        var m = vo.pin_url ? vo.pin_note.match(/^(.*)\[(.+?)\](.*)$/) : null;
+        if (m) {
+          if (m[1]) ph.appendChild(document.createTextNode(m[1]));
+          var a = document.createElement('a');
+          a.href = vo.pin_url; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = m[2];
+          a.style.color = 'var(--amb)';
+          ph.appendChild(a);
+          if (m[3]) ph.appendChild(document.createTextNode(m[3]));
+        } else {
+          ph.appendChild(document.createTextNode(vo.pin_note.replace(/[\[\]]/g, '')));
+        }
       }
     }
   }
