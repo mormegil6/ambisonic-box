@@ -551,12 +551,15 @@ GUEST_MAX_S   = int(os.environ.get("GUEST_MAX_S", "10800"))   # absolute cap, ±
 # stop), guest publishes are refused for this long. Without it, an encoder
 # with auto-reconnect re-claims the freed slot in seconds, which makes the cap
 # a 3 h duty cycle instead of a limit and the kill button a two-second blip.
-# 300 s outlasts OBS's default auto-reconnect budget (25 tries x 10 s).
+# 300 s only covers the dense head of OBS's default auto-reconnect schedule
+# (25 tries, exponential backoff capped at 15 min, roughly 3 h total) - it
+# spaces out reclaim attempts rather than outlasting the encoder's retries.
 GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 # Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
-# netcall gives up at ~10 s (not configurable), and the docker stop before the
-# wait is itself bounded to ~3.5 s, so the sum must stay safely under that.
+# netcall gives up after netcall_timeout (default 10 s, an undocumented
+# rtmp-level directive left at its default here), and the docker stop before
+# the wait is itself bounded to ~3.5 s, so the sum must stay safely under that.
 HANDOVER_S    = 4
 GSTATE  = DATA/"guest_state.json"
 GUESTCSV = DATA/"guest_sessions.csv"

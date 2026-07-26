@@ -10,8 +10,9 @@
 # stand-in, not the reference content; for a real demo loop prepare a proper
 # H.264 + 16-ch AAC master instead (.env.example, "Demo content").
 #
-# Uses the earshot image's ffmpeg: the 16-channel AAC needs its PCE-aware
-# build. Builds the image first if it is missing.
+# Uses the earshot image's ffmpeg (stock ffmpeg 4.0+ also has a PCE-capable
+# AAC encoder; the image just guarantees one without needing ffmpeg on the
+# host). Builds the image first if it is missing.
 #
 # Usage: scripts/make-demo-loop.sh [-o OUT] [-t SECONDS] [--force]
 #   defaults: content/demo.mp4, 60 s. Durations that are multiples of 30 s

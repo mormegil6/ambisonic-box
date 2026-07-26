@@ -335,7 +335,9 @@ def render_card_face(name, size, ss=2):
             # PLUGE, darkest to brightest: sub-black, black, above-black, then
             # the limited-range white point and beyond. Under a correct tv-range
             # encode the sub-black bar is invisible and the above-black bar is
-            # just visible; seeing both means something expanded the range.
+            # just visible; seeing both means the range was never expanded -
+            # something is treating the tv-range signal as full range (lifted
+            # blacks).
             vals = [0, 8, 16, 24, 128, 235, 243, 255]
             bh = n / len(vals)
             for i, v in enumerate(vals):

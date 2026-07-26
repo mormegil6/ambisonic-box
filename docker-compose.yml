@@ -82,8 +82,8 @@ services:
     ports:
       # Loopback only: docs/ENDPOINTS.md marks this private, and /stat discloses
       # publisher and client IPs. Compose MERGES `ports` lists instead of
-      # replacing them, so this has to be narrowed here; an override cannot
-      # remove a base mapping.
+      # replacing them, so this has to be narrowed here; a plain override list
+      # cannot remove a base mapping (removal needs `!override`/`!reset`).
       - "127.0.0.1:8081:80"   # dev only: webtools UI, /stat, /dash debug
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]

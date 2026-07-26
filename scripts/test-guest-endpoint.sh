@@ -138,7 +138,7 @@ push_guest() {  # push_guest <name> <seconds> [sync]; sync: run in foreground, r
             -re -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
             -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
             -b:v 800k -g 60 -keyint_min 60 \
-            -c:a aac -strict -2 -b:a 256k -ar 48000 \
+            -c:a aac -b:a 256k -ar 48000 \
             -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >/dev/null 2>&1
         return $?
     fi
@@ -148,7 +148,7 @@ push_guest() {  # push_guest <name> <seconds> [sync]; sync: run in foreground, r
         -re -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
         -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
         -b:v 800k -g 60 -keyint_min 60 \
-        -c:a aac -strict -2 -b:a 256k -ar 48000 \
+        -c:a aac -b:a 256k -ar 48000 \
         -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >/dev/null 2>&1 &
 }
 
@@ -350,7 +350,7 @@ docker compose run --rm --no-deps -T --name guestpush-tmono --entrypoint ffmpeg 
   -hide_banner -loglevel error -re -f lavfi \
   -i "testsrc2=size=320x160:rate=30[out0];sine=frequency=440:sample_rate=48000[out1]" \
   -map '0:v' -map '0:a' -c:v libx264 -preset ultrafast -pix_fmt yuv420p -g 60 \
-  -c:a aac -strict -2 -b:a 96k -t 180 -f flv rtmp://rtmp-ingest:1935/guest/tmono >/dev/null 2>&1 &
+  -c:a aac -b:a 96k -t 180 -f flv rtmp://rtmp-ingest:1935/guest/tmono >/dev/null 2>&1 &
 if wait_for "$label: mono guest live" 30 st_is live; then
     t0=$(now)
     # detector arms at 45 s + drop at next 10 s ping + teardown

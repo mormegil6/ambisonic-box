@@ -64,7 +64,7 @@
     var mpd = await fetch('/dash/hoast_demo.mpd', { cache: 'no-store' }).then(function (r) { return r.text(); });
     var audio = (mpd.match(/<AdaptationSet[^>]*contentType="audio"[\s\S]*?<\/AdaptationSet>/) || [''])[0];
     var sn = +((audio.match(/startNumber="(\d+)"/) || [0, 1])[1]);
-    var ts = +((audio.match(/timescale="(\d+)"/) || [0, 1000])[1]);
+    var ts = +((audio.match(/timescale="(\d+)"/) || [0, 1])[1]);  // ISO/IEC 23009-1 default @timescale is 1
     var tm = audio.match(/<S t="(\d+)" d="(\d+)"/);
     mpdInfo = { startNumber: sn, t0: tm ? (+tm[1]) / ts : 0, segdur: tm ? (+tm[2]) / ts : 5 };
   }

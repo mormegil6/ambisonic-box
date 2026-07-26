@@ -245,7 +245,7 @@ docker compose run --rm --no-deps -T --name "$PUSH_CONTAINER" \
     -map 0:v -map 0:a \
     -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
     -b:v 4M -g 60 -keyint_min 60 \
-    -c:a aac -strict -2 -b:a 512k -ar 48000 \
+    -c:a aac -b:a 512k -ar 48000 \
     -t "$PUSH_SECONDS" \
     -f flv "rtmp://rtmp-ingest:1935/live/${TEST_STREAM}?token=${STREAM_KEY}" &
 push_pid=$!

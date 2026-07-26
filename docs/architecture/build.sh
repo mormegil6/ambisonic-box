@@ -38,9 +38,10 @@ npx --yes @mermaid-js/mermaid-cli@11.16.0 -i "$MMD" -o "$RAW" \
 # 2. rearrange the layout (flanking nodes, box, title, viewBox) -> final SVG
 python3 postprocess.py "$RAW" "$SVG"
 
-# 3. rasterise to PNG. mermaid puts label text in <foreignObject> (HTML), which
-#    browsers do NOT render when an SVG is loaded via <img>, so the README embeds
-#    the PNG; the SVG stays as the scalable source (open it directly to view).
+# 3. rasterise to PNG. mermaid puts label text in <foreignObject> (HTML), whose
+#    rendering in <img>-loaded SVGs depends on the viewer's browser and fonts
+#    (not universal), so the README embeds the PNG; the SVG stays as the
+#    scalable source (open it directly to view).
 BROWSER=$(python3 -c "import json;print(json.load(open('puppeteer-config.json'))['executablePath'])")
 read -r W H < <(python3 - "$SVG" "$SCALE" <<'PY'
 import re, sys

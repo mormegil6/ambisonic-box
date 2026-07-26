@@ -8,7 +8,8 @@
 # Enabled:  the real VOD locations (page + packaged DASH) are included.
 # Disabled: explicit 404 stubs. Stubs rather than an empty include: without
 # them /vod-dash/ would fall through to `location /` and serve the mounted
-# files WITHOUT the COOP/CORS headers. The Live|VOD nav pill is also removed
+# files with default MIME types, no Expose-Headers and no Cache-Control. The
+# Live|VOD nav pill is also removed
 # from the served page, so the feature leaves no visible trace.
 if [ "${VOD_ENABLED:-0}" = "1" ]; then
     cp /etc/nginx/vod-locations.conf.on /etc/nginx/vod-locations.conf

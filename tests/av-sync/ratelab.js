@@ -1,7 +1,9 @@
 (function () {
   // Rate-lab: probe whether element playbackRate (preservesPitch=false) can
-  // drain the Chromium MediaElementSource+MSE audio delay. Panel shows a live
-  // A/V offset estimate from flash/beep onset trains (color+tone test clip).
+  // drain the then-suspected Chromium MediaElementSource+MSE audio delay (it
+  // cannot; the offset was later traced to an ignored video edit list, not a
+  // fixed decode-path delay). Panel shows a live A/V offset estimate from
+  // flash/beep onset trains (color+tone test clip).
   var panel = document.createElement('div');
   panel.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,.9);color:#eee;'
     + 'font:13px/1.5 ui-monospace,monospace;padding:8px 12px;border-bottom:2px solid #0a4';

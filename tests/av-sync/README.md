@@ -4,7 +4,7 @@ Console-pasted instruments built during the DASH A/V-desync investigation (measu
 
 - **avmeter.js**: frequency-identified A/V-offset meter. Taps the HOAST360 `masterGain`, identifies each beep's dominant frequency, then locates that tone inside the independently fetched + decoded DASH audio segments (Goertzel) and reports the median offset (positive = audio late). Alias-free: the *frequency*, not the event period, identifies each beep, so it cannot be fooled by a delay that equals the flash interval. Exposes `window.__avmeter2()`.
 
-- **ratelab.js**: "rate-lab" probe of whether element `playbackRate` (`preservesPitch=false`) can drain the Chromium `MediaElementSource`+MSE audio delay, with a live A/V-offset readout from the flash/beep onset train.
+- **ratelab.js**: "rate-lab" probe of whether element `playbackRate` (`preservesPitch=false`) can drain the then-suspected Chromium `MediaElementSource`+MSE audio delay (it cannot; the offset was later traced to an ignored video edit list, not a fixed decode-path delay - see the measurement notes under Documentation), with a live A/V-offset readout from the flash/beep onset train.
 
 - **inspect.js**: on-screen mobile console. Captures errors/rejections and samples the player's live `<video>` element into a WebGL overlay, for debugging on mobile where there is no console and the sphere may render black.
 

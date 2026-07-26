@@ -36,7 +36,7 @@
 
 *Bitrate and buffer depth vs segment duration (`scripts/plot-segment-tradeoff.py`; PNG + SVG). Buffer is a min-max band, not error bars; A/V offset is a structural 0 ms at every duration, so it is noted rather than plotted.*
 
-- **0.5 s is not viable at 4K**: a keyframe every 15 frames forces libvpx far past the 4 Mbps target (~6x bitrate at its quality floor), and the playback buffer hovers under 1 s - it was the only variant with repeated stalls.
+- **0.5 s is not viable at 4K**: a keyframe every 15 frames forces libvpx far past the 4 Mbps target (~11x the target, ~6x the 2 s variant's bitrate, at its quality floor), and the playback buffer hovers under 1 s - it was the only variant with repeated stalls.
 - 1 s / 2 s / 4 s are equivalent on sync; they differ only in bitrate overhead and buffer depth. Startup latency was ~0.4-0.6 s for all variants.
 - Playback-ratio numbers below 1.0 in some runs are **headless software-decode throttling** (57-60 % dropped frames in *every* variant on this box), not a variant property.
 

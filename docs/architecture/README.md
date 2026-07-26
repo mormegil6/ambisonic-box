@@ -26,7 +26,7 @@ Needs `node`/`npx`, `python3`, and a Chromium-based browser (path in `puppeteer-
 
 ## Why a PNG in the README, not the SVG
 
-mermaid renders node and label text inside `<foreignObject>` (HTML). Browsers do not render foreignObject when an SVG is loaded through an `<img>` tag, so embedding `architecture.svg` directly would show the boxes and lines with no text. The README embeds `architecture.png`; the SVG remains the vector source.
+mermaid renders node and label text inside `<foreignObject>` (HTML). Whether that renders when the SVG is loaded through an `<img>` tag depends on the viewer's browser and installed fonts (current Chrome and Firefox do render it, but support isn't universal and shouldn't be relied on for a README that has to work everywhere). The README embeds `architecture.png`; the SVG remains the vector source.
 
 ## Why postprocess.py
 
