@@ -730,5 +730,17 @@ window.__BOX__ = {"host":null,"links":[{"label":"Earshot","port":8081,"path":"/w
 
 tick(); setInterval(tick, 10000);
 </script>
+
+    <script>
+      // External links open in a new tab; same-origin navigation (anchors,
+      // nav, tabs) stays in-window. Delegated at capture time so links
+      // injected later (brand.json content, download rows) are covered too.
+      document.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (a && a.origin && a.origin !== location.origin && !a.target) {
+          a.target = '_blank'; a.rel = 'noopener';
+        }
+      }, true);
+    </script>
 </body>
 </html>
