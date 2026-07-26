@@ -34,7 +34,7 @@ docker compose config | grep FFMPEG_FLAGS
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
 | `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
-| `shaka` | Shaka Packager for offline VOD and A/V-sync test packaging (writes to the dash-output volume; packaged clips are then placed under `content/vod/dash`); compose profile `tools`, manual runs only, never in the live path | - |
+| `shaka` | Shaka Packager for offline VOD packaging (writes to the dash-output volume; packaged clips are then placed under `content/vod/dash`); compose profile `tools`, manual runs only, never in the live path | - |
 
 ## Requirements
 
