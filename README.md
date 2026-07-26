@@ -19,7 +19,7 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legac
 
 So **the on-demand path is 4th-order ready today** - it never touches AAC, and the only hardcoded piece is the order argument the page passes to HOAST360 (`initialize(mpd, irs, 3)`). A 4th-order VOD clip needs a 4th-order master and that argument changed, with no format, packaging or renderer work. It is not claimed as a shipped feature because no 4th-order clip has been played end to end yet; the components are proven, the integration is not. Raising the *live* path is a different matter - it needs a contribution format that can carry 25 channels (a wider-layout AAC encoder, or moving ingest off RTMP to SRT/WebRTC with Opus), which is architectural rather than configuration. See the measurement notes (below, Documentation) for the numbers behind this.
 
-**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default, because the only VP9 configuration ever measured cost ~310 % CPU on a 2012 quad-core test host even when scaled down. To check what a given host will actually do rather than trusting this paragraph:
+**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default, because the only VP9 configuration ever measured cost ~310 % CPU on a 2012 Mac Mini (quad-core i7) even when scaled down. To check what a given host will actually do rather than trusting this paragraph:
 
 ```bash
 docker compose config | grep FFMPEG_FLAGS
@@ -34,7 +34,7 @@ docker compose config | grep FFMPEG_FLAGS
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
 | `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
-| `shaka` | Shaka Packager, offline only, never in the live path. Two entry points: the compose `tools` profile drives the A/V-sync variant packaging (`scripts/package-dash-variants.sh`), and `scripts/package-vod-dash.sh` runs the same image standalone to write the on-demand clips into `content/vod/dash/` | - |
+| `shaka` | Shaka Packager, offline only, never in the live path. Main job: `scripts/package-vod-dash.sh` runs the image standalone to package the on-demand clips into `content/vod/dash/` (the compose `tools` profile additionally drives the optional A/V-sync variant packaging, `scripts/package-dash-variants.sh`) | - |
 
 ## Requirements
 
@@ -67,6 +67,9 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/) (
 | Video | H.264, keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate) |
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `STREAM_KEY`: a custom stream key no longer moves the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
+
+
+**Channel-count requirement:** the pipeline expects exactly 16 audio channels end to end (Earshot's transcode and the player's 3rd-order renderer are not order-flexible). A 1st- or 2nd-order source must be zero-padded to 16 channels by the sender, which is a valid 3rd-order signal with silent upper orders; a plain stereo or mono push produces no output at all (on the guest endpoint it is auto-ended with that reason).
 
 ## Guest test endpoint
 
@@ -185,9 +188,7 @@ Does segment duration affect lip sync? Measured answer: **no**. The A/V start of
 
 **Local / lab (AMD64):** the quick start above. Validated on WSL2 Ubuntu and Ubuntu Server 22.04.
 
-**Azure Container Apps:** build and push images (`docker buildx build --platform linux/amd64`), mount `dash-output` as ephemeral storage, expose 8080 (player) and 1935 (ingest, TCP). For events, point OBS at the ingress; opt into the VP9 `FFMPEG_FLAGS` line from `.env.example` if you want all-WebM delivery and have the CPU for it.
-
-**Raspberry Pi 5 (ARM64, experimental):** all base images are multi-arch and earshot builds from source, so `docker buildx build --platform linux/arm64` works, and the default `-c:v copy` passthrough is exactly what a Pi wants. Realtime VP9 (the `.env.example` opt-in) is the bottleneck; if enabled and the Pi cannot keep up, return to the default or use a bigger machine. The Pi target is a nice-to-have, not a requirement.
+**Planned, not yet validated end to end:** Azure (for one-off events; raw TCP ingress for 1935 is the constraint to solve there) and Raspberry Pi 5 (all base images are multi-arch and `docker buildx build --platform linux/arm64` compiles, but no Pi has run a real stream yet). Treat both as directions, not documented paths; this section will grow real instructions when a real deployment produces them.
 
 **Per-host overrides:** deployment-specific settings (bind the dashboard (:8090) to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry service, Telegram tokens, a branded landing page) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and adjust. The base stack runs without it.
 
