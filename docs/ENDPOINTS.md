@@ -8,14 +8,14 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 |---|---|---|---|
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
 | 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
-| 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` publishes `8081:80` on all interfaces; Compose appends port entries, so an override cannot narrow it. Firewall the port or edit the base file |
+| 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so an override can widen but never narrow a base mapping. Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
 
-Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 8000 inside the network), rtmp-ingest's health port (8080 internal), and the `dash-output` / `status-public` volumes.
+Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), and the `dash-output` / `status-public` volumes.
 
 ### Control routes proxied on 8080
 
-`hoast-player` reverse-proxies exactly two telemetry routes to the public port, both as exact-match `location =` blocks, so nothing else on 8090 is reachable from outside:
+`hoast-player` reverse-proxies exactly three telemetry routes to the public port (`/api/live`, `/api/start`, `/api/guest/report`), both as exact-match `location =` blocks, so nothing else on 8090 is reachable from outside:
 
 | Route | Method | Proxies to | Notes |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Audio-path flags (mechanism measured in the publication notes; see the README's 
 ## What telemetry itself polls (the monitoring inputs)
 
 - `earshot /stat` → `<publishing/>`, `<nclients>`: is a stream live?
-- newest `chunk-stream*.webm` mtime in the dash volume: segment freshness
+- newest `chunk-stream*` segment (`.webm`/`.m4s`/`.mp4`) mtime in the dash volume: segment freshness
 - docker container health + the hoast-player access log: viewers + countries
 - `/sys/class/thermal/thermal_zone0/temp`, `df /`, uptime, load: host health
 

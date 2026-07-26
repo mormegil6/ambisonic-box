@@ -89,7 +89,7 @@ esac
 log "codec policy: $VIDEO_CODEC (effective FFMPEG_FLAGS: $FFMPEG_FLAGS)"
 
 # ------------------------------------------ docs-agreement guard ------------
-# The default codec policy once lived in three places that drifted apart, and
+# compose's FFMPEG_FLAGS fallback is canonical; README and .env.example must agree, and
 # the shipped stack failed this very script as a result. The compose fallback
 # is canonical; everything else must reference it or agree with it. This guard
 # checks the CANONICAL DEFAULT (not the deployment's override), so it holds on

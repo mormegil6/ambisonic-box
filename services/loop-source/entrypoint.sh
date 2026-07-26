@@ -3,9 +3,9 @@
 # image). Demo-content policy, DEMO_CONTENT=1 by default:
 #   - no content/demo.mp4 -> synthesise the spherical placeholder in-container
 #     (this image IS the PCE-aware ffmpeg; no network involved, ~20 s once)
-#   - fetch the VOD reference masters from the pinned release in the
+#   - fetch the VOD reference masters (only when VOD_ENABLED=1; default 0) from the pinned release in the
 #     BACKGROUND (fail-soft; the loop never waits on the network)
-# DEMO_CONTENT=0 does neither: exactly the old idle-with-instructions
+# DEMO_CONTENT=0 does neither: idle-with-instructions
 # behaviour when the file is absent.
 set -u
 
@@ -32,7 +32,7 @@ if [ "$DEMO_CONTENT" = "1" ] && [ "${VOD_ENABLED:-0}" = "1" ]; then
     # running after the exec below (reparented, same container).
     sh "$DIR/fetch-demo-content.sh" &
 elif [ "$DEMO_CONTENT" = "1" ]; then
-    echo "[loop-source] VOD_ENABLED=0: skipping the reference-master fetch (DEMO_CONTENT only governs the live loop)"
+    echo "[loop-source] VOD_ENABLED=0: skipping the reference-master fetch (set VOD_ENABLED=1 to also fetch the VOD reference masters)"
 fi
 
 if [ ! -f /content/demo.mp4 ]; then

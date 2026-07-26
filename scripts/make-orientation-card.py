@@ -16,7 +16,7 @@ produces Adapted Material, which ND forbids redistributing - and the clip is
 published both as a release asset and on the live VOD page. Generating our own
 makes the clip ours end to end, publishable without qualification.
 
-Layout follows the same convention as AmbisonicEnergyRenderer: azimuth runs
+Layout convention: azimuth runs
 +180 deg at the left edge, through 0 deg at centre, to -180 deg at the right, so
 left-of-centre reads LEFT and right-of-centre reads RIGHT for a viewer facing
 front. Elevation runs +90 (top) to -90 (bottom); the horizon is the centre row.

@@ -4,7 +4,7 @@
 #
 # Video: the testsrc2 pattern as a genuinely FLAT screen inside the sphere.
 # v360 treats the pattern as a rectilinear (gnomonic, input=flat) image with a
-# 60x30 degree field of view and maps it into the equirectangular frame; after
+# 75x37.5 degree field of view and maps it into the equirectangular frame; after
 # the player textures the sphere, straight edges render straight, like a
 # planar screen floating at the front direction, black everywhere else.
 # (Pasting the rectangle into the equirect canvas directly gives a
@@ -14,10 +14,10 @@
 #
 # Audio: ONE mono 440 Hz source encoded to 3rd-order Ambisonics (SN3D/ACN,
 # AmbiX) with time-varying gains via aeval: it orbits the listener once every
-# ORBIT_S seconds with a +/-30 degree elevation wobble every WOBBLE_S seconds,
+# 15 s with a +/-30 degree elevation wobble every 10 s seconds,
 # so turning your head (or dragging the view) audibly moves the tone. The
 # encoding coefficients are the closed-form SN3D spherical harmonics,
-# verified numerically against an independent Legendre-recurrence reference
+# closed-form SN3D spherical harmonics, constants exact to double precision
 # to 3e-16 before being baked in here.
 #
 # Loop seam: with DEMO_DUR a multiple of 30 s, the orbit (15 s), the wobble

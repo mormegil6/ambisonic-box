@@ -10,8 +10,8 @@ Operations monitoring for the HOA 360° stack, shipped as a compose service so a
 
 - **container health** and the **player access log** - via the mounted docker socket. Read-write, not read-only: besides `docker ps --format json`, `docker logs` and `docker exec`, on-demand idling runs `docker start` and `docker stop` on the loop source.
 - **stream liveness** - earshot's `/stat` (`<publishing/>`, `<nclients>`) plus the freshness of the newest segment in the `dash-output` volume.
-- **viewers + countries** - unique public client IPs on `/dash/` in the last 90 s, parsed from hoast-player's `cf` log format (`<CF-Connecting-IP> <CF-IPCountry> "<request>" <status>`), so viewers behind the Cloudflare tunnel are counted with their real IP + country.
-- **CPU temp / disk / uptime** - optional Linux-host mounts (see the override example); without them those fields read `null`.
+- **viewers + countries** - unique public client IPs on `/dash/` in the last 90 s, parsed from hoast-player's `cf` log format (`<CF-Connecting-IP> <CF-IPCountry> "<request>" <status>`), so viewers behind a Cloudflare tunnel (if one fronts the player) are counted with their real IP + country, and direct viewers fall back to the peer address.
+- **Disk usage** needs the host `/` mount from the override example; CPU temp and uptime read host sysfs/procfs without extra mounts. Unavailable fields read `null`.
 
 ## Configuration (environment)
 
@@ -38,7 +38,7 @@ The image needs only the docker **CLI** (talks to the socket) - no docker engine
 
 ## Guest session log: retention and geolocation
 
-`guest_sessions.csv` rows are kept indefinitely as anonymised statistics (timestamp, sanitised stream name, country, duration, end reason), mirroring the viewer stats' long-standing shape (counts and countries, never identifiers). The IP column is redacted after `GUEST_RETENTION_DAYS` (default 30), which is what the public notice's 30-day line refers to.
+`guest_sessions.csv` rows are kept indefinitely as anonymised statistics (timestamp, sanitised stream name, country, duration, end reason), the same shape as the viewer stats (counts and countries, never identifiers) (counts and countries, never identifiers). The IP column is truncated to its network prefix (a.b.c.x for v4, /48 for v6) after `GUEST_RETENTION_DAYS` (default 30), keeping repeat-network patterns visible without keeping the address, which is what the guest-endpoint notice on the player page refers to with its retention line (the `{RETENTION_DAYS}` placeholder).
 
 Country is resolved locally at session end from the DB-IP country-lite database (fetched once into the data volume at start, fail-soft to `--` offline; refresh by deleting `dbip-country-lite.csv.gz` from the volume). Guest IPs are never sent to any online lookup service.
 

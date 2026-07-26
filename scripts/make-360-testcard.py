@@ -20,7 +20,7 @@ projection's. The poles stop being smeared blobs and become ordinary walls
 GEOMETRY
 World axes follow Ambisonic ACN/SN3D, the same frame the rest of this repo
 uses: +X front, +Y left, +Z up. The equirect convention matches
-make-orientation-card.py and AmbisonicEnergyRenderer: azimuth +180 at the left
+make-orientation-card.py: azimuth +180 at the left
 edge through 0 at centre to -180 at the right, elevation +90 top to -90 bottom.
 So the left half of the image is what is to the viewer's left.
 
@@ -181,7 +181,7 @@ def render_dummy_face(name, size):
 # 3325); what is ours is the layout, the code, and the 360 arrangement.
 #
 # The card is authored in full-range RGB. The delivery encode is limited range
-# (see CLAUDE.md: VP9/AV1 must be tv range), so 0 and 255 land on the clipping
+# (see lip-sync-test/RESULTS.md: VP9/AV1 must be tv range), so 0 and 255 land on the clipping
 # boundaries at 16 and 235 - which is precisely what the PLUGE block is for. If
 # the sub-black bar is visible, something is expanding range it should not.
 

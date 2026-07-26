@@ -7,6 +7,21 @@
 #   - a Chromium-based browser, path in puppeteer-config.json (mmdc + rasterise)
 #   - python3              (postprocess.py; standard library only)
 set -euo pipefail
+
+# Chromium path: env override, else first match from common locations, so the
+# committed config carries no machine-specific path.
+BROWSER_PATH="${BROWSER_PATH:-}"
+if [ -z "$BROWSER_PATH" ]; then
+  for c in \
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+    /usr/bin/chromium /usr/bin/chromium-browser /usr/bin/google-chrome; do
+    [ -x "$c" ] && BROWSER_PATH="$c" && break
+  done
+fi
+[ -n "$BROWSER_PATH" ] || { echo "no Chromium found; set BROWSER_PATH" >&2; exit 1; }
+printf '{\n  "executablePath": "%s"\n}\n' "$BROWSER_PATH" > puppeteer-config.json
+
 cd "$(dirname "$0")"
 
 MMD=architecture.mmd

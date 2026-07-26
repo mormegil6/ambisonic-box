@@ -5,7 +5,7 @@
 #   - reads container health + the player access log via the mounted docker socket,
 #   - reads stream liveness from the shared dash-output volume and earshot's /stat,
 #   - reads CPU temp / disk from optional host mounts (degrades to null if absent),
-#   - writes stats.json (private dashboard) + public-stats.json (curated, for the
+#   - writes stats.json (private dashboard) + status.json (curated, for the
 #     stream page) + a viewers.csv history,
 #   - fires Telegram on the RISING edge of a *sustained* problem (debounced) and on
 #     recovery. Telegram is optional (skipped unless BOT_TOKEN/CHAT_ID are set).
@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-HOST     = os.environ.get("TEL_HOST", "example-host")
+HOST     = os.environ.get("TEL_HOST", "hoa360")
 def _own_project():
     """The compose project this telemetry container actually belongs to, read
     from its own labels (hostname == container id). The env var is only a
@@ -213,7 +213,7 @@ def encoder(ps, publishing):
     wall clock since process start. After an hour at 1.0x, a collapse to 0.3x
     needs ten more minutes to drag that average under ENCODER_MIN, and a milder
     0.85x collapse never gets there at all. That is the exact shape of thermal
-    throttling, the failure this host is known for, and nothing else catches it:
+    throttling, a classic failure shape on thermally constrained hosts, and nothing else catches it:
     a throttled encoder still writes segments inside SEG_STALE_S, so
     stream_stalled stays quiet too.
 
@@ -284,13 +284,13 @@ _live_since = [None]        # epoch the stream last became live, for readiness
 
 # A player pinned to a 30 s live delay cannot start on a timeline shorter than
 # that: dash.js throws "Cannot read properties of null (reading 'range')" and
-# never recovers. Measured on the box, a cold start reaches fresh segments at
+# never recovers. Measured on the reference deployment, a cold start reaches fresh segments at
 # t+6 s but only plays once ~35 s of history exists (first frame t+43 s). So
 # liveness is not readiness, and the player must not initialise until this.
 READY_S = int(os.environ.get("TEL_READY_S", "35"))
 
 # Reachability probes, both optional and env-gated so the code stays generic
-# and deployments opt in (the box does; see its override). Neither needs a
+# and deployments opt in (opt in via an override; see docker-compose.override.yml.example). Neither needs a
 # credential: cloudflared already serves /ready + /metrics on localhost, and
 # the R2 check is an anonymous HEAD on a public object.
 TUNNEL_METRICS_URL = os.environ.get("TUNNEL_METRICS_URL", "").rstrip("/")
@@ -540,7 +540,7 @@ def auto_idle(strm, watchers):
 # unauthenticated (that is how ingest's proxy calls arrive). Like /api/stop,
 # they are trusted surface; the trust boundary is the compose network plus
 # whatever the operator binds 8090 to, and the public player proxies only
-# /api/live and /api/start, never these.
+# /api/live, /api/start and /api/guest/report, never these.
 # Master switch, OFF by default: most deployments are a single private
 # publisher and should never expose a keyless application. Everything below
 # no-ops when disabled, and the status surfaces omit the endpoint entirely.
@@ -607,7 +607,7 @@ def _guest_save():
 # statistics, but the IP column is REDACTED once it ages past the window. The
 # country, resolved at write time and kept, is the aggregate-level residue,
 # exactly like viewers.csv's country codes. Container stdout logs rotate by
-# size, not by days; that residual is a known item for the final wording.
+# size, not by days; stdout logs rotate by size, so they are a retention residual.
 GUEST_RETENTION_S = int(os.environ.get("GUEST_RETENTION_DAYS", "30")) * 86400
 # IP bans (dashboard "End + ban"). Clamped to the retention window on
 # purpose: expiry and IP redaction are ONE event, so a ban outliving the
@@ -685,8 +685,7 @@ def geo_cc(ip):
 
 def anon_ip(ip):
     """Truncate, do not erase: keep the network part so long-term statistics
-    can still see repeat networks and ban-evasion patterns (operator decision
-    2026-07-25, disclaimer updated to match). v4 keeps /24 (a.b.c.x), v6
+    can still see repeat networks and ban-evasion patterns (the player disclaimer states the same rule). v4 keeps /24 (a.b.c.x), v6
     keeps /48 (x:x:x::x). Idempotent; rows already fully redacted to "-"
     stay "-" (that data is gone). Truncated values can never equal a real
     address, so ban enforcement stays inert on them by construction."""
@@ -1487,7 +1486,7 @@ def telegram(msg):
     if not BOT or not CHAT:
         return
     # Dashboard link tail. Telegram only auto-linkifies hostnames with a
-    # real TLD (IPs work, bare "example-host" never does), so deployments
+    # real TLD (IPs work, a bare TLD-less hostname never does), so deployments
     # set TEL_DASH_URL to a resolvable full URL (e.g. the Tailscale MagicDNS
     # name); plain text needs no parse_mode and nothing to escape.
     tail = os.environ.get("TEL_DASH_URL", "")
@@ -1701,7 +1700,7 @@ def evaluate_alerts(s):
     conds = {
         "services_down":  (bool(down), "service(s) unhealthy: " + ", ".join(down), "all services healthy again", None, None),
         "disk_full":      (d is not None and d >= DISK_FULL_PCT, f"disk {d}% full", "disk usage back to normal", d, "max"),
-        "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, nearing 105°C critical", "CPU temp back below 100°C", t, "max"),
+        "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, at/above the alert threshold", "CPU temp back below 100°C", t, "max"),
         "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x)", "encoder keeping up again", s["encoder"]["speed"], "min"),
         "stream_stalled": (stalled, f"stream publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
         "tunnel_down":    (bool(s.get("tunnel")) and s["tunnel"]["connected"] is False, "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),

@@ -19,7 +19,7 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legac
 
 So **the on-demand path is 4th-order ready today** - it never touches AAC, and the only hardcoded piece is the order argument the page passes to HOAST360 (`initialize(mpd, irs, 3)`). A 4th-order VOD clip needs a 4th-order master and that argument changed, with no format, packaging or renderer work. It is not claimed as a shipped feature because no 4th-order clip has been played end to end yet; the components are proven, the integration is not. Raising the *live* path is a different matter - it needs a contribution format that can carry 25 channels (a wider-layout AAC encoder, or moving ingest off RTMP to SRT/WebRTC with Opus), which is architectural rather than configuration. See the measurement notes (below, Documentation) for the numbers behind this.
 
-**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default, because the only VP9 configuration ever measured cost ~310 % CPU on the Mac Mini even when scaled down. To check what a given host will actually do rather than trusting this paragraph:
+**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default, because the only VP9 configuration ever measured cost ~310 % CPU on a 2012 quad-core test host even when scaled down. To check what a given host will actually do rather than trusting this paragraph:
 
 ```bash
 docker compose config | grep FFMPEG_FLAGS
@@ -30,11 +30,11 @@ docker compose config | grep FFMPEG_FLAGS
 | Service | Role | Host port |
 |---|---|---|
 | `rtmp-ingest` | public RTMP ingest; stream-key auth, relay to earshot | 1935 |
-| `earshot` | transcode to 16-ch Opus + VP9, live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
+| `earshot` | transcode to 16-ch Opus + video per `FFMPEG_FLAGS` (H.264 passthrough default, VP9 opt-in), live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
 | `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
-| `shaka` | Shaka Packager for offline VOD packaging (writes to the dash-output volume; packaged clips are then placed under `content/vod/dash`); compose profile `tools`, manual runs only, never in the live path | - |
+| `shaka` | Shaka Packager, offline only, never in the live path. Two entry points: the compose `tools` profile drives the A/V-sync variant packaging (`scripts/package-dash-variants.sh`), and `scripts/package-vod-dash.sh` runs the same image standalone to write the on-demand clips into `content/vod/dash/` | - |
 
 ## Requirements
 
@@ -45,7 +45,7 @@ docker compose config | grep FFMPEG_FLAGS
 ## Quick start
 
 ```bash
-git clone https://git.pg.edu.pl/p829296/hoa-360-stream.git && cd hoa-360-stream
+git clone https://github.com/mormegil6/hoa-360-stream.git && cd hoa-360-stream
 git submodule update --init
 cp /path/to/demo.mp4 content/demo.mp4   # H.264 + 16-ch AAC; see .env.example
 docker compose up -d --build
@@ -96,14 +96,13 @@ How it behaves:
 - **Fail-closed:** if telemetry is down, guest publishes are rejected while the token-authed `live` application and the demo loop keep working.
 - The owner path is unaffected: pushing with the stream key to `/live` does not consult the arbiter. Do not do both at once; check the dashboard (or press End session) before an owner broadcast.
 
-**Network prerequisite:** the guest endpoint is only as public as TCP port
-1935. On the demo box, inbound 1935 from outside the faculty network is not open yet (pending a the faculty admin request), so for now guests on the LAN or the box's Tailscale network can use it (`example-host:1935`) while the public internet cannot. The only thing to request from network admins is: inbound TCP 1935 to the box. Everything else ships in this compose file.
+**Network prerequisite:** the guest endpoint is exactly as public as TCP port 1935. If your host sits behind a firewall or NAT, the one thing to arrange is inbound TCP 1935; everything else ships in this compose file.
 
 ## On-demand VOD clips
 
 **Off by default.** Set `VOD_ENABLED=1` to serve the on-demand page; disabled, the `/vod/` and `/vod-dash/` routes return 404, the Live|VOD nav pill is removed, and loop-source skips the reference-master fetch. The two flags are independent: `DEMO_CONTENT` governs the live verification loop (placeholder synthesis), `VOD_ENABLED` governs the on-demand clips, and `VOD_ENABLED=0` suppresses the clip fetch even with `DEMO_CONTENT=1`.
 
-When enabled, the player serves on-demand reference clips at `/vod/` (`/vod/?clip=<name>`). Delivery location is a `brand.json` choice: `vodBase` empty or absent serves the clips from this host's `/vod-dash/` route; setting it to a URL serves them from an external host that mirrors the `vod-dash/` tree (see "Optional: serving VOD from object storage" below for the CORS requirements). The player reads the key at clip start, so switching needs no rebuild. Two are published as **release assets** - no media is committed here, only the generators and the player wiring: `directions` (a 360 orientation test - the equirectangular test card from `scripts/make-360-testcard.py`, an ambisonic energy-visualisation overlay, and spoken front/right/left/top reads from an ambisonic recording, so only the audio is not generated here) and `colortones` (colour-and-tone A/V-sync pattern, fully generated by `scripts/make-colortones.sh`). Put the masters in `content/vod/masters/` (gitignored); `scripts/encode-vod-ladder.sh` builds the resolution ladder and `scripts/package-vod-dash.sh` packages it into combined-MPD DASH under `content/vod/dash/<clip>/`, served at `/vod-dash/`.
+When enabled, the player serves on-demand reference clips at `/vod/` (`/vod/?clip=<name>`). Delivery location is a `brand.json` choice: `vodBase` empty or absent serves the clips from this host's `/vod-dash/` route; setting it to a URL serves them from an external host that mirrors the `vod-dash/` tree (see "Optional: serving VOD from object storage" below for the CORS requirements). The player reads the key at clip start, so switching needs no rebuild. Two are published as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips-v1) - no media is committed here, only the generators and the player wiring: `directions` (a 360 orientation test - the equirectangular test card from `scripts/make-360-testcard.py`, an ambisonic energy-visualisation overlay, and spoken front/right/left/top reads from an ambisonic recording, so only the audio is not generated here) and `colortones` (colour-and-tone A/V-sync pattern, fully generated by `scripts/make-colortones.sh`). Put the masters in `content/vod/masters/` (gitignored); `scripts/encode-vod-ladder.sh` builds the resolution ladder and `scripts/package-vod-dash.sh` packages it into combined-MPD DASH under `content/vod/dash/<clip>/`, served at `/vod-dash/`.
 
 **360 test card.** `scripts/make-360-testcard.py` renders six flat broadcast test screens and arranges them as the walls of a cube around the viewer, then inverse-projects that into equirectangular. Each wall spans exactly 90°, so a 360 viewer at a normal field of view sees a flat, undistorted card: circles stay round and straight lines stay straight, and any bend, softening or colour shift is the pipeline's doing rather than the projection's. Each face carries EBU 75 % colour bars, a grey staircase, PLUGE, a multiburst, a checkerboard, a band-limited detail patch and a Siemens star, plus its own name and centre bearing - so the picture reports resolution, gamma, range handling and compression damage in whichever direction you happen to be looking. The poles become ordinary ceiling and floor walls instead of smeared blobs. Drawing directly in equirectangular cannot do this: the pattern is pre-distorted, so nothing in it has a known shape by the time it reaches the eye.
 
@@ -125,13 +124,13 @@ captions: [
 ]
 ```
 
-The `.vtt` files are not tracked here - like the clip masters they ship as **release assets**, so a fresh `git clone` has the caption *config* but not the caption *files*. `scripts/make-colortones.sh` emits the colortones pair as part of generating that clip; `scripts/make-directions-captions.sh` (a flagged clip-specific one-off, since `directions` is a recording rather than something this repo generates) emits the directions pair.
+The `.vtt` files are not tracked here - like the clip masters they ship as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips-v1), so a fresh `git clone` has the caption *config* but not the caption *files*. `scripts/make-colortones.sh` emits the colortones pair as part of generating that clip; `scripts/make-directions-captions.sh` (a flagged clip-specific one-off, since `directions` is a recording rather than something this repo generates) emits the directions pair.
 
-The player side-loads these as native `<track>` elements rather than reading a DASH `text` AdaptationSet, which renders unreliably through videojs-contrib-dash (measured; see the note on the measurement notes under Documentation). `services/hoast-player/nginx.conf` must therefore type `.vtt` as `text/vtt` in the `/vod-dash/` location; the default `application/octet-stream` makes stricter browsers refuse the track.
+The player side-loads these as native `<track>` elements rather than reading a DASH `text` AdaptationSet, which renders unreliably through videojs-contrib-dash (measured; see the note on the measurement notes under Documentation). `services/hoast-player/vod-locations.conf` must therefore type `.vtt` as `text/vtt` in the `/vod-dash/` location; the default `application/octet-stream` makes stricter browsers refuse the track.
 
 ## Optional: serving VOD from object storage
 
-By default the stack serves the on-demand clips itself (`/vod-dash/` out of `content/vod/dash`). If you front the player with a CDN, check its terms before leaving large video on that path: Cloudflare, for example, restricts serving large non-Cloudflare-hosted video through their proxy, which is why the reference deployment offloads VOD to a Cloudflare R2 bucket instead.
+By default the stack serves the on-demand clips itself (`/vod-dash/` out of `content/vod/dash`). If you front the player with a CDN, check its terms before leaving large video on that path: Cloudflare, for example, restricts serving large non-Cloudflare-hosted video through their proxy, offloading VOD to an object-storage origin (Cloudflare R2, for example) avoids this.
 
 To do the same: upload `content/vod/dash/` to a bucket under a `vod-dash/` prefix, attach a custom domain, allow CORS from your player origin including the `range` request header (DASH SegmentBase addresses by byte range), and set `vodBase` in `brand.json` to that domain. Removing the key falls back to box-served VOD instantly; the local copy and route stay in place either way.
 
@@ -199,8 +198,6 @@ Does segment duration affect lip sync? Measured answer: **no**. The A/V start of
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): full segment-duration / lip-sync study
-- [docs/NDI.md](docs/NDI.md): Quest 3 / Twinkle NDI output extension (design only)
-- [docs/NDI-TEST.md](docs/NDI-TEST.md): hands-on NDI/Twinkle validation runbook
 - [.env.example](.env.example): configuration reference, including how to prepare `content/demo.mp4`
 
 ## License
@@ -211,7 +208,7 @@ Compose files, service configs and scripts in this repository: **Apache 2.0**. B
 |---|---|
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
 | [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, three documented patches) | GPL |
-| Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl --enable-nonfree`; treat the built earshot image as non-redistributable and build it yourself) |
+| Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |
 | nginx, Alpine packages | BSD-2-Clause / various |

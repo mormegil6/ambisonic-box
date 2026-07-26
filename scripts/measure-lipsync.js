@@ -1,4 +1,4 @@
-/* Phase 5 lip-sync / segment-duration measurement.
+/* Lip-sync / segment-duration measurement (see lip-sync-test/RESULTS.md).
  *
  * Drives lip-sync-test/index.html in headless Chromium and measures, for each
  * DASH variant (0.5 s / 1 s / 2 s / 4 s segments):
@@ -11,7 +11,7 @@
  * play through ONE media element - MSE keeps them locked to the same clock,
  * and the lip-sync offset a viewer experiences is whatever timestamp offset
  * the packaging baked in. That part is measured statically with ffprobe by
- * scripts/package-dash-variants.sh's companion check in the Phase 5 report
+ * scripts/package-dash-variants.sh's companion check in lip-sync-test/RESULTS.md
  * (audio vs video start_time per variant); this script measures the dynamic
  * playback behaviour that the segment duration actually changes.
  *

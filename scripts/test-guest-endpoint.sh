@@ -21,7 +21,9 @@
 #            retryable).
 #   RB       report button path: accepted report returns ok, repeat within the
 #            reporter window returns already-reported, session counter grows.
-#   BN       ban path: End+ban ends the live session and the banned address is
+#   BN       ban path (enforcement blocks only rows that are active-labelled,
+#            unexpired by the clock, AND carry a non-truncated matching IP; see
+#            collect._ban_blocks). End+ban ends the live session and the banned address is
 #            refused at on_publish; unban lifts it. Edge cases per the design:
 #            an active-labelled row that is time-expired, and one with a
 #            redacted IP, must BOTH still be allowed to publish (the triple

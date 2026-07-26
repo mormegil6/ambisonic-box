@@ -31,7 +31,7 @@ invisible. The residual pole *look* is creasing at the sliver-quad diagonals,
 not magnitude - the fix for that is per-pixel shader sampling, not more mesh.
 
 Usage: scripts/measure-sphere-distortion.py [--fov DEG] [--viewport PX] [--rays N]
-Needs numpy (see the AmbisonicEnergyRenderer venv; system python3 lacks it).
+Needs numpy (pip install numpy).
 """
 import argparse
 import numpy as np

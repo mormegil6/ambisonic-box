@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Segment-duration trade-off figure for the Phase 5 lip-sync measurement.
+"""Segment-duration trade-off figure for the lip-sync measurement (lip-sync-test/RESULTS.md).
 
 Regenerates lip-sync-test/segment-tradeoff.png from the RESULTS.md numbers.
 
@@ -53,7 +53,7 @@ fig.text(0.5, 0.005,
          ha="center", fontsize=8, style="italic")
 
 fig.tight_layout(rect=(0, 0.03, 1, 1))
-# PNG for inline markdown / quick view; SVG (vector) for the website and print.
+# PNG for inline markdown / quick view; SVG (vector) for web pages and print.
 for ext, kw in (("png", {"dpi": 160}), ("svg", {})):
     out = f"lip-sync-test/segment-tradeoff.{ext}"
     fig.savefig(out, **kw)

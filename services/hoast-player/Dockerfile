@@ -1,4 +1,4 @@
-# Serves the patched HOAST360 player (Phase 1 build) and the live DASH output.
+# Serves the patched HOAST360 player  and the live DASH output.
 # Build context must be the repo root (needs the hoast360/ submodule):
 #   docker build -f services/hoast-player/Dockerfile .
 FROM nginx:1.30.2-alpine

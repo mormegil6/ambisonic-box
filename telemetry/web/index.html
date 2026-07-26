@@ -22,7 +22,7 @@
   .updated{margin-left:auto;color:var(--dim);font-size:12px;font-family:var(--mono)}
   .alertbar{background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);
             color:#ffb3ae;border-radius:8px;padding:9px 13px;margin:12px 0;font-size:13px;display:none}
-  /* 140px min so all six tiles (incl. the box's disk/uptime pair) hold one
+  /* 140px min so all tiles hold one
      line on a normal window instead of wrapping the sixth */
   .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:14px 0}
   .tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
@@ -193,7 +193,7 @@
     </div>
   </section>
 
-  <footer>auto-refreshes every 10 s · served on the box, reached over Tailscale · Telegram carries the breakage alerts · <a href="https://db-ip.com" style="color:inherit">IP Geolocation by DB-IP</a></footer>
+  <footer>auto-refreshes every 10 s · private dashboard: bind :8090 to a private interface · Telegram alerts optional · <a href="https://db-ip.com" style="color:inherit">IP Geolocation by DB-IP</a></footer>
 
 <script>
 const $ = id => document.getElementById(id);

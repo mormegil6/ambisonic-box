@@ -67,9 +67,8 @@
 // Feed a 16-channel Opus WebM (the /check asset, one distinct sine per
 // channel) through ManagedMediaSource (or classic MSE as the desktop
 // control), tap the media element with createMediaElementSource, and COUNT
-// the channels that actually carry signal. 16 bars = the dashjs5/video.js8
-// migration has a real endpoint on iPhone; fewer = WebKit downmixed or
-// failed, and the migration loses its main justification.
+// the channels that actually carry signal. 16 bars = WebKit delivers discrete multichannel Opus, so an iPhone
+// player is possible; fewer = WebKit downmixed or failed.
 var LOG = [];
 function log(k, v) { LOG.push(k + ': ' + v); render(); }
 function render() { document.getElementById('raw').textContent = LOG.join('\n'); }
@@ -239,7 +238,7 @@ function runTest() {
 
   // Rolling measurement DURING (looped) playback: sample every 250 ms for
   // 3 s and keep each channel's maximum RMS, so a 1 s asset can never be
-  // measured only after it ended (the first harness version's mistake).
+  // measured only after it ended.
   var rmsMax = null;
   function sampleLoop() {
     if (MODE.notap) {

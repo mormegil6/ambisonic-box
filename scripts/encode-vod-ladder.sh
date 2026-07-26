@@ -25,7 +25,7 @@
 # refusal the floor is read straight out of the error text
 # ("8k+ resolution support is limited to M5 and faster presets") and retried
 # there - which keeps the best preset each library actually permits instead of
-# pinning to the oldest one's floor. the encode host's WSL2 ffmpeg is still v1.7, so
+# pinning to the oldest one's floor. current distro ffmpeg builds still ship SVT-AV1 v1.7, so
 # this path is live, not theoretical.
 #
 # Measure again for other content, and full length: a 10 s excerpt of this same

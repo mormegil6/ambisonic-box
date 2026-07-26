@@ -6,7 +6,7 @@
 # Results were previously gathered ad hoc, over weeks, against builds that kept
 # changing underneath them - and nothing recorded which build. That is fine
 # while iterating and useless afterwards: "which code produced Table 1?" had no
-# answer, and at least one recorded table (the Phase 5 segment-duration study)
+# answer, and at least one recorded table (the segment-duration study in lip-sync-test/RESULTS.md)
 # was measured through a player that has since gained a combined MPD, an MSE
 # buffer cap, a rewritten audio feed and a finer projection sphere. Those
 # numbers describe software that no longer exists.
@@ -121,19 +121,19 @@ else
 fi
 
 if [ ! -d node_modules/playwright-core ] && [ ! -d node_modules/playwright ]; then
-    skip lipsync "segment-duration study (Phase 5 table)" \
+    skip lipsync "segment-duration study (lip-sync-test/RESULTS.md)" \
         "playwright absent - npm i -D playwright-core && npx playwright install chromium"
     skip smoke "player smoke test" "playwright absent (same as above)"
 else
     # The lip-sync fixtures are gitignored build products, so a fresh clone
-    # cannot reproduce the Phase 5 table until they are regenerated. That is a
+    # cannot reproduce the segment-duration table until they are regenerated. That is a
     # reproducibility gap in its own right: build them first, do not let the
     # measurement fail with a bare 404.
     if compgen -G "lip-sync-test/dash_*" > /dev/null && [ -d lip-sync-test/dist ]; then
         run lipsync "segment-duration study: startup latency, playback ratio, stalls, A/V offset" \
             node scripts/measure-lipsync.js
     else
-        skip lipsync "segment-duration study (Phase 5 table)" \
+        skip lipsync "segment-duration study (lip-sync-test/RESULTS.md)" \
             "fixtures absent - run scripts/package-dash-variants.sh first (lip-sync-test/dash_*/ and dist/ are gitignored)"
     fi
     run smoke "player smoke: no console errors, clocks advance, HOA rotation follows drag" \

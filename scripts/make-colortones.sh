@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generate the "colortones" A/V-sync test pattern (matches the original
-# colortones_4k_16ch.mp4 design, reverse-engineered from that file).
+# the colortones A/V-sync test pattern).
 #
 # A 2:1 equirectangular frame with a persistent centre crosshair (front/horizon
 # marker). On a black baseline, every SLOT seconds a FLASH-second full-frame

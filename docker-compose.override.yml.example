@@ -3,13 +3,13 @@
 # Copy to `docker-compose.override.yml` on the deployment host; Compose loads it
 # automatically on top of docker-compose.yml, and it is gitignored. Nothing here
 # is required; the base stack runs standalone. These are production niceties for
-# a Linux host (this is how `example-host` is wired); adjust paths/IPs to yours.
+# a Linux host; adjust paths/IPs to yours.
 
 services:
 
   telemetry:
     environment:
-      - TEL_HOST=example-host          # name shown on the dashboard + in alerts
+      - TEL_HOST=my-stream-box          # name shown on the dashboard + in alerts
       # Telegram breakage alerts (optional). Prefer putting these in .env (also
       # gitignored) so they are not duplicated across services:
       # - BOT_TOKEN=123456:AA...

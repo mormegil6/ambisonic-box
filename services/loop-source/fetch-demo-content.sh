@@ -14,7 +14,7 @@
 #
 # DEMO_BASE_URL overrides the release base URL (used by the test harness with
 # a local fixture server). When the repo is private, anonymous fetches return
-# 404: expected, handled by the fail-soft path (see PLAN.md pre-publication
+# 404: expected, handled by the fail-soft path (a 404 lands in the fail-soft path
 # check).
 set -u
 
@@ -22,7 +22,7 @@ BASE="${DEMO_BASE_URL:-https://github.com/mormegil6/hoa-360-stream/releases/down
 DEST="${DEMO_VOD_DIR:-/content/vod/masters}"
 
 # asset<TAB>sha256, one per line. Update BOTH the release asset and this list
-# together (see PLAN.md: verify size + SHA-256 by re-downloading after upload).
+# together (verify size + SHA-256 by re-downloading after upload).
 ASSETS="colortones_8k360_16ch.webm bf9bb0b70e9ab0851e31847ee92cce2b9f278ed6091de2c2bbe5c62619720057
 directions_8k360_16ch.webm a8049c5cb7bc2442cedc409a9f017243eb1373d1e09f7743782d467856b9c070"
 

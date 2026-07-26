@@ -25,7 +25,7 @@ Sections 1, 2, 4 and 6 below are the changes now merged upstream - kept document
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
-Upstream installs `libvpx-dev` in the build stage and `libvpx` in the runtime stage but never enables it in ffmpeg's configure, so the shipped ffmpeg cannot encode VP9 (`Unrecognized option 'deadline'`). This stack's default `FFMPEG_FLAGS` transcode video to VP9 for all-WebM DASH output, which requires it.
+Upstream installs `libvpx-dev` in the build stage and `libvpx` in the runtime stage but never enables it in ffmpeg's configure, so the shipped ffmpeg cannot encode VP9 (`Unrecognized option 'deadline'`). This stack's VP9 codec policy (opt-in via `FFMPEG_FLAGS`; the committed default is `-c:v copy`) requires libvpx when enabled.
 
 ### 2. `src/nginx-transcoder/entrypoint.sh`: volume-safe startup
 
@@ -68,9 +68,9 @@ nginx-rtmp accepts the relayed stream from `rtmp-ingest` on :1935 (internal only
 ```
 ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
   -strict -2 -c:a libopus -mapping_family 255 ${FFMPEG_FLAGS} \
-  -f dash /opt/data/dash/$name.mpd
+  -f dash /opt/data/dash/${DASH_NAME}.mpd
 ```
 
-16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see `.env.example` at the repo root - VP9 realtime by default, `-c:v copy` fallback documented). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
+16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see `.env.example` at the repo root - `-c:v copy` passthrough by default, VP9 realtime documented as the opt-in codec policy). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
 
 HTTP :80 (mapped to host :8081 in dev) serves the webtools monitoring UI at `/webtools`, `rtmp_stat` at `/stat`, a health endpoint at `/` and the raw DASH output at `/dash` (the player normally serves it from the shared volume instead).

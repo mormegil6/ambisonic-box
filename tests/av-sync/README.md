@@ -8,4 +8,4 @@ Console-pasted instruments built during the DASH A/V-desync investigation (measu
 
 - **inspect.js**: on-screen mobile console. Captures errors/rejections and samples the player's live `<video>` element into a WebGL overlay, for debugging on mobile where there is no console and the sphere may render black.
 
-Superseded scratch (multiple `avmeter`/harness iterations, old player bundles, throwaway test media) was left out; these three are the canonical tools.
+These three are the canonical tools.

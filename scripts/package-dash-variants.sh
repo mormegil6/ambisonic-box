@@ -13,7 +13,7 @@
 #
 # GOP rule: subsegments must start on keyframes, so the master's keyframe
 # interval must divide every segment duration. A 0.5 s GOP satisfies all four
-# variants (e.g. -g 12 @ 25 fps was unattainable; use -g 12/13 ~ 0.5 s, or
+# variants (e.g. an exact 0.5 s GOP is impossible at 25 fps (12.5 frames); -g 12 or 13 is the closest; use -g 12/13 ~ 0.5 s, or
 # re-encode the master with -g = segment_duration * fps). This script
 # measures the real keyframe cadence with ffprobe and warns per variant.
 #
@@ -46,7 +46,7 @@ if [ ! -f "${SRC}" ]; then
     echo "ERROR: source master '${SRC}' not found." >&2
     echo "Expected a VP9 + 16-ch Opus WebM file (not demo.mp4, which is the" >&2
     echo "H.264/AAC RTMP contribution copy). Pass a path explicitly:" >&2
-    echo "  $0 content/demo-master-master.webm" >&2
+    echo "  $0 content/master-vp9-opus16.webm" >&2
     exit 1
 fi
 

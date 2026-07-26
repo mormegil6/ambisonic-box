@@ -6,18 +6,18 @@
 # Opus track (1024 kbit/s, mapping_family 255) is added. This regenerates the
 # data behind the capture-bound quality finding in the publication notes ("Perceived quality is capture-bound,
 # not bitrate-bound"), so the raw encodes never need to be kept: run it, read the
-# table, record the conclusion in the publication notes (kept outside the repo until published), delete the out-dir.
+# table, record the conclusion in the publication notes (kept outside the repo permanently; findings are cited via the published papers), delete the out-dir.
 #
 # Perceptual assessment is manual and in the target player, in the viewport (a
 # viewer sees ~1/8 of the equirect frame magnified) - not a VMAF number. The
-# section-7 finding was "no perceptible difference across CRF 21-27; the limiting
+# capture-bound quality finding was "no perceptible difference across CRF 21-27; the limiting
 # artefacts are stitching seams and sensor noise, which no bitrate removes".
 #
 # Usage: scripts/crf-sweep.sh <source> [out-dir] [crf-list] [encoder] [scale] [seconds] [start]
 #   defaults: out=./crf-sweep  crf="21 23 25 27"  encoder=libx264
 #             scale=4096:2048   seconds=60         start=0
 #   examples:
-#     scripts/crf-sweep.sh concert_master.mp4                       # section-7 repro (x264, 4K)
+#     scripts/crf-sweep.sh concert_master.mp4                       # capture-bound quality repro (x264, 4K)
 #     scripts/crf-sweep.sh master.webm ./sweep "26 30 34" libsvtav1 7680:3840 30 65
 set -euo pipefail
 

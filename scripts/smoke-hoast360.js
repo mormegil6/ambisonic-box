@@ -1,10 +1,10 @@
-/* Headless smoke test for the modernised HOAST360 player (Phase 1 verification).
+/* Headless smoke test for the modernised HOAST360 player.
  *
  * Serves hoast360/ with http-server, loads index.html in headless Chromium with
  * real autoplay policy (--autoplay-policy=user-gesture-required), starts the
  * committed order-4 demo and verifies:
  *   - no console/page errors,
- *   - AudioContext is 'running' after the play gesture (audit issue C1),
+ *   - AudioContext is 'running' after the play gesture,
  *   - audio and video clocks both advance (dashjs 4.7.4 + contrib-dash path),
  *   - mouse drag on the canvas updates the HOA rotation matrix,
  *   - stop/load reset cycle survives.
