@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fetch the VOD reference masters from the PINNED vod-clips-v1 GitHub release
+# Fetch the VOD reference masters from the PINNED vod-clips GitHub release
 # into the content volume. Runs in the loop-source container (busybox sh).
 #
 # - Pinned tag, never "latest"; pinned SHA-256 per asset, checked IN THIS REPO
@@ -18,7 +18,7 @@
 # check).
 set -u
 
-BASE="${DEMO_BASE_URL:-https://github.com/mormegil6/hoa-360-stream/releases/download/vod-clips-v1}"
+BASE="${DEMO_BASE_URL:-https://github.com/mormegil6/hoa-360-stream/releases/download/vod-clips}"
 DEST="${DEMO_VOD_DIR:-/content/vod/masters}"
 
 # asset<TAB>sha256, one per line. Update BOTH the release asset and this list
