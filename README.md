@@ -2,7 +2,7 @@
 
 # hoa-360-stream: live 360 video and third-order Ambisonics over MPEG-DASH
 
-Containerised toolchain for live streaming 360 video with third-order Ambisonics (16-channel) audio: RTMP in, MPEG-DASH (16-ch Opus, WebM) out, rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player.
+Containerised toolchain for live streaming 360 video with Higher-Order Ambisonics audio, 1st to 3rd order (3rd-order, 16-channel is the canonical configuration): RTMP in, MPEG-DASH (multichannel Opus, WebM) out, rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player that picks the ambisonic order up from the stream.
 
 **Live demo:** <https://bmroz.eu/projects/360-livestream/>
 
@@ -15,7 +15,7 @@ Containerised toolchain for live streaming 360 video with third-order Ambisonics
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legacy RTMP/FLV cannot carry VP9/Opus). From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
-**Why 16 channels, and what it would take to go higher.** The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
+**Why 16 channels, and what it would take to go higher.** In practice: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are named AAC layouts; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 is not. The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
 
 So **the on-demand path is 4th-order ready today** - it never touches AAC, and the only hardcoded piece is the order argument the page passes to HOAST360 (`initialize(mpd, irs, 3)`). A 4th-order VOD clip needs a 4th-order master and that argument changed, with no format, packaging or renderer work. It is not claimed as a shipped feature because no 4th-order clip has been played end to end yet; the components are proven, the integration is not. Raising the *live* path is a different matter - it needs a contribution format that can carry 25 channels (a wider-layout AAC encoder, or moving ingest off RTMP to SRT/WebRTC with Opus), which is architectural rather than configuration. See the measurement notes (below, Documentation) for the numbers behind this.
 
@@ -55,7 +55,7 @@ docker compose up -d --build
 
 Without `content/demo.mp4` the stack still demos itself: on first start loop-source synthesises a spherical placeholder in-container (black sphere with a test-pattern screen at the front, and a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works). With `VOD_ENABLED=1` it also fetches the two `/vod/` reference masters from the pinned `vod-clips-v1` release (~373 MB once, background, SHA-256 verified, fail-soft). Set `DEMO_CONTENT=0` to skip the synthesis, or replace `content/demo.mp4` with a real master any time (`docker compose restart loop-source` picks it up).
 
-## Stream your own content
+## Stream your own content (the `live` application)
 
 Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/) (supports 16.0 AAC):
 
@@ -81,7 +81,7 @@ Anyone with an ambisonic microphone rig and OBS Music Edition can test their str
 |---|---|
 | Server | `rtmp://<host>:1935/guest` |
 | Stream key | anything you like (it names your session in the status pages) |
-| Audio / video | same requirements as the `live` application above |
+| Audio / video | same requirements as [the `live` application](#stream-your-own-content-the-live-application) above |
 
 How it behaves:
 
