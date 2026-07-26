@@ -486,9 +486,9 @@
             if (!show) { box.hidden = true; return; }
             document.getElementById('guestEndReasonText').textContent =
                 'The last test stream ended automatically: it produced no playable output. '
-                + 'The endpoint needs 16-channel (3rd-order ambisonic) audio; plain stereo or mono will not play. / '
+                + 'The endpoint needs ambisonic audio: 4 channels (1st order) or 16 channels (3rd order); plain stereo or mono will not play. / '
                 + 'Ostatnia transmisja testowa zako\u0144czy\u0142a si\u0119 automatycznie: nie wygenerowa\u0142a odtwarzalnego strumienia. '
-                + 'Punkt ko\u0144cowy wymaga d\u017awi\u0119ku 16-kana\u0142owego (ambisonia 3. rz\u0119du); zwyk\u0142e stereo lub mono nie zadzia\u0142a.';
+                + 'Punkt ko\u0144cowy wymaga d\u017awi\u0119ku ambisonicznego: 4 kana\u0142y (1. rz\u0105d) lub 16 kana\u0142\u00f3w (3. rz\u0105d); zwyk\u0142e stereo lub mono nie zadzia\u0142a.';
             box.hidden = false;
         }
 
@@ -569,7 +569,10 @@
             var g = document.getElementById('gate'); if (g) g.hidden = true;
             // Whichever manifest the box is currently writing (from /api/live);
             // the literal is only the fallback for a stack without telemetry.
-            hoast360.initialize(window.__MPD__ || "/dash/hoast_demo.mpd", "/irs/", 3);
+            var liveMpd = window.__MPD__ || "/dash/hoast_demo.mpd";
+            orderFromMpd(liveMpd).then(function (order) {
+                hoast360.initialize(liveMpd, "/irs/", order);
+            });
         }
 
         function pollGate() {
@@ -693,6 +696,27 @@
                     });
             });
         })();
+
+        // Ambisonic order from the manifest: the pipeline is order-flexible
+        // (Earshot's transcode carries any channel count into mapping_family
+        // 255 Opus), so the renderer order comes from the stream, not from a
+        // hardcoded constant. (o+1)^2 channels -> order o; anything else
+        // falls back to 3rd order, the stack's canonical configuration.
+        function orderFromMpd(url) {
+            return fetch(url, { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.text() : ''; })
+                .then(function (t) {
+                    var m = t.match(/audio_channel_configuration[^>]*value="(\d+)"/i)
+                         || t.match(/AudioChannelConfiguration[^>]*value="(\d+)"/);
+                    var ch = m ? parseInt(m[1], 10) : 16;
+                    var order = { 4: 1, 9: 2, 16: 3, 25: 4 }[ch];
+                    if (!order) order = 3;
+                    if (window.console) console.log('HOA order', order, '(' + ch + ' ch) from manifest');
+                    document.documentElement.setAttribute('data-hoa-order', order + ':' + ch);
+                    return order;
+                })
+                .catch(function () { return 3; });
+        }
 
         function init() {
             // Probed in the HOAST360 constructor, before anything is fetched. Acting
@@ -856,7 +880,10 @@
             cb.setAttribute('data-cf-beacon', JSON.stringify({ token: String(cfTok) }));
             document.head.appendChild(cb);
           }
-          hoast360.initialize(vodUrl('/vod-dash/' + clip + '/' + clip + '.mpd'), '/irs/', 3);
+          var clipMpd = vodUrl('/vod-dash/' + clip + '/' + clip + '.mpd');
+          orderFromMpd(clipMpd).then(function (order) {
+              hoast360.initialize(clipMpd, '/irs/', order);
+          });
           wireVodLoop();
           addLoopButton();
           if (info.captions) addCaptions(info.captions);

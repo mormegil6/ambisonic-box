@@ -1279,7 +1279,7 @@ def _guest_stall_arm():
             age = segment_age()
             if age is not None and age < SEG_STALE_S:
                 return              # segments flowing; healthy session
-            _guest["terminating"] = "no playable output (16-channel audio required)"
+            _guest["terminating"] = "no playable output (ambisonic audio required: 4 or 16 channels)"
             _guest["kill"] = True   # dropped at the next update ping
             _guest_save()
         print("guest transcode stalled; ending the session "
