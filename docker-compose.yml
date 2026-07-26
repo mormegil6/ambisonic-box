@@ -3,7 +3,7 @@
 # Live path:  loop-source (or OBS ME) ──rtmp──▶ rtmp-ingest ──rtmp──▶ earshot
 #             earshot transcodes to 16-ch Opus (+ VP9 by default) and writes
 #             live DASH into the dash-output volume ──▶ hoast-player serves it.
-# shaka is a `tools`-profile utility (VOD/lip-sync packaging), NOT in the live
+# shaka is a `tools`-profile utility (offline VOD + A/V-sync test packaging), NOT in the live
 # path - it cannot ingest a 16-channel live stream.
 #
 # The RTMP contribution leg is H.264 + 16-ch AAC (PCE) by protocol necessity;
@@ -242,7 +242,8 @@ services:
     restart: unless-stopped
     logging: *bounded-logs
 
-  # VOD/lip-sync packaging utility (Phase 5) - NOT in the live path.
+  # Offline VOD + A/V-sync test packaging (the Phase 5 measurement fixtures
+  # and the on-demand clips) - NOT in the live path.
   # Usage: docker compose run --rm shaka <packager args>
   shaka:
     image: google/shaka-packager:v3.7.2

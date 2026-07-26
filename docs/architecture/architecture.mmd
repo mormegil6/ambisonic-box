@@ -22,7 +22,7 @@ flowchart TD
     LOOP -- "RTMP (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT
     EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
-    SHAKA -. "VOD / lip-sync packaging" .-> VOL
+    SHAKA -. "VOD + A/V-sync test packaging" .-> VOL
     VOL --> PLAYER
     PLAYER -- "HTTP :8080" --> VIEWER
     VOL -. "segment freshness" .-> TELEM
