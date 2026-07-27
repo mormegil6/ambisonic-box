@@ -1,5 +1,8 @@
 output/*
 !output/.gitkeep
+# earshot wipes ./output on every start; ./scratch is the sibling that survives
+scratch/*
+!scratch/.gitkeep
 content/*.mp4
 content/*.mov
 content/*.wav

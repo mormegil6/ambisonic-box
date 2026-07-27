@@ -78,7 +78,15 @@ services:
       # and the shipped stack failed its own test as a result.
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -max_muxing_queue_size 1000 -c:v copy}
     volumes:
+      # WIPED ON EVERY START. The entrypoint clears /opt/data/dash so a restart
+      # begins a fresh DASH timeline (see services/earshot/README.md 2), and the
+      # volume is bind-backed by ./output, so the host directory is emptied too.
+      # Nothing that must survive a restart may live here.
       - dash-output:/opt/data/dash
+      # Never touched by earshot: the entrypoint only clears .../dash. For test
+      # harnesses, probe captures written from inside the container, and other
+      # one-off files that have to outlive `docker compose up`.
+      - ./scratch:/opt/data/scratch
     ports:
       # Loopback only: docs/ENDPOINTS.md marks this private, and /stat discloses
       # publisher and client IPs. Compose MERGES `ports` lists instead of
