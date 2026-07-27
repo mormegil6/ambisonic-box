@@ -4,7 +4,7 @@
 
 ## Relationship to upstream
 
-The pinned commit above is a 2022 snapshot, but this tree is **not** four years behind. Upstream has made exactly eight commits since (four merged pull requests), all of which touch what we vendor - and all four are changes contributed *from here* and merged in July 2026:
+The pinned commit above is a 2022 snapshot, but this tree is **not** four years behind. Upstream has made commits since (five merged pull requests), all of which touch what we vendor - and all five are changes contributed *from here* and merged in July 2026:
 
 | change | upstream |
 |---|---|
@@ -12,16 +12,15 @@ The pinned commit above is a 2022 snapshot, but this tree is **not** four years 
 | `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
 | volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
 | relative redirects (`absolute_redirect off`) | **merged**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) (`ac1dda7`) |
+| `ENABLE_NONFREE` build ARG (section 7 below) | **merged**, [#57](https://github.com/EnvelopSound/Earshot/pull/57) (`e765fdb`) |
 
-A fifth change, the `ENABLE_NONFREE` build ARG (section 7 below), is contributed upstream as [#57](https://github.com/EnvelopSound/Earshot/pull/57) and not yet merged.
-
-So `src/` is content-equivalent to upstream master `ac1dda7` plus the local extras below - that master head includes `absolute_redirect off` ([#56](https://github.com/EnvelopSound/Earshot/pull/56), §6 below), contributed from here and merged upstream on 2026-07-24. Verified by diff against master: **nothing upstream carries is missing here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical (`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
+So `src/` is content-equivalent to upstream master `e765fdb` plus the local extras below - that is upstream's current tip, entirely made of changes contributed from here. Verified by diff against master: **nothing upstream carries is missing here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical (`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
 
 Re-vendoring would therefore be pure bookkeeping: it gains no code, because the reason upstream changed is that upstream adopted these changes. The only thing it would buy is a less misleading pin. Worth doing when convenient, not urgent, and the local extras below would all have to be re-applied afterwards anyway.
 
 ## Local modifications
 
-Sections 1, 2, 4 and 6 below are the changes now merged upstream - kept documented because they are still deviations from the *pinned* commit, and because sections 2 and 5 build on them. Section 7 is contributed but not yet merged (#57). Sections 3 and 5, plus the refinement noted in 2, are the only things still genuinely ours.
+Sections 1, 2, 4, 6 and 7 below are the changes now merged upstream - kept documented because they are still deviations from the *pinned* commit, and because sections 2 and 5 build on them. Sections 3 and 5, plus the refinement noted in 2, are the only things still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -59,7 +58,7 @@ nginx builds directory redirects (e.g. `/webtools` -> `/webtools/`) as absolute 
 
 ### 7. `src/Dockerfile`: `ENABLE_NONFREE` build ARG
 
-ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this build links no nonfree library (only libx264/libopus/libvpx), so the flag is a no-op licence stamp that blocks publishing a pre-built image. The ARG defaults to 1 in the Dockerfile (stock build unchanged), but the stack's docker-compose.yml passes 0 by default so its images are redistributable; export ENABLE_NONFREE=1 to restore the stock build. Verified equivalent end to end (16-ch Opus hexadecagonal + VP9, full pipeline test). Contributed upstream as [#57](https://github.com/EnvelopSound/Earshot/pull/57) (open).
+ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this build links no nonfree library (only libx264/libopus/libvpx), so the flag is a no-op licence stamp that blocks publishing a pre-built image. The ARG defaults to 1 in the Dockerfile (stock build unchanged), but the stack's docker-compose.yml passes 0 by default so its images are redistributable; export ENABLE_NONFREE=1 to restore the stock build. Verified equivalent end to end (16-ch Opus hexadecagonal + VP9, full pipeline test). Contributed upstream as [#57](https://github.com/EnvelopSound/Earshot/pull/57) and merged on 2026-07-27 (`e765fdb`); applied here ahead of that merge.
 
 ## What this service does in the stack
 
