@@ -25,7 +25,7 @@ So **the on-demand path is 4th-order capable, verified end to end** - it never t
 docker compose config | grep FFMPEG_FLAGS
 ```
 
-**PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's predefined layouts, so a stream carrying one has to spell the layout out in a PCE rather than name it; stock ffmpeg will not write that, which is why earshot vendors a patched, PCE-aware build. Without it the contribution leg could not carry 16 channels over RTMP at all. `dash-output` is a Docker volume - the shared filesystem earshot segments into and nginx serves from, nothing to do with level.
+**PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's predefined layouts, so a stream carrying one has to spell the layout out in a PCE rather than name it. Stock ffmpeg does emit a PCE for named layouts like `hexadecagonal`; earshot vendors its own build so the image guarantees that regardless of the host's ffmpeg version. Without a PCE-capable encoder the contribution leg could not carry 16 channels over RTMP at all. `dash-output` is a Docker volume - the shared filesystem earshot segments into and nginx serves from, nothing to do with level.
 
 | Service | Role | Host port |
 |---|---|---|
@@ -173,6 +173,14 @@ Does segment duration affect lip sync? Measured answer: **no**. The A/V start of
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
 
 `package-dash-variants.sh` drives Shaka Packager through the compose `tools` profile. The pattern for manual runs is `docker compose run --rm shaka <packager args>`.
+
+## Working directories: `output/` and `scratch/`
+
+Two gitignored directories at the repo root, with opposite guarantees.
+
+`output/` is **earshot's** working directory: the DASH volume is bind-backed by it, and earshot's entrypoint clears that directory on every container start so each run begins a fresh timeline. Anything you leave in `output/` is deleted by the next `docker compose up`. That is intended for segments, and a trap for everything else.
+
+`scratch/` is mounted alongside at `/opt/data/scratch` and is never touched by earshot, which only ever clears `.../dash`. Put anything that has to survive a restart here: test harnesses, probe captures written from inside the container, one-off files. Because it sits inside the repo, Node also resolves the root `node_modules` from it, so browser-based harnesses run without extra path setup.
 
 ## Troubleshooting
 
