@@ -11,6 +11,21 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 | 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so a plain override list can widen but not narrow a base mapping (narrowing needs `!override`/`!reset` on the key). Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
 
+### If you bind a private port to a VPN or floating address
+
+Binding these private ports to a VPN interface address (Tailscale, WireGuard, a keepalived VIP) rather than loopback is a reasonable way to reach them from your own devices only. It has one sharp edge worth knowing before a power cut finds it for you.
+
+At boot, the container runtime generally starts once the VPN's *service* is active, but active does not mean the address has been **assigned** - the client may still be authenticating. Publishing a port to an address that does not exist yet fails with `cannot assign requested address`, and the container exits immediately. A `restart: unless-stopped` policy does **not** recover this, because the failure is in container networking setup rather than in the container process: the container stays dead until something restarts it by hand. Services bound to `0.0.0.0` come up normally in the same boot, so the stack appears half-working rather than obviously broken.
+
+Two independent mitigations, worth having both:
+
+- `net.ipv4.ip_nonlocal_bind = 1` (via `/etc/sysctl.d/`) lets the bind succeed regardless of when the address appears; traffic flows once it does. This prevents the failure.
+- A boot-time script that waits for the address, brings the stack up, and then **verifies the private endpoints actually answer** - recreating any service whose port is not bound. This recovers from it.
+
+Order matters on the way back up: `rtmp-ingest`'s nginx resolves `earshot` once when it loads its config, so it must start (or be restarted) after earshot is healthy, or it crash-loops on `host not found in url earshot:1935/live`.
+
+The failure mode that makes this worth automating is not the downtime, it is the silence: **`telemetry` is the alerting path**, so if it is one of the services that failed to bind, nothing can report the outage - including the outage of the alerter itself. Any boot-recovery script should send its own notification, independently of telemetry, on success as well as failure.
+
 Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), and the `dash-output` / `status-public` volumes.
 
 ### Control routes proxied on 8080
