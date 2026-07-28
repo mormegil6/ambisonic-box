@@ -131,6 +131,22 @@ The `.vtt` files are not tracked here - like the clip masters they ship as [rele
 
 The player side-loads these as native `<track>` elements rather than reading a DASH `text` AdaptationSet, which renders unreliably through videojs-contrib-dash (measured; see the note on the measurement notes under Documentation). `services/hoast-player/vod-locations.conf` must therefore type `.vtt` as `text/vtt` in the `/vod-dash/` location: it's the registered, spec-correct MIME type, and current browsers key on the `WEBVTT` file signature regardless, but there's no reason to serve it as anything else.
 
+### Playing it on a standalone headset
+
+The clips play in a Meta Quest 3's own browser, with no app to install and nothing to configure: open the page and drag to look around. The headset's browser decodes the multichannel Opus directly and the page renders the sound field binaurally, head-tracked, the same as on desktop.
+
+<div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
+
+The panel in that shot is the `?dbg` capability probe (see the URL-flags note in [docs/ENDPOINTS.md](docs/ENDPOINTS.md)), reporting what the headset's browser actually managed:
+
+```
+Stereo Opus control (WebM):    DECODED (2 ch, 48000 Hz, 1 s)
+16-channel (3OA) Opus (WebM):  DECODED (16 ch, 48000 Hz, 1 s)
+25-channel (4OA) Opus (WebM):  DECODED (25 ch, 48000 Hz, 1 s)
+```
+
+Both the 3rd-order and the 4th-order layouts decode there, which is independent corroboration of the order-4 claim above from consumer hardware and a different browser engine (OculusBrowser 149) than the headless harness used for the end-to-end test. `AudioContext maxChannelCount: 2` in the same panel is the headset's *output* device being stereo, which is exactly right for binaural rendering; it is not a limit on what can be decoded.
+
 ## Optional: serving VOD from object storage
 
 By default the stack serves the on-demand clips itself (`/vod-dash/` out of `content/vod/dash`). If you front the player with a CDN, check its terms before leaving large video on that path: Cloudflare, for example, restricts serving large non-Cloudflare-hosted video through their proxy, offloading VOD to an object-storage origin (Cloudflare R2, for example) avoids this.
