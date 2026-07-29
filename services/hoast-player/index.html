@@ -108,7 +108,8 @@
              background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
       .tabs a:hover{text-decoration:none}
       .tabs a.on{background:var(--accent);border-color:var(--accent);color:#06231f}
-      .clip-meta{font-size:13.5px;color:var(--body);opacity:.9;margin:12px 0 0}
+      .clip-detail{font-size:15px;color:var(--body);margin:12px 0 0;line-height:1.55}
+      .clip-meta{font-size:13.5px;color:var(--body);opacity:.72;margin:6px 0 0}
       .clip-dl{font-size:13.5px;margin:8px 0 0}
       /* guest-stream notice: visible only while a guest holds the endpoint */
       [hidden]{display:none!important}
@@ -253,6 +254,7 @@
         <a data-clip="directions" href="/vod/?clip=directions">Directions</a>
         <a data-clip="colortones" href="/vod/?clip=colortones">Colortones (A/V sync)</a>
       </div>
+      <p class="clip-detail" id="clipDetail" hidden></p>
       <p class="clip-meta" id="clipMeta" hidden></p>
       <p class="clip-dl" id="brandDownloads" hidden></p>
 
@@ -798,7 +800,8 @@
         directions: {
           title: "Directions",
           desc: "A 360° imaging test with spoken direction cues, for checking picture and spatial accuracy.",
-          meta: "Broadcast test cards form the walls of a cube, so each arrives undistorted when you face it: colour bars, grey scale, PLUGE, multiburst and a Siemens star per wall, under an ambisonic energy-visualisation overlay. 8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · 2 min loop",
+          detail: "Broadcast test cards form the walls of a cube, so each arrives undistorted when you face it: colour bars, grey scale, PLUGE, multiburst and a Siemens star per wall, under an ambisonic energy-visualisation overlay.",
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus (3rd-order Ambisonics, ACN/SN3D) · 2 min loop",
           captions: [
             { src: '/vod-dash/directions/captions_en.vtt', lang: 'en', label: 'English' },
             { src: '/vod-dash/directions/captions_pl.vtt', lang: 'pl', label: 'Polski' }
@@ -807,7 +810,8 @@
         colortones: {
           title: "Colortones (A/V sync)",
           desc: "An audio/video-sync test pattern: colour flashes paired with tones.",
-          meta: "Ten colour flashes, each paired with a distinct 300-1200 Hz tone on channel 1, so any A/V offset is unambiguous by eye and ear. 8K (7680×3840) · AV1 · 16-channel Opus · 1 s lead-in · 2 min loop",
+          detail: "Ten colour flashes, each paired with a distinct 300-1200 Hz tone on channel 1, so any A/V offset is unambiguous by eye and ear.",
+          meta: "8K (7680×3840) · AV1 · 16-channel Opus · 1 s lead-in · 2 min loop",
           captions: [
             { src: '/vod-dash/colortones/captions_en.vtt', lang: 'en', label: 'English' },
             { src: '/vod-dash/colortones/captions_pl.vtt', lang: 'pl', label: 'Polski' }
@@ -835,6 +839,8 @@
         var k = document.getElementById('kicker'); if (k) k.textContent = 'HOA 360° · VOD test clips';
         var h = document.getElementById('h1'); if (h) h.textContent = info.title;
         var t = document.getElementById('hoast-text'); if (t) t.textContent = info.desc;
+        var dt = document.getElementById('clipDetail');
+        if (dt && info.detail) { dt.textContent = info.detail; dt.hidden = false; }
         var m = document.getElementById('clipMeta'); if (m) { m.textContent = info.meta; m.hidden = false; }
 
         var tabs = document.getElementById('clipTabs'); if (tabs) tabs.hidden = false;
