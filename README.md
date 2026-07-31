@@ -72,12 +72,16 @@ The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_
 
 ### Stock OBS on macOS: record multitrack, merge, push
 
-Live 16-channel contribution needs OBS Music Edition (stock OBS caps a stream at one 8-channel track). But **stock OBS on macOS can still feed this stack** in a record-then-push flow, because its per-track ceiling is the only ceiling: with a multichannel Core Audio device (a BlackHole 16/64ch loopback, or an aggregate of your interface) and Preferences > Audio > Channels set to **7.1**, each OBS audio track records 8 fully discrete channels via CoreAudio AAC with input order preserved (verified per-tone, 2026-07-27). Six tracks are available, so 16 channels fit on two: route capture channels 1-8 to track 1 and 9-16 to track 2, enable both tracks in the recording output, and record.
+Live 16-channel contribution needs OBS Music Edition (stock OBS caps a stream at one audio track). But **stock OBS on macOS can still feed this stack** in a record-then-push flow, by spreading the channels across recording tracks. The settings below are the ones that survived per-channel verification (2026-07-31, OBS 32.2.1, tone-per-channel with level checks); the two obvious-looking alternatives both fail in ways nothing warns about, so treat this recipe as exact:
 
-The recording then needs one step, because OBS neither merges its own tracks nor tags them usefully (each says "7.1 surround", which is meaningless for ambisonics):
+- Settings > Audio > **Channels: 4.0** - four full-band channels per track. NOT 7.1: OBS's 7.1 path silently **mutes the LFE slot outright** (channel 4 of every track arrives digital-silent, which for ambisonics would erase ACN 3, the X axis).
+- Four capture sources on a multichannel Core Audio device (BlackHole 16/64ch, or an aggregate of your interface): device channels 1-4, 5-8, 9-12, 13-16, downmixing off, routed to recording tracks 1-4 respectively (Advanced Audio Properties), all four tracks enabled in Settings > Output > Recording.
+- Recording audio encoder: **FFmpeg AAC**, format mkv. NOT CoreAudio AAC: its 4-channel AAC decodes in MPEG transmission order (C, L, R, Cs), which reads back as a scrambled `[3,1,2,4]` within every track.
+
+Then one step, because OBS neither merges its own tracks nor tags them usefully:
 
 ```bash
-# sanity-check the capture shape first: expect 2 tracks x 8 channels
+# sanity-check the capture shape first: expect 4 tracks x 4 channels
 ./scripts/merge-obs-tracks.sh --check recording.mkv
 
 # a) one 16-channel PCM master (archival, VOD packaging input) ...
@@ -89,7 +93,7 @@ The recording then needs one step, because OBS neither merges its own tracks nor
     --push "rtmp://<host>:1935/live/<name>?token=<STREAM_KEY>"
 ```
 
-The merge is strictly positional (track 1 becomes channels 1-8, track 2 becomes 9-16, never a downmix), so AmbiX channel order survives if the capture device carried it. `scripts/test-obs-merge.sh` proves this with a per-channel tone ladder, offline and (with `--e2e` and the stack up) through ingest and transcode to the emitted DASH Opus. Keep the OBS video settings from the table above; the push copies video untouched.
+The merge is strictly positional (track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix), so AmbiX channel order survives end to end. `scripts/test-obs-merge.sh` proves this with a per-channel tone ladder, offline and (with `--e2e` and the stack up) through ingest and transcode to the emitted DASH Opus; the same ladder played from a DAW into a real OBS capture is how the two failure modes above were caught. Keep the OBS video settings from the table above; the push copies video untouched.
 
 
 **Channel counts:** the pipeline is order-flexible where the tools allow it. Earshot's transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder only accepts *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) work while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders). A plain stereo or mono push produces no output at all and is auto-ended on the guest endpoint with that reason.
