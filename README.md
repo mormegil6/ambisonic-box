@@ -269,4 +269,4 @@ This repository is the containerised successor of the toolchain described in the
 
 ## Contact
 
-Bartłomiej Mróz · bartlomiej.mroz@pg.edu.pl · [Department of Multimedia Systems](https://multimed.org/index_en.html), Gdańsk University of Technology · [bmroz.eu](https://bmroz.eu)
+Bartłomiej Mróz · bartlomiej.mroz@pg.edu.pl · Department of Multimedia Systems, Gdańsk University of Technology · [bmroz.eu](https://bmroz.eu)
