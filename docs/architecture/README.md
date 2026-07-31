@@ -2,6 +2,17 @@
 
 The data-flow diagram embedded in the top-level `README.md`.
 
+## What the diagram simplifies
+
+The diagram draws the data path and compresses everything else. The omissions are deliberate, so the picture stays readable; this is the honest list:
+
+- **`shaka packager (profile: tools)`** means the service sits behind the Compose profile named `tools`: a plain `docker compose up` never starts it, it runs only on demand (`docker compose run --rm shaka <packager args>`) for offline VOD packaging and the A/V-sync test fixtures. The dotted edge into the volume means exactly that: not part of the live path, and it could not be (it cannot ingest a 16-channel live stream).
+- **telemetry has one drawn input (the dash-output freshness probe) but several real ones**, all undrawn: container health and the hoast-player access log (viewer counts, countries) via the Docker socket, earshot's `/stat` (is a publisher connected), and the host's temperature, disk and uptime.
+- **telemetry is not only a sink.** Undrawn control and output edges: it starts and stops `loop-source` for on-demand idling (a Docker-socket action, which is why the socket mount is read-write), writes the curated public `status.json` into the `status-public` volume that hoast-player serves, and sends Telegram alerts.
+- **the viewer's control path is invisible.** A visitor wakes the idle demo through exactly three `/api` routes that hoast-player reverse-proxies to telemetry; the diagram shows only the one HTTP edge. The route list, and why it is exactly three, is in [`docs/ENDPOINTS.md`](../ENDPOINTS.md).
+- **`rtmp-ingest`'s "auth" label compresses the mechanism**: the `on_publish` callback goes to an auth endpoint inside the same container, not to another service.
+- **only the `dash-output` volume is drawn**; `telemetry-data` (private dashboard history) and `status-public` (public status JSON) exist but carry no arrows here.
+
 - `architecture.png` - what the README embeds (see the foreignObject note below)
 - `architecture.svg` - the scalable vector source (open it directly to view)
 

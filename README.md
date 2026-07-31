@@ -10,6 +10,8 @@ Containerised toolchain for live streaming 360 video with Higher-Order Ambisonic
 
 <div align="center"> <img src="docs/architecture/architecture.png" width="80%" alt="HOA 360 stream architecture: OBS and loop-source feed rtmp-ingest, earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume"> </div>
 
+<p align="center"><em>The data path only. Control and monitoring edges are deliberately omitted; <a href="docs/architecture/README.md">docs/architecture/</a> lists exactly what the diagram simplifies.</em></p>
+
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
 
@@ -261,10 +263,10 @@ This repository is the containerised successor of the toolchain described in the
 
 - Thomas Deppisch and Nils Meyer-Kahlen, [HOAST360](https://github.com/thomasdeppisch/hoast360), the higher-order Ambisonics 360 player this project patches and serves
 - [Envelop](https://envelop.us), Earshot, the multichannel RTMP-to-DASH transcoder
-- pkviet, OBS Studio Music Edition and the PCE-capable FFmpeg fork
+- pkviet, [OBS Studio Music Edition](https://github.com/pkviet/obs-studio) and the PCE-capable FFmpeg fork
 - [Shaka project](https://github.com/shaka-project), Shaka Packager
-- Gdańsk University of Technology, Department of Multimedia Systems
+- Gdańsk University of Technology, [Department of Multimedia Systems](https://multimed.org/index_en.html)
 
 ## Contact
 
-Bartłomiej Mróz · bartlomiej.mroz@pg.edu.pl · Department of Multimedia Systems, Gdańsk University of Technology · [bmroz.eu](https://bmroz.eu)
+Bartłomiej Mróz · bartlomiej.mroz@pg.edu.pl · [Department of Multimedia Systems](https://multimed.org/index_en.html), Gdańsk University of Technology · [bmroz.eu](https://bmroz.eu)
