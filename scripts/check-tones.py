@@ -43,11 +43,20 @@ def goertzel(xs, f):
 ok = True
 for c in range(ch):
     xs = samples[c::ch]
+    rms = math.sqrt(sum(x * x for x in xs) / len(xs)) / 32768.0
+    rms_db = 20 * math.log10(rms) if rms > 0 else -200.0
+    # a silent channel still has an argmax over leakage from its neighbours,
+    # which once produced a false PASS on a channel OBS had muted - so silence
+    # is its own loud failure, checked before any frequency reasoning
+    if rms_db < -60.0:
+        print(f"  ch{c:02d} expect {freqs[c]:4d} Hz: SILENT ({rms_db:.0f} dBFS)")
+        ok = False
+        continue
     powers = [goertzel(xs, f) for f in freqs]
     best = powers.index(max(powers))
     status = "ok" if best == c else f"WRONG (dominant {freqs[best]} Hz)"
     if best != c:
         ok = False
-    print(f"  ch{c:02d} expect {freqs[c]:4d} Hz: {status}")
+    print(f"  ch{c:02d} expect {freqs[c]:4d} Hz: {status} ({rms_db:.0f} dBFS)")
 print("TONE CHECK " + ("PASS" if ok else "FAIL"))
 sys.exit(0 if ok else 1)
