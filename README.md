@@ -70,6 +70,27 @@ Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/) (
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `STREAM_KEY`: a custom stream key no longer moves the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
 
+### Stock OBS on macOS: record multitrack, merge, push
+
+Live 16-channel contribution needs OBS Music Edition (stock OBS caps a stream at one 8-channel track). But **stock OBS on macOS can still feed this stack** in a record-then-push flow, because its per-track ceiling is the only ceiling: with a multichannel Core Audio device (a BlackHole 16/64ch loopback, or an aggregate of your interface) and Preferences > Audio > Channels set to **7.1**, each OBS audio track records 8 fully discrete channels via CoreAudio AAC with input order preserved (verified per-tone, 2026-07-27). Six tracks are available, so 16 channels fit on two: route capture channels 1-8 to track 1 and 9-16 to track 2, enable both tracks in the recording output, and record.
+
+The recording then needs one step, because OBS neither merges its own tracks nor tags them usefully (each says "7.1 surround", which is meaningless for ambisonics):
+
+```bash
+# sanity-check the capture shape first: expect 2 tracks x 8 channels
+./scripts/merge-obs-tracks.sh --check recording.mkv
+
+# a) one 16-channel PCM master (archival, VOD packaging input) ...
+./scripts/merge-obs-tracks.sh recording.mkv master.mov --channels 16
+
+# b) ... or push straight to the ingest (video copied, audio re-encoded
+#    to 16-ch AAC with the PCE the RTMP leg needs, realtime-paced)
+./scripts/merge-obs-tracks.sh recording.mkv --channels 16 \
+    --push "rtmp://<host>:1935/live/<name>?token=<STREAM_KEY>"
+```
+
+The merge is strictly positional (track 1 becomes channels 1-8, track 2 becomes 9-16, never a downmix), so AmbiX channel order survives if the capture device carried it. `scripts/test-obs-merge.sh` proves this with a per-channel tone ladder, offline and (with `--e2e` and the stack up) through ingest and transcode to the emitted DASH Opus. Keep the OBS video settings from the table above; the push copies video untouched.
+
 
 **Channel counts:** the pipeline is order-flexible where the tools allow it. Earshot's transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder only accepts *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) work while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders). A plain stereo or mono push produces no output at all and is auto-ended on the guest endpoint with that reason.
 
