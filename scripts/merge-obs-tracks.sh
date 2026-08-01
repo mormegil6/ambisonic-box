@@ -2,14 +2,16 @@
 # Merge a stock-OBS multitrack recording into a single multichannel file the
 # stack can use, or push it straight to the RTMP ingest.
 #
-# Why this exists: stock OBS (32.1.2+, macOS verified 2026-07-27) delivers 8
-# fully discrete channels PER AUDIO TRACK via a multichannel Core Audio
-# aggregate device with the global layout set to 7.1 - but it cannot merge its
-# own tracks, and it tags each track as surround 7.1. So a 16-channel
-# ambisonic capture arrives as two 8-channel AAC tracks whose channel ORDER is
-# right and whose layout TAG is wrong. This script concatenates the tracks in
-# container order (OBS track order is preserved in the file) and replaces the
-# surround tag:
+# Why this exists: stock OBS (macOS verified 2026-07-31, 32.2.1) records
+# discrete multichannel audio PER TRACK from a multichannel Core Audio device
+# with the global layout set to 4.0 (quad; four full-band channels per track,
+# NEVER an LFE-bearing layout - 7.1 mutes the LFE slot outright, which would
+# erase ambisonic ACN 3) - but it cannot merge its own tracks, and it tags
+# each one with surround semantics. So a 16-channel ambisonic capture arrives
+# as four 4-channel AAC tracks (FFmpeg AAC encoder, not CoreAudio - see the
+# README recipe) whose channel ORDER is right and whose layout TAG is wrong.
+# This script concatenates the tracks in container order (OBS track order is
+# preserved in the file) and replaces the surround tag:
 #   - default: a PCM master (.mov, video stream copied). It carries the same
 #     named layout when one exists (16 -> hexadecagonal, 4 -> quad), because
 #     that is what any later AAC encode of the master needs anyway; other
@@ -30,17 +32,20 @@
 #   merge-obs-tracks.sh <obs-recording> --push rtmp://<host>:1935/live/<key> [--channels N]
 #
 #   --channels N   keep only the first N merged channels (default: all).
-#                  Use 16 when capturing 3OA on two 8-channel tracks.
+#                  Use 16 when capturing 3OA across 4-channel tracks.
 #   --check        probe and report the recording's track/channel shape, then exit.
+#   --loop         (push mode) loop the input endlessly, so a short capture can
+#                  drive a longer live test; stop with ctrl-C.
 #
 # Exit codes: 0 OK, 1 failure, 2 bad invocation / unusable input.
 
 set -euo pipefail
 
-INPUT="" OUTPUT="" PUSH_URL="" CHANNELS="" CHECK=0
+INPUT="" OUTPUT="" PUSH_URL="" CHANNELS="" CHECK=0 LOOP=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check)    CHECK=1 ;;
+        --loop)     LOOP=1 ;;
         --push)     PUSH_URL="${2:?--push needs a URL}"; shift ;;
         --channels) CHANNELS="${2:?--channels needs a number}"; shift ;;
         -h|--help)  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -142,8 +147,10 @@ fi
 # --- run ------------------------------------------------------------------
 if [ -n "$PUSH_URL" ]; then
     ABITRATE=$((96 * C))k   # 96 kbit/s per channel on the contribution leg
+    LOOPARGS=()
+    [ "$LOOP" -eq 1 ] && LOOPARGS=(-stream_loop -1)
     echo "pushing: $C ch AAC ($PAN_LAYOUT, PCE) @ $ABITRATE + copied video -> $PUSH_URL"
-    exec ffmpeg -hide_banner -loglevel warning -stats -re -i "$INPUT" \
+    exec ffmpeg -hide_banner -loglevel warning -stats -re "${LOOPARGS[@]}" -i "$INPUT" \
         -filter_complex "$FILTER" \
         -map 0:v:0? -map '[a]' \
         -c:v copy -c:a aac -b:a "$ABITRATE" \
