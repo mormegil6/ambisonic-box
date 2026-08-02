@@ -1903,6 +1903,13 @@ def serve():
                     if call and call != "update_publish":
                         return self._json(200, {})
                     return self._json(guest_update(name), {})
+            # Owner /live publish just passed the STREAM_KEY check at
+            # rtmp-ingest; preempt any in-progress guest session the same way
+            # the dashboard's kill button does. nginx already fails this
+            # open, so the response here doesn't gate anything.
+            if p == "/rtmp/live/notify":
+                guest_kill()
+                return self._json(200, {})
             return super().do_GET()
 
         def do_POST(self):

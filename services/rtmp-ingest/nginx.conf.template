@@ -53,12 +53,33 @@ http {
             # stdout/docker logs on every publish.
             access_log off;
             if ($arg_name = '${STREAM_KEY}') {
-                return 201;
+                return 418;
             }
             if ($arg_token = '${STREAM_KEY}') {
-                return 201;
+                return 418;
             }
             return 401;
+        }
+
+        # 418 carries no meaning here; it is an internal marker so a matched
+        # key can run one more step - telling telemetry to preempt any
+        # in-progress guest session - before answering nginx-rtmp, without
+        # nesting proxy_pass inside the `if` blocks above.
+        error_page 418 = @owner_authed;
+        location @owner_authed {
+            # Best-effort only: telemetry is optional (profiles: ["tools"]),
+            # and the owner's publish must succeed whether or not it is
+            # running, so any failure here is masked back to success.
+            access_log off;
+            resolver 127.0.0.11 valid=5s;
+            set $arbiter http://telemetry:8090;
+            proxy_pass $arbiter/rtmp/live/notify;
+            proxy_read_timeout 3s;
+            proxy_intercept_errors on;
+            error_page 500 502 503 504 = @owner_authed_fallback;
+        }
+        location @owner_authed_fallback {
+            return 201;
         }
 
         location = /health {
