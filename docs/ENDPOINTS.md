@@ -7,6 +7,7 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 | Port | Service | Serves | Exposure intent |
 |---|---|---|---|
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
+| 8890/udp | `srt-gateway` | SRT contribution `srt://<host>:8890?streamid=<name>` (native OBS multitrack); **OFF unless `SRT_ENABLED=1`** | public only if you run the SRT guest endpoint; else unbound. The gateway is privilege-separated (no docker socket, no volumes, no STREAM_KEY, read-only rootfs) because it terminates hostile pre-auth internet bytes |
 | 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
 | 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so a plain override list can widen but not narrow a base mapping (narrowing needs `!override`/`!reset` on the key). Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
@@ -26,7 +27,7 @@ Order matters on the way back up: `rtmp-ingest`'s nginx resolves `earshot` once 
 
 The failure mode that makes this worth automating is not the downtime, it is the silence: **`telemetry` is the alerting path**, so if it is one of the services that failed to bind, nothing can report the outage - including the outage of the alerter itself. Any boot-recovery script should send its own notification, independently of telemetry, on success as well as failure.
 
-Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), and the `dash-output` / `status-public` volumes.
+Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), the `srt-gateway` status/health port (8091 internal; discloses the active caller IP, so same loopback-only reasoning as earshot's `/stat`), and the `dash-output` / `status-public` volumes.
 
 ### Control routes proxied on 8080
 

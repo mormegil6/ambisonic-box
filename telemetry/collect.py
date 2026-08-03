@@ -13,7 +13,7 @@
 # A tiny threaded HTTP server serves the dashboard on TEL_PORT. stdlib only + the
 # docker CLI (installed in the image; the socket is mounted read-write, because
 # on-demand idling starts and stops the loop-source container).
-import json, os, re, subprocess, time, ipaddress, threading
+import hmac, json, os, re, socket, subprocess, time, ipaddress, threading
 import http.server, socketserver, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -555,6 +555,14 @@ GUEST_MAX_S   = int(os.environ.get("GUEST_MAX_S", "10800"))   # absolute cap, ±
 # (25 tries, exponential backoff capped at 15 min, roughly 3 h total) - it
 # spaces out reclaim attempts rather than outlasting the encoder's retries.
 GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
+# srt-gateway trust anchor: the gateway republishes SRT sessions into the
+# guest app from inside the compose network, so nginx-rtmp reports the
+# gateway's container address for every SRT guest. It smuggles the CALLER's
+# real address as a ?realip= publish arg; the substitution is honored only
+# with this shared secret AND from the gateway's own resolved address (see
+# _gw_realip_ok). Empty secret = substitution off entirely.
+GUEST_GW_SECRET = os.environ.get("GUEST_GW_SECRET", "")
+TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 # Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
 # netcall gives up after netcall_timeout (default 10 s, an undocumented
@@ -595,6 +603,48 @@ _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint up
 
 def _guest_sanitize(name):
     return (re.sub(r"[^A-Za-z0-9_-]", "", name or "")[:32]) or "guest"
+
+
+_gw_ip_cache = [0.0, None]
+
+
+def _gw_ip(force=False):
+    """srt-gateway's current container address, re-resolved through docker's
+    DNS with a short cache so a recreated gateway is picked up within 5 s.
+    force re-resolves now: used to bust a stale entry rather than misattribute
+    a real guest to the gateway's own (old) IP right after a gateway restart."""
+    now = time.time()
+    if force or now - _gw_ip_cache[0] > 5:
+        try:
+            _gw_ip_cache[1] = socket.gethostbyname(TEL_SRT_GW_HOST)
+        except OSError:
+            _gw_ip_cache[1] = None
+        _gw_ip_cache[0] = now
+    return _gw_ip_cache[1]
+
+
+def _gw_realip_ok(reporter, token, realip):
+    """Honor a ?realip= claim only when all four hold: a secret is configured,
+    the claimant knows it (constant-time compare), the publish really arrived
+    from the gateway's own resolved address, and the claimed value parses as
+    an IP. A remote publisher can put realip= in its publish URL, but it
+    cannot satisfy the address check (nginx-rtmp emits its own addr= before
+    the publish-URL args and parse_qs takes the first occurrence) and cannot
+    know the secret, so attribution stays unforgeable."""
+    if not (GUEST_GW_SECRET and token and realip):
+        return False
+    if not hmac.compare_digest(token, GUEST_GW_SECRET):
+        return False
+    # secret already matched, so this IS the gateway; a reporter mismatch here
+    # means the cache is stale (gateway just recreated), not an impostor - bust
+    # it once rather than misattribute this guest to the gateway's own address
+    if reporter != _gw_ip() and reporter != _gw_ip(force=True):
+        return False
+    try:
+        ipaddress.ip_address(realip)
+    except ValueError:
+        return False
+    return True
 
 
 def _guest_save():
@@ -966,6 +1016,13 @@ def guest_publish(name, addr):
                   f"{name} from {addr}", flush=True)
             return 403
         resumed_session = _guest["state"] == "grace"
+        # a grace window belongs to the caller who opened the session: a
+        # different address arriving during it must not inherit the session
+        # (and its clock, and any pending kill) - it waits for grace to end
+        if resumed_session and _guest["addr"] and addr != _guest["addr"]:
+            print(f"guest publish rejected (grace held by {_guest['addr']}): "
+                  f"{name} from {addr}", flush=True)
+            return 403
         if not resumed_session:
             _guest_view.update(peak=0, sum=0, n=0)
         # claim the slot as "handover" before the slow unwind: a concurrent
@@ -1170,6 +1227,40 @@ def _ban_blocks(ip):
         except Exception:
             continue
     return False
+
+def _bans_active_ips():
+    """Currently enforceable ban addresses - the same three explicit
+    conditions as _ban_blocks, list form, for the gateway's snapshot."""
+    now = time.time()
+    ips = []
+    for r in _bans_read():
+        if r["state"] != "active" or r["ip"] in ("-", ""):
+            continue
+        try:
+            if datetime.fromisoformat(r["expires_at"]).timestamp() > now:
+                ips.append(r["ip"])
+        except Exception:
+            continue
+    return ips
+
+
+def guest_precheck_snapshot():
+    """Read-only admission state for srt-gateway's handshake pre-filter,
+    polled every couple of seconds. Same compose-internal trust boundary as
+    every /rtmp/guest/ route (the ban IPs it carries stay inside it). Only a
+    pre-filter: the authoritative fail-closed gate remains guest_publish when
+    the gateway's relay actually connects."""
+    if not GUEST_ENABLED:
+        return {"enabled": False, "available": False,
+                "grace_addr": None, "bans": []}
+    with _guest_lock:
+        st = _guest["state"]
+        cd = _guest.get("cooldown_until")
+        available = st in ("free", "grace") and not (cd and time.time() < cd)
+        grace_addr = _guest.get("addr") if st == "grace" else None
+    return {"enabled": True, "available": available,
+            "grace_addr": grace_addr, "bans": _bans_active_ips()}
+
 
 def _bans_expire():
     """Retention-window sweep: past-retention rows lose their IP, and rows
@@ -1892,6 +1983,16 @@ def serve():
                 addr = (args.get("addr") or [""])[0]
                 call = (args.get("call") or [""])[0]
                 act = p.rsplit("/", 1)[-1]
+                if act == "precheck-snapshot":
+                    return self._json(200, guest_precheck_snapshot())
+                # SRT sessions arrive via srt-gateway, so nginx-rtmp reports
+                # the gateway's address; the real caller rides in ?realip=,
+                # honored only under _gw_realip_ok's four conditions so bans,
+                # logs and the session record key the actual guest
+                realip = (args.get("realip") or [""])[0]
+                gwtok = (args.get("gw") or [""])[0]
+                if realip and _gw_realip_ok(addr, gwtok, realip):
+                    addr = realip
                 if act == "publish":
                     return self._json(guest_publish(name, addr), {})
                 if act == "done":

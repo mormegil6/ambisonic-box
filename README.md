@@ -32,6 +32,7 @@ docker compose config | grep FFMPEG_FLAGS
 | Service | Role | Host port |
 |---|---|---|
 | `rtmp-ingest` | public RTMP ingest; stream-key auth, relay to earshot | 1935 |
+| `srt-gateway` | SRT contribution ingest (native OBS multitrack); joins 4x4 to 16-ch, republishes into the guest arbiter. Privilege-separated, **off unless `SRT_ENABLED=1`** | 8890/udp |
 | `earshot` | transcode to 16-ch Opus + video per `FFMPEG_FLAGS` (H.264 passthrough default, VP9 opt-in), live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
@@ -95,7 +96,7 @@ Then one step, because OBS neither merges its own tracks nor tags them usefully:
 
 The merge is strictly positional (track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix), so AmbiX channel order survives end to end. `scripts/test-obs-merge.sh` proves this with a per-channel tone ladder, offline and (with `--e2e` and the stack up) through ingest and transcode to the emitted DASH Opus; the same ladder played from a DAW into a real OBS capture is how the two failure modes above were caught. Keep the OBS video settings from the table above; the push copies video untouched.
 
-**Live, not record-then-push:** OBS's Custom Output (FFmpeg), set to "Output to URL" over SRT with an `mpegts` container, keeps multiple audio tracks genuinely separate and live - this is a real OBS capability (used in production for multi-language broadcast), not a hack, and it means OBS alone can carry both video and this stack's multichannel audio live, no external merge step. Validated locally 2026-08-01 with the same 4x4 quad routing above: 4 discrete 4-channel AAC streams arrive intact, channel order and levels confirmed with the same tone ladder. Two defaults to override, both silent failures otherwise: the container's default audio encoder (`mp2`) flatly rejects more than 2 channels, and `aac_at` (CoreAudio) reproduces the same transmission-order scramble as the recording path - pick plain `aac` (tick "Show all codecs" if it's hidden). This needs a receiving side on the box (an SRT listener that demuxes and merges the tracks before relaying into the normal RTMP ingest) - designed and adversarially reviewed, not yet built; RTMP remains the only live ingest until it lands.
+**Live over SRT, no merge step:** OBS's Custom Output (FFmpeg), set to "Output to URL" over SRT with an `mpegts` container, keeps multiple audio tracks genuinely separate and live - a real OBS capability (used in production for multi-language broadcast), not a hack, so OBS alone carries both video and this stack's 16-channel audio live. The receiving side is the `srt-gateway` service: it terminates SRT, joins the four 4-channel tracks into one 16-channel stream, and republishes into the same guest arbiter as RTMP, so the session cap, cooldown, reconnect grace, bans and dashboard kill all behave identically on both transports. It is **off by default** (`SRT_ENABLED=0`, the UDP port stays unbound); see `.env.example` for the switches and the [guest section](#guest-test-endpoint-the-guest-application) for the recipe. Two encoder defaults to override, both silent failures otherwise: the container's default `mp2` flatly rejects more than 2 channels, and `aac_at` (CoreAudio, macOS) reproduces the recording path's transmission-order scramble - pick plain `aac` (tick "Show all codecs" if hidden). Proven end to end (OBS-shaped 4x4 SRT push through the gateway to 16-channel DASH Opus, every channel in its slot) on both macOS and Windows.
 
 **Future scaling, noted but not built:** the same per-track pattern extends past 3rd order. Six tracks of 5.0 (30 ch) comfortably covers 4th order (25 ch, with headroom); six tracks of 7.0 (42 ch) would cover 5th order (36 ch, `(5+1)^2`, with headroom - HOAST360's renderer is reportedly capable of it, though no impulse-response set exists for it yet). The `.1`/LFE slot is deliberately never used, matching the trap already documented above (7.1's LFE mutes outright; there's no reason to expect the other surround layouts' LFE slot behaves any better, and ambisonics has no channel that maps onto "LFE" anyway). 4.0 stays the actual recipe for now - this is a note for when it's needed, not a plan to build it early.
 
@@ -110,8 +111,9 @@ Anyone with an ambisonic microphone rig and OBS Music Edition can test their str
 
 | Setting | Value |
 |---|---|
-| Server | `rtmp://<host>:1935/guest` |
-| Stream key | anything you like (it names your session in the status pages) |
+| Server (RTMP) | `rtmp://<host>:1935/guest` |
+| Server (SRT, if `SRT_ENABLED=1`) | `srt://<host>:8890?streamid=<name>&latency=2000000` |
+| Stream key / streamid | anything you like (it names your session in the status pages) |
 | Audio / video | same requirements as the `live` application [above](#stream-your-own-content-the-live-application) |
 
 How it behaves:
@@ -128,9 +130,10 @@ How it behaves:
 - **Bans:** the dashboard's End + ban button blocks the session's source IP for `GUEST_BAN_DAYS` (default 30, clamped to the retention window: ban expiry and IP redaction are deliberately the same event). Bans can be lifted early from the dashboard. This is a SPEED BUMP, not enforcement: dynamic IPs, CGNAT and VPNs all defeat an IP ban. It exists to make casual misuse inconvenient, nothing more.
 - **Stalled transcodes:** a guest pushing the wrong audio layout (plain stereo/mono is the classic mistake) produces no playable output; the session is ended automatically after ~45 s and the reason is shown on the player page, with no cooldown so a corrected retry works immediately.
 - **Fail-closed:** if telemetry is down, guest publishes are rejected while the token-authed `live` application and the demo loop keep working.
-- The owner path is unaffected: pushing with the stream key to `/live` does not consult the arbiter. Do not do both at once; check the dashboard (or press End session) before an owner broadcast.
+- **Owner preemption:** a successful stream-key push to `/live` now ends any in-progress guest session automatically (the owner's `/auth` success signals the arbiter, which drops the guest the same way the dashboard's End session button does, within one liveness-ping interval). You no longer have to clear the slot by hand before an owner broadcast.
+- **SRT as well as RTMP:** with `SRT_ENABLED=1`, the same arbiter also accepts native OBS multitrack over SRT via the `srt-gateway` service (`srt://<host>:8890?streamid=<name>`); slot, cap, cooldown, grace, bans and kill are shared across both transports, so the rules above apply identically however a guest connects. See the [multitrack recipe](#stock-obs-on-macos-record-multitrack-merge-push) for the OBS settings.
 
-**Network prerequisite:** the guest endpoint is exactly as public as TCP port 1935. If your host sits behind a firewall or NAT, the one thing to arrange is inbound TCP 1935; everything else ships in this compose file.
+**Network prerequisite:** the RTMP guest endpoint is exactly as public as TCP port 1935; the SRT endpoint (if enabled) is exactly as public as UDP 8890. If your host sits behind a firewall or NAT, the one thing to arrange is inbound access to whichever port(s) you use; everything else ships in this compose file.
 
 ## On-demand VOD clips
 

@@ -222,6 +222,12 @@ services:
       # guest disconnects, and the absolute session cap (enforced within
       # ~10 s of expiry, via the on_update ping).
       - GUEST_ENABLED=${GUEST_ENABLED:-0}
+      # shared secret with srt-gateway: realip attribution on the guest app is
+      # honored only when the publish arrives from the gateway's resolved
+      # address AND carries this value (constant-time compare). Empty = the
+      # substitution is refused entirely, so SRT guests would be logged and
+      # banned as the gateway container's IP - set it whenever SRT_ENABLED=1.
+      - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
       - GUEST_GRACE_S=${GUEST_GRACE_S:-120}
       - GUEST_MAX_S=${GUEST_MAX_S:-10800}
       # after a cap/kill-forced end, refuse guest publishes this long, so an
@@ -250,6 +256,55 @@ services:
       - "127.0.0.1:8090:8090"
     depends_on:
       - hoast-player
+    restart: unless-stopped
+    logging: *bounded-logs
+
+  # SRT guest ingest: terminates SRT on public UDP 8890 (the only place the
+  # real caller IP exists - ffmpeg listeners never see it, so bans could not
+  # work without this) and republishes each session into rtmp-ingest's /guest
+  # app, inheriting the whole arbiter lifecycle (slot, 3h cap, cooldown,
+  # grace, bans, kill, stall, demo-loop interlock) from the existing
+  # nginx-rtmp callbacks. Privilege-separated on purpose: this container
+  # parses hostile pre-auth internet bytes, so it holds NO docker socket, NO
+  # volumes, NO STREAM_KEY, no capabilities, read-only rootfs. OFF by default
+  # (SRT_ENABLED=0: the port stays unbound and packets to the mapping die);
+  # see .env.example before enabling.
+  srt-gateway:
+    build:
+      context: ./services/srt-gateway
+    image: hoa360-srt-gateway:local
+    environment:
+      - SRT_ENABLED=${SRT_ENABLED:-0}
+      - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
+      - SRT_PASSPHRASE=${SRT_PASSPHRASE:-}
+      - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
+      - XDG_CACHE_HOME=/tmp
+    ports:
+      # public-intent binding, so it must live in the BASE file: compose
+      # merges ports lists, an override can widen but never narrow. The
+      # container side is fixed at 8890; SRT_PORT moves only the host side.
+      - "${SRT_PORT:-8890}:8890/udp"
+    read_only: true
+    # ffmpeg's fontconfig probes a cache dir on startup; without a writable
+    # one every child spawn logs an error line. Nothing else writes.
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    depends_on:
+      rtmp-ingest:
+        condition: service_healthy
+      telemetry:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
     logging: *bounded-logs
 
