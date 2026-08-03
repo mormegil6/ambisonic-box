@@ -228,6 +228,9 @@ services:
       # substitution is refused entirely, so SRT guests would be logged and
       # banned as the gateway container's IP - set it whenever SRT_ENABLED=1.
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
+      # only so the dashboard knows whether to list srt-gateway among the
+      # live-path services (it runs either way, idle when off)
+      - SRT_ENABLED=${SRT_ENABLED:-0}
       - GUEST_GRACE_S=${GUEST_GRACE_S:-120}
       - GUEST_MAX_S=${GUEST_MAX_S:-10800}
       # after a cap/kill-forced end, refuse guest publishes this long, so an

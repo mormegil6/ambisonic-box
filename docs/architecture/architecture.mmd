@@ -4,9 +4,11 @@
 %% architecture.svg / architecture.png. The subgraph deliberately has no
 %% `direction` (a nested one would give the SVG two coordinate systems).
 flowchart TD
+    SRTOBS["stock OBS<br/>macOS / Windows<br/>H.264 + 4 x 4-ch AAC"]
     OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["DOCKER COMPOSE"]
+        GATEWAY["srt-gateway<br/>SRT terminator<br/>joins 4 tracks to 16-ch"]
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>demo.mp4"]
         EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
@@ -18,6 +20,8 @@ flowchart TD
 
     VIEWER["viewer browser<br/>HOAST360<br/>binaural HOA"]
 
+    SRTOBS -- "SRT :8890" --> GATEWAY
+    GATEWAY -- "RTMP /guest" --> INGEST
     OBS -- "RTMP :1935" --> INGEST
     LOOP -- "RTMP (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT

@@ -113,6 +113,12 @@ def services(ps):
         name = svc_label(r)
         if name in ("telemetry", "loop-source", "shaka"):   # self + non-core live path
             continue
+        # srt-gateway runs even with SRT_ENABLED=0 (it just never binds the
+        # UDP port), and a green pill for a service that is deliberately doing
+        # nothing reads as noise. Same rule as the two above: only list what is
+        # actually part of the live path in THIS configuration.
+        if name == "srt-gateway" and not SRT_ENABLED:
+            continue
         state, status = r.get("State", ""), r.get("Status", "")
         health = ("healthy" if "(healthy)" in status else
                   "unhealthy" if "(unhealthy)" in status else
@@ -563,6 +569,9 @@ GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
 # _gw_realip_ok). Empty secret = substitution off entirely.
 GUEST_GW_SECRET = os.environ.get("GUEST_GW_SECRET", "")
 TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
+# only for deciding whether srt-gateway belongs in the dashboard's service row;
+# the gateway itself is the authority on whether it is actually listening
+SRT_ENABLED = os.environ.get("SRT_ENABLED", "0") == "1"
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 # Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
 # netcall gives up after netcall_timeout (default 10 s, an undocumented
@@ -1434,9 +1443,13 @@ def guest_report(reporter_ip, reporter_cc):
 # earshot is only offered TOGETHER with ingest: nginx-rtmp resolves the push
 # hostname once at startup, so a lone earshot restart silently breaks the
 # relay (the standing rule, now encoded rather than remembered).
+# srt-gateway restarts alone safely: it holds no resolve-once state (its
+# per-session ffmpeg dials rtmp-ingest fresh each time), so the only cost is
+# dropping an SRT session in progress.
 RESTARTABLE = {"rtmp-ingest": ["rtmp-ingest"],
                "hoast-player": ["hoast-player"],
                "telemetry": ["telemetry"],
+               "srt-gateway": ["srt-gateway"],
                "earshot-ingest": ["earshot", "rtmp-ingest"]}
 
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Post-process the raw mermaid (dagre) SVG of architecture.mmd into the final
 # architecture diagram. Keying off mermaid's stable element ids, it:
-#   - moves OBS (external) and loop-source (in-box) to flank rtmp-ingest with
-#     straight horizontal edges, and the viewer browser to the left of the box,
-#     centred under OBS and level with hoast-player;
+#   - lays the SRT chain (stock OBS -> srt-gateway -> rtmp-ingest) out as one
+#     horizontal run, curves the legacy RTMP sender up into ingest beneath it,
+#     flanks ingest with loop-source, and puts the viewer in the left gutter;
 #   - lifts each rerouted edge's label above its line and re-centres it;
 #   - shrinks the DOCKER COMPOSE box to its content, puts the title on the top
 #     edge in a chip that breaks the border, and rounds the corners;
@@ -34,6 +34,79 @@ bm = re.search(r'<rect style="stroke-width:3px[^"]*"\s*x="([-\d.]+)"\s*y="([-\d.
 box_left = float(bm.group(1))
 box_right = float(bm.group(1)) + float(bm.group(3))
 box_bottom = float(bm.group(2)) + float(bm.group(4))
+
+# srt-gateway sits INSIDE the box on rtmp-ingest's row, immediately left of it,
+# but dagre leaves nowhere near enough room there. Push the box's left wall out
+# far enough to seat the gateway plus a gap wide enough for its edge label. The
+# space this opens is the box's lower-left, which is empty in this layout.
+GW_INSET = 18.0                  # gateway's inset from the wall (mirrors loop-source)
+GW_GAP   = 130.0                 # gateway -> ingest run; must fit "RTMP /guest"
+_ix, _iy = node_pos('INGEST')
+box_left = min(box_left,
+               (_ix - node_halfwidth('INGEST')) - GW_INSET
+               - 2 * node_halfwidth('GATEWAY') - GW_GAP)
+
+# === lower half: restore the two-column grid dagre gave up when the gateway
+#     was added. hoast-player sits under earshot, telemetry under shaka, and
+#     the dash-output volume is centred between those two columns, which is
+#     how this half read before the SRT route existed. Moving the volume means
+#     redrawing all four of its edges, since dagre's originals point at the old
+#     coordinates; see _edge_curve for how their shape is reproduced. ===
+def _move(nid, nx, ny):
+    global s
+    s = re.sub(r'(id="my-svg-flowchart-' + nid + r'-\d+"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\))',
+               lambda m: f"{m.group(1)}{nx}, {ny}{m.group(2)}", s, count=1)
+
+def _cyl_half(nid):
+    """The volume is a cylinder <path>, not a <rect>: its own offset transform
+    carries (-halfwidth, -halfheight)."""
+    blk = s[s.find('id="my-svg-flowchart-' + nid + '-'):][:800]
+    m = re.search(r'outer-path"[^>]*?transform="translate\((-?[\d.]+),\s*(-?[\d.]+)\)"', blk)
+    return abs(float(m.group(1))), abs(float(m.group(2)))
+
+ex_, ey_ = node_pos('EARSHOT'); ehh = node_halfheight('EARSHOT')
+sx_, sy_ = node_pos('SHAKA');   shh = node_halfheight('SHAKA')
+_,   vy_ = node_pos('VOL');     vhw_, vhh_ = _cyl_half('VOL')
+_,   ppy = node_pos('PLAYER');  phh = node_halfheight('PLAYER')
+_,   tty = node_pos('TELEM');   thh = node_halfheight('TELEM')
+
+PLX = ex_                      # hoast-player under earshot
+TLX = sx_                      # telemetry under shaka
+VLX = (ex_ + sx_) / 2.0        # volume centred between the columns
+_move('PLAYER', PLX, ppy)
+_move('TELEM',  TLX, tty)
+_move('VOL',    VLX, vy_)
+
+def _edge_curve(eid, p0, p1, out_dir, in_dir):
+    """One cubic in dagre's own idiom for these edges: it leaves a box face
+    along the perpendicular ('v') and meets the cylinder at an angle ('d'),
+    or the reverse. Forcing both tangents vertical gives a flat-then-steep
+    step; keeping them different is what makes the original curves read as
+    curves. Returns the t=0.5 point, for label placement."""
+    (x0, y0), (x1, y1) = p0, p1
+    dx, dy = x1 - x0, y1 - y0
+    c1 = (x0, y0 + dy * 0.55) if out_dir == 'v' else (x0 + dx * 0.30, y0 + dy * 0.30)
+    c2 = (x1, y1 - dy * 0.55) if in_dir == 'v' else (x1 - dx * 0.30, y1 - dy * 0.30)
+    d = f"M{x0},{y0}C{c1[0]},{c1[1]} {c2[0]},{c2[1]} {x1},{y1}"
+    globals()['s'] = re.sub(r'(<path d=")[^"]*(" id="my-svg-' + eid + r'")',
+                            lambda m: f"{m.group(1)}{d}{m.group(2)}", globals()['s'], count=1)
+    return ((x0 + 3 * c1[0] + 3 * c2[0] + x1) / 8.0,
+            (y0 + 3 * c1[1] + 3 * c2[1] + y1) / 8.0)
+
+VIN = 46.0                     # how far in from the volume's centre edges land
+mid = _edge_curve('L_EARSHOT_VOL_0', (ex_, ey_ + ehh), (VLX - VIN, vy_ - vhh_ + 4), 'v', 'd')
+s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_EARSHOT_VOL_0")',
+           lambda m: f"{m.group(1)}{mid[0] - 78.0}, {mid[1] - 16.0}{m.group(2)}", s, count=1)
+
+mid = _edge_curve('L_SHAKA_VOL_0', (sx_, sy_ + shh), (VLX + VIN, vy_ - vhh_ + 4), 'v', 'd')
+s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_SHAKA_VOL_0")',
+           lambda m: f"{m.group(1)}{mid[0] + 30.0}, {mid[1] - 16.0}{m.group(2)}", s, count=1)
+
+_edge_curve('L_VOL_PLAYER_0', (VLX - VIN, vy_ + vhh_ - 4), (PLX, ppy - phh - 6), 'd', 'v')
+
+mid = _edge_curve('L_VOL_TELEM_0', (VLX + VIN, vy_ + vhh_ - 4), (TLX, tty - thh - 6), 'd', 'v')
+s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_VOL_TELEM_0")',
+           lambda m: f"{m.group(1)}{mid[0] + 22.0}, {mid[1] - 14.0}{m.group(2)}", s, count=1)
 
 px, py = node_pos('PLAYER')
 phw = node_halfwidth('PLAYER')
@@ -73,26 +146,65 @@ ly = sy - 24.0
 s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_PLAYER_VIEWER_0")',
            lambda m: f"{m.group(1)}{lx}, {ly}{m.group(2)}", s, count=1)
 
-# === OBS: mirror the viewer on the input side. Drop OBS from its high position
-#     to rtmp-ingest's height (keep its x) so the RTMP :1935 edge runs straight
-#     left->right into ingest instead of diagonally down. ===
+# === input side: two contribution routes into rtmp-ingest. ===
+#   SRT (recommended):  stock OBS --SRT--> srt-gateway --RTMP /guest--> ingest
+#   RTMP (legacy):      OBS Music Edition --RTMP :1935--------------> ingest
+# The SRT chain runs as one straight horizontal line on ingest's own row, with
+# srt-gateway inside the box (it is a compose service) and its sender outside
+# in the left gutter. OBS Music Edition sits below on the same gutter axis and
+# curves up into ingest, so the legacy path visibly joins the main run.
 ix, iy = node_pos('INGEST')
-ihw = node_halfwidth('INGEST')
-ox, _oy = node_pos('OBS')
-# drop OBS level with ingest; OBS and the viewer share the same centre axis
-OX, OY = VX, iy
-s = re.sub(r'(id="my-svg-flowchart-OBS-\d+"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\))',
-           lambda m: f"{m.group(1)}{OX}, {OY}{m.group(2)}", s, count=1)
-# reroute OBS->INGEST straight; end just short of ingest's left edge so the
-# arrowhead clears the node (same marker-refX trick as the viewer edge)
-o_sx = OX + ohw                  # OBS right edge
-o_ex = ix - ihw - 6.0            # just outside ingest's left edge
-s = re.sub(r'(<path d=")[^"]*(" id="my-svg-L_OBS_INGEST_0")',
-           lambda m: f'{m.group(1)}M{o_sx},{iy}L{o_ex},{iy}{m.group(2)}', s, count=1)
-# RTMP :1935 label above the line, centred over the connector (OBS edge <-> ingest edge)
-o_lx, o_ly = (o_sx + (ix - ihw)) / 2.0, iy - 22.0
-s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_OBS_INGEST_0")',
-           lambda m: f"{m.group(1)}{o_lx}, {o_ly}{m.group(2)}", s, count=1)
+ihw, ihh = node_halfwidth('INGEST'), node_halfheight('INGEST')
+ghw, ghh = node_halfwidth('GATEWAY'), node_halfheight('GATEWAY')
+shw = node_halfwidth('SRTOBS')
+
+ROW_OFF = 190.0                  # OBS Music Edition's row, below ingest's
+GY = iy                          # srt-gateway + its sender share ingest's row
+OY = iy + ROW_OFF
+
+# gateway just inside the box's left wall (the wall was pushed out above to
+# make room), mirroring loop-source's inset on the right
+GX = box_left + GW_INSET + ghw
+# both external senders share the viewer's centre axis (VX)
+SX, OX = VX, VX
+
+for nid, nx, ny in (('GATEWAY', GX, GY), ('SRTOBS', SX, GY), ('OBS', OX, OY)):
+    s = re.sub(r'(id="my-svg-flowchart-' + nid + r'-\d+"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\))',
+               lambda m, x=nx, y=ny: f"{m.group(1)}{x}, {y}{m.group(2)}", s, count=1)
+
+def set_edge(eid, d):
+    global s
+    s = re.sub(r'(<path d=")[^"]*(" id="my-svg-' + eid + r'")',
+               lambda m: f"{m.group(1)}{d}{m.group(2)}", s, count=1)
+
+def set_label(eid, lx, ly):
+    global s
+    s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="' + eid + r'")',
+               lambda m: f"{m.group(1)}{lx}, {ly}{m.group(2)}", s, count=1)
+
+# 1) stock OBS -> srt-gateway: straight horizontal, crossing the box wall
+sr_sx, sr_ex = SX + shw, GX - ghw - 6.0
+set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{GY}L{sr_ex},{GY}")
+set_label('L_SRTOBS_GATEWAY_0', (sr_sx + (GX - ghw)) / 2.0, GY - 22.0)
+
+# 2) srt-gateway -> ingest: straight horizontal, completing the SRT run
+g_sx, g_ex = GX + ghw, ix - ihw - 6.0
+set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{iy}L{g_ex},{iy}")
+set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, iy - 22.0)
+
+# 3) OBS Music Edition -> ingest: a symmetric S-curve in the style of the
+#    dash-output volume edges - horizontal at both ends, sweeping up into
+#    ingest's LEFT edge below the gateway's arrow. Landing on the left edge
+#    rather than underneath keeps it clear of the earshot relay arrow and its
+#    label, which both occupy ingest's underside.
+o_sx, o_sy = OX + ohw, OY
+o_ex, o_ey = ix - ihw - 6.0, iy + ihh * 0.62
+# Both control points share one x, placed late (0.78) so the curve stays flat
+# beneath srt-gateway and only lifts once past it: the legacy path visibly
+# runs UNDER the gateway to reach ingest directly, without grazing its corner.
+o_mid = o_sx + (o_ex - o_sx) * 0.78
+set_edge('L_OBS_INGEST_0', f"M{o_sx},{o_sy}C{o_mid},{o_sy} {o_mid},{o_ey} {o_ex},{o_ey}")
+set_label('L_OBS_INGEST_0', o_sx + (o_ex - o_sx) * 0.26, o_sy - 24.0)
 
 # === loop-source: mirror OBS on the right. Move it level with ingest, to its
 #     right, so RTMP (internal) runs straight right->left into ingest. It lives
@@ -116,8 +228,9 @@ s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+
 #     row (both feeders now sit at ingest's level, leaving the top empty), put
 #     the DOCKER COMPOSE title ON the edge with a break in the border, and round
 #     the corners. ===
-ingest_top = iy - node_halfheight('INGEST')
-NEW_TOP = ingest_top - 46.0               # room for the title on the edge
+# gateway and ingest share a row but the gateway is the taller box, so the top
+# edge follows whichever actually reaches highest
+NEW_TOP = min(iy - ihh, GY - ghh) - 46.0  # room for the title on the edge
 tm = re.search(r'<g class="cluster-label" transform="translate\(([-\d.]+),\s*[-\d.]+\)"><foreignObject width="([-\d.]+)"', s)
 tx, tw = float(tm.group(1)), float(tm.group(2))
 # 1. resize + round the cluster rect
@@ -142,7 +255,7 @@ s = re.sub(r'(<g class="cluster-label" transform="translate\()[-\d.]+,\s*[-\d.]+
 #    Do NOT touch any styled <rect>.
 vb = re.search(r'viewBox="([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)"', s)
 x0, y0, w, h = map(float, vb.groups())
-leftmost = min(VX - vhw, OX - ohw)   # OBS is wider than the viewer -> left extent
+leftmost = min(VX - vhw, OX - ohw, SX - shw)   # widest external box sets the left extent
 new_x0 = min(x0, leftmost - 20.0)
 new_w = w + (x0 - new_x0)
 new_y0 = NEW_TOP - 34.0                   # just above the title on the edge
