@@ -1,0 +1,5 @@
+# Force LF regardless of the cloning platform's git config. Most of this
+# repo (shell scripts, Dockerfiles, nginx configs) runs inside Linux
+# containers, and a shebang broken by a stray \r fails opaquely on Windows
+# clones ("bash\r: No such file or directory" instead of a clear error).
+* text=auto eol=lf
