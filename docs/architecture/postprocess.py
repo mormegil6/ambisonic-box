@@ -187,8 +187,12 @@ def set_label(eid, lx, ly):
 # 1) stock OBS -> srt-gateway: straight horizontal, crossing the box wall
 sr_sx, sr_ex = SX + shw, GX - ghw - 6.0
 set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{GY}L{sr_ex},{GY}")
-# centre both port labels on the gutter, measured from whichever external box
-# reaches furthest right, so the wider label cannot ride up onto it
+# Both port labels share one x so they line up vertically. It is the midpoint
+# to the GATEWAY, not to the box wall, so the labels deliberately overlap the
+# wall and break it the way the DOCKER COMPOSE title chip does - that overlap
+# is the intended look, not a collision to correct. Measured from whichever
+# external box reaches furthest right, so the wider label ("RTMP :1935")
+# cannot ride up onto it.
 PORT_LX = (max(SX + shw, OX + ohw) + (GX - ghw)) / 2.0
 set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
 
