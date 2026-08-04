@@ -9,6 +9,9 @@ Verified on OBS Studio 32.2.1, macOS, with [BlackHole](https://github.com/Existe
 - **OBS Studio** (stock - no patched fork).
 - **A multichannel Core Audio device** carrying your 16 ambisonic channels. [BlackHole](https://github.com/ExistentialAudio/BlackHole) (16ch or 64ch) is the usual choice; an aggregate device built from your interface works too. Your DAW or player sends AmbiX (ACN/SN3D) channels 1-16 into it.
 
+<div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="82%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
+
+
 ## 1. Set the global channel layout
 
 **Settings > Audio > Channels: `4.0`**
@@ -16,6 +19,9 @@ Verified on OBS Studio 32.2.1, macOS, with [BlackHole](https://github.com/Existe
 Not 7.1. OBS's 7.1 path mutes the LFE slot outright - channel 4 of every track arrives digital-silent (measured at -99 dBFS on a real capture). For ambisonics that erases ACN 3, the X axis, and nothing warns you.
 
 This setting governs the width of every track, independently of how many channels a source actually carries. It has to match the shape you intend or the output is silently padded.
+
+<div align="center"><img src="images/obs-macos/03_OBS-channels-setting.png" width="82%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
+
 
 ## 2. Four capture sources, one per track
 
@@ -30,7 +36,13 @@ Add four **Audio Input Capture** sources on your multichannel device, one per gr
 
 Turn **downmixing off** on each. Assign tracks in **Advanced Audio Properties** (right-click any source in the Audio Mixer): tick exactly one track per source, and untick the rest.
 
+<div align="center"><img src="images/obs-macos/04_OBS-adding-4ch-audio-device.png" width="82%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
+
+
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
+
+<div align="center"><img src="images/obs-macos/06_OBS-tracks-routing.png" width="82%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
+
 
 ## 3. Point OBS at the box
 
@@ -54,6 +66,9 @@ Three traps in that table, all silent:
 
 Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver.
 
+<div align="center"><img src="images/obs-macos/07_OBS-recording-streaming-settings.png" width="82%" alt="OBS Settings, Output, Recording tab: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, an srt:// URL, Container Format mpegts, Video Bitrate 6000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
+
+
 ## 4. Push it
 
 Press **Start Recording**.
@@ -61,6 +76,9 @@ Press **Start Recording**.
 That is not a typo. Custom Output (FFmpeg) is a *recording* output in OBS even when its destination is a URL, so it lives on the Recording tab and Start Recording is what pushes it. Start Streaming does nothing for it.
 
 The stream appears on the player page within a few seconds of the first keyframe.
+
+<div align="center"><img src="images/obs-macos/05_OBS-four-4ch-devices.png" width="82%" alt="The OBS main window with four sources named BlackHole16ch 01-04 through 13-16, and the Audio Mixer showing all four with live signal."></div>
+
 
 Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you have to press Start again; the guest endpoint holds your slot for a grace window (default 120 s) so a prompt reconnect continues the same session.
 
@@ -75,7 +93,10 @@ Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you 
 
 ## Proving the channel order
 
-Do not trust the chain by ear. Send a distinct tone per channel from your DAW - [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) is a ready REAPER project that does exactly that, 100 Hz to 1600 Hz in 100 Hz steps, using only a stock JS plugin - then record locally and check what came back:
+Do not trust the chain by ear. Send a distinct tone per channel from your DAW - [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) is a ready REAPER project that does exactly that - a 16-channel `3OA` parent track with sixteen mono children `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level, using only a stock JS plugin - then record locally and check what came back:
+
+<div align="center"><img src="images/obs-macos/02_Reaper-tracks.png" width="82%" alt="The fixture REAPER project: a 16-channel parent track named 3OA with sixteen mono child tracks ACN-00 to ACN-15, each running a Tone Generator, shown in the mixer with a descending level staircase."></div>
+
 
 ```bash
 ./scripts/merge-obs-tracks.sh --check recording.mkv     # expect: 4 track(s), channels per track: 4 4 4 4
