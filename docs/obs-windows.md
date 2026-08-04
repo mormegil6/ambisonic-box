@@ -54,36 +54,48 @@ While you are in Settings, two fields under **Advanced > Video** are worth setti
 
 atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
 
-Steps 4 and 5 below are the fiddly ones, and they can be skipped: once the PluginHost2 window is open, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) into it and the wiring and the Discrete #4 layouts arrive already done. Confirm the device and sample rate afterwards under Options > Change Device Settings.
+atkAudio is the one thing here you have to install; its [plugin page](https://obsproject.com/forum/resources/atkaudio-plugin.2099/) and [latest release](https://github.com/atkAudio/PluginForObsRelease/releases/latest) are linked under [What you need](#what-you-need) above.
 
-1. **Add Source > atkAudio Source Mixer.** This exists only to host a filter. Do **not** try to use its own combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
+Steps 3d and 3e below are the fiddly ones, and they can be skipped: once the PluginHost2 window is open, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) into it and the wiring and the Discrete #4 layouts arrive already done. Confirm the device and sample rate afterwards under Options > Change Device Settings.
 
-   <div align="center"><img src="images/obs-windows/04_OBS-add-source.png" width="57%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
+### 3a. Add the atkAudio Source Mixer source
 
-2. Right-click that source > **Filters > + > atkAudio Plugin Host2**. A separate floating **atkAudio PluginHost2** window opens. That is the real interface.
+**Add Source > atkAudio Source Mixer.** This exists only to host a filter. Do **not** try to use its own combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
 
-   <div align="center"><img src="images/obs-windows/05_OBS-add-pluginhost2-filter.png" width="50%" alt="The Filters dialog for the atkAudio Source Mixer source, with the add-filter list open and atkAudio PluginHost2 highlighted."></div>
+<div align="center"><img src="images/obs-windows/04_OBS-add-source.png" width="57%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
 
-3. In that window: **Options > Change Device Settings**. Set Device to **ReaRoute ASIO**, sample rate to match your REAPER project (48000 Hz), and make sure all 16 channels are ticked under **Active INPUT channels** ("ReaRoute REAPER=>CLIENT" - audio coming *from* REAPER). They are generally all ticked already, but check them through anyway: a single missing one costs you an ambisonic channel and nothing later will say so. The Active OUTPUT list can be left alone; that direction sends OBS audio back to REAPER and is not used here.
+### 3b. Open PluginHost2, the real interface
 
-   <div align="center"><img src="images/obs-windows/06_PluginHost2-device-settings.png" width="66%" alt="The PluginHost2 Audio Settings panel: Device is ReaRoute ASIO (x64), the Active input channels list shows ReaRoute REAPER to CLIENT entries ticked, and the sample rate is 48000 Hz."></div>
+Right-click that source > **Filters > + > atkAudio Plugin Host2**. A separate floating **atkAudio PluginHost2** window opens. That is the real interface.
 
-4. **Plugins > Create Plug-in > OBS Output**, four times - one instance per group of four channels. Wire Audio Input ports 1-4 into the first, 5-8 into the second, 9-12 into the third, 13-16 into the fourth. Order matters: this is what preserves AmbiX channel order.
+<div align="center"><img src="images/obs-windows/05_OBS-add-pluginhost2-filter.png" width="50%" alt="The Filters dialog for the atkAudio Source Mixer source, with the add-filter list open and atkAudio PluginHost2 highlighted."></div>
 
-   New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That also clears the Audio Input node, which you do have to recreate. The Audio Output and MIDI in/out nodes go too and do not come back, but nothing here uses them, so leave them gone.
+### 3c. Point PluginHost2 at ReaRoute ASIO
 
-   <div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
+In that window: **Options > Change Device Settings**. Set Device to **ReaRoute ASIO**, sample rate to match your REAPER project (48000 Hz), and make sure all 16 channels are ticked under **Active INPUT channels** ("ReaRoute REAPER=>CLIENT" - audio coming *from* REAPER). They are generally all ticked already, but check them through anyway: a single missing one costs you an ambisonic channel and nothing later will say so. The Active OUTPUT list can be left alone; that direction sends OBS audio back to REAPER and is not used here.
 
-5. **Each OBS Output node defaults to stereo.** Right-click the **node itself** (not a port, and not its OBS Properties dialog) > **Configure Audio I/O**, and set the **Input Configuration**'s Channel Layout to **Discrete #4**. Repeat for all four nodes. The Output Configuration can be left alone - that is the OBS-facing side, and it follows.
+<div align="center"><img src="images/obs-windows/06_PluginHost2-device-settings.png" width="66%" alt="The PluginHost2 Audio Settings panel: Device is ReaRoute ASIO (x64), the Active input channels list shows ReaRoute REAPER to CLIENT entries ticked, and the sample rate is 48000 Hz."></div>
 
-   Use "Discrete" rather than a named surround layout like Quad. That was a precaution, not a measurement: a named 4-channel layout asserts what its channels *mean*, and could imply an ordering or an LFE slot that has nothing to do with ACN 0-3, whereas discrete channels carry no such claim and cannot be reinterpreted downstream. Quad was never tested here, so it may well work too.
+### 3d. Create four OBS Output nodes
 
-   This step is undocumented upstream: a search of the plugin's forum thread, its whole changelog, its reviews and every GitHub issue turned up no mention of it. Skip it and every node stays stereo, which cannot reach 16 - OBS offers six audio tracks, so 2-channel nodes top out at 12 channels no matter how many you create. The plug-in itself does not appear to cap how many OBS Output nodes you can add; the ceiling is OBS's track count times the per-track width, which is why the width is the thing to fix.
+**Plugins > Create Plug-in > OBS Output**, four times - one instance per group of four channels. Wire Audio Input ports 1-4 into the first, 5-8 into the second, 9-12 into the third, 13-16 into the fourth. Order matters: this is what preserves AmbiX channel order.
 
-   <div align="center">
-     <img src="images/obs-windows/08_PluginHost2-configure-audio-io.png" width="45%" alt="Right-clicking an OBS Output node in the PluginHost2 graph opens a context menu with Configure Audio I/O highlighted, alongside Save and Load plugin state.">
-     <img src="images/obs-windows/09_PluginHost2-discrete-4.png" width="33%" alt="The OBS Output node Configure Audio I/O panel with the Channel Layout dropdown open, Stereo currently ticked and Discrete #4 highlighted.">
-   </div>
+New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That also clears the Audio Input node, which you do have to recreate. The Audio Output and MIDI in/out nodes go too and do not come back, but nothing here uses them, so leave them gone.
+
+<div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
+
+### 3e. Set each node to Discrete #4
+
+**Each OBS Output node defaults to stereo.** Right-click the **node itself** (not a port, and not its OBS Properties dialog) > **Configure Audio I/O**, and set the **Input Configuration**'s Channel Layout to **Discrete #4**. Repeat for all four nodes. The Output Configuration can be left alone - that is the OBS-facing side, and it follows.
+
+Use "Discrete" rather than a named surround layout like Quad. That was a precaution, not a measurement: a named 4-channel layout asserts what its channels *mean*, and could imply an ordering or an LFE slot that has nothing to do with ACN 0-3, whereas discrete channels carry no such claim and cannot be reinterpreted downstream. Quad was never tested here, so it may well work too.
+
+This step is undocumented upstream: a search of the plugin's forum thread, its whole changelog, its reviews and every GitHub issue turned up no mention of it. Skip it and every node stays stereo, which cannot reach 16 - OBS offers six audio tracks, so 2-channel nodes top out at 12 channels no matter how many you create. The plug-in itself does not appear to cap how many OBS Output nodes you can add; the ceiling is OBS's track count times the per-track width, which is why the width is the thing to fix.
+
+<div align="center">
+  <img src="images/obs-windows/08_PluginHost2-configure-audio-io.png" width="45%" alt="Right-clicking an OBS Output node in the PluginHost2 graph opens a context menu with Configure Audio I/O highlighted, alongside Save and Load plugin state.">
+  <img src="images/obs-windows/09_PluginHost2-discrete-4.png" width="33%" alt="The OBS Output node Configure Audio I/O panel with the Channel Layout dropdown open, Stereo currently ticked and Discrete #4 highlighted.">
+</div>
 
 The finished graph looks like this - one Audio Input node fanning out to four OBS Output nodes, four connections each:
 
