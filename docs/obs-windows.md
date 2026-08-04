@@ -52,7 +52,7 @@ While you are in Settings, two fields under **Advanced > Video** are worth setti
 
 ## 3. Bring the 16 channels into OBS
 
-atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
+atkAudio's real interface is a node-graph editor in its own floating window, not an OBS Properties dialog. The Source Mixer you add below does have OBS properties of its own - a layout selector, source slots, gain sliders and a couple of toggles - but none of them are what carries the 16 channels here, so leave them at their defaults.
 
 atkAudio is the one thing here you have to install; its [plugin page](https://obsproject.com/forum/resources/atkaudio-plugin.2099/) and [latest release](https://github.com/atkAudio/PluginForObsRelease/releases/latest) are linked under [What you need](#what-you-need) above.
 
@@ -60,7 +60,7 @@ Steps 3d and 3e below are the fiddly ones, and they can be skipped: once the Plu
 
 ### 3a. Add the atkAudio Source Mixer source
 
-**Add Source > atkAudio Source Mixer.** This exists only to host a filter. Do **not** try to use its own combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
+**Add Source > atkAudio Source Mixer.** Here it exists only to host a filter, so leave its properties as they come. In particular do **not** reach for its combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
 
 <div align="center"><img src="images/obs-windows/04_OBS-add-source.png" width="57%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
 
@@ -101,7 +101,7 @@ The finished graph looks like this - one Audio Input node fanning out to four OB
 
 <div align="center"><img src="images/obs-windows/10_PluginHost2-wired-graph.png" width="66%" alt="The finished PluginHost2 graph: one Audio Input node fanning out to four OBS Output nodes, four connections each."></div>
 
-Four sources now appear in the OBS **Sources** panel, with real level meters. Rename each one to carry its channel range - `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16`. Nothing downstream reads the names, but the next step asks you to match each source to a track number, and generic names make that easy to get wrong.
+Four sources now appear in the OBS **Sources** panel, with real level meters. They have no Properties dialog of their own, which is expected - everything about them lives in the graph. Rename each one to carry its channel range - `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16`. Nothing downstream reads the names, but the next step asks you to match each source to a track number, and generic names make that easy to get wrong.
 
 <div align="center"><img src="images/obs-windows/11_OBS-four-ph2out-sources.png" width="82%" alt="The OBS main window on Windows showing sources Ph2Out 01-04 through 13-16 plus the atkAudio Source Mixer, with the Audio Mixer showing live signal on all four."></div>
 
@@ -160,7 +160,7 @@ Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you 
 | Audio arrives but the ambisonic field is wrong | Channel order. Verify with a tone ladder (below) before blaming the renderer. |
 | Recording reads back as 32 channels, not 16 | Global Settings > Audio > Channels is `7.1`, not `4.0`. |
 | No ASIO option anywhere in OBS | atkAudio is not installed, or OBS is older than 31.1.1. |
-| The source's Properties says "No properties available" | Expected. The interface is the PluginHost2 filter window, not Properties. |
+| A `Ph2Out ...` source has no Properties at all | Expected. Those sources are configured entirely in the PluginHost2 graph window; only the Source Mixer has OBS properties, and none of them matter here. |
 | Stuck at 2 channels per track, so 12 channels at most | The OBS Output nodes are still stereo. Right-click each node > Configure Audio I/O, and set the Input Configuration to Discrete #4. |
 
 ## Proving the channel order
