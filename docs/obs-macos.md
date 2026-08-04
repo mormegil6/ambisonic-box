@@ -12,6 +12,8 @@ The steps run in the same order as [the Windows guide](obs-windows.md). Only ste
 - **A multichannel Core Audio device** carrying your 16 ambisonic channels. [BlackHole](https://github.com/ExistentialAudio/BlackHole) (16ch or 64ch) is the usual choice; an aggregate device built from your interface works too.
 - **A source of 16 channels.** [REAPER](https://www.reaper.fm/) is what this guide uses, and the fixture project below is a REAPER project; anything that can send AmbiX (ACN/SN3D) channels 1-16 into the device will do.
 
+**You can import most of this instead of typing it.** The OBS side ships as two presets: a **profile** ([`docs/fixtures/obs-macos-profile/`](fixtures/)), which carries the channel count and the whole Recording tab, and a **scene collection** ([`docs/fixtures/obs-macos-blackhole.json`](fixtures/)), which carries the four sources and their track assignments. Import them from OBS's **Profile > Import** and **Scene Collection > Import** menus and steps 2 to 5 are done bar the URL, which you still have to point at your own box. The steps are written out anyway, because it is worth knowing what the preset did and where to look when it does not work.
+
 ## 1. Send 16 channels into BlackHole
 
 Set REAPER's audio device to the multichannel device, at 48 kHz.
@@ -23,6 +25,8 @@ To test the chain rather than your own content, open [`docs/fixtures/AmbiX16ch_S
 <div align="center"><img src="images/obs-macos/02_Reaper-tracks.png" width="82%" alt="The fixture REAPER project: a 16-channel parent track named 3OA with sixteen mono child tracks ACN-00 to ACN-15, each running a Tone Generator, shown in the mixer with levels stepping up in 6 dB increments to ACN-07 and back down to ACN-15."></div>
 
 **The routing is two layers.** Each mono child feeds a single 16-channel bus (`3OA`) through an internal send, one send per destination channel: `ACN-00` into channel 1, on up to `ACN-15` into channel 16. Only that bus carries a **hardware output**, mapped `1-16 -> Output 1..16`, and its **Master send is unticked** so the ladder never reaches your monitors.
+
+Sixteen individual hardware outputs would work too. The bus is worth the extra track because it puts the entire channel mapping in one dialog you can read at a glance - and it is where an ambisonic encoder would sit if you were producing content rather than testing.
 
 Those outputs are numbered rather than named because on macOS the *device* is chosen back in Preferences > Audio > Device, so `Output 1..16` here means channels 1-16 of BlackHole. On Windows the same list shows ReaRoute by name instead.
 
@@ -36,13 +40,17 @@ Those outputs are numbered rather than named because on macOS the *device* is ch
 
 **Settings > Audio > Channels: `4.0`**
 
-Not 7.1. OBS's 7.1 path mutes the LFE slot outright - channel 4 of every track arrives digital-silent (measured at -99 dBFS on a real capture). For ambisonics that erases ACN 3, the X axis, and nothing warns you.
-
-This setting governs the width of every track, independently of how many channels a source actually carries. It has to match the shape you intend or the output is silently padded. Set it before you build anything else, so nothing downstream is measured against the wrong width.
+Not 7.1. This governs the channel *width* of every track in the output regardless of how many channels a source actually carries, and it is a separate gate from anything the sources are configured to do. Left at 7.1 every 4-channel track is widened to 8 and the recording reads back as 32 channels instead of 16, with nothing to warn you - that one was caught on Windows only because the verification step counts channels. A 7.1 layout also carries an LFE slot that OBS mutes outright: channel 4 of every track arrives digital-silent, measured at -99 dBFS on a real macOS capture, which for ambisonics erases ACN 3, the X axis. Exactly where a 4-channel source lands inside a 7.1 track was never measured, so treat a 7.1 capture as unusable rather than as padding you can strip. Set it before you build anything else, so nothing downstream is measured against the wrong width.
 
 **Channels is the only field on that page that matters.** Every global audio device dropdown can stay **Disabled** - your 16 channels arrive as *sources*, not as global devices.
 
 <div align="center"><img src="images/obs-macos/04_OBS-channels-setting.png" width="57%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
+
+OBS then warns that surround sound is enabled and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
+
+While you are in Settings: **Advanced > Video**. Leave **Color Range** on **Limited**, not Full. This project's rule is limited range throughout - full-range video broke the dash.js/MSE player with `PIPELINE_ERROR_DECODE` (see the [README's troubleshooting table](../README.md#troubleshooting)) - and under the passthrough video path OBS's H.264 reaches the player untouched, so OBS is the first place in the chain that can set it wrong. That was measured on VP9 rather than H.264, but limited range costs nothing either way.
+
+Setting **Color Format** to **NV12** at the same time is cheap insurance: NV12 is the 8-bit 4:2:0 layout H.264 encoders consume natively, so nothing has to convert each frame. That one is a precaution, not a measurement here - it comes from [obs-studio issue #8226](https://github.com/obsproject/obs-studio/issues/8226), a Windows report of heavy frame drops on the Custom Output (FFmpeg) path, closed as not planned.
 
 ## 3. Bring the 16 channels into OBS
 

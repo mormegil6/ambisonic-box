@@ -12,6 +12,8 @@ The steps run in the same order as [the macOS guide](obs-macos.md). Only steps 1
 - **[atkAudio plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/)** ([releases](https://github.com/atkAudio/PluginForObsRelease/releases/latest)). OBS has no native ASIO input, and `obs-asio` is abandoned with an open ReaRoute distortion bug on OBS 30+; atkAudio is its named successor. (OBS 33.0 is expected to bring a native ASIO host, which would make this plugin unnecessary.)
 - **An ASIO source of 16 channels.** [REAPER](https://www.reaper.fm/)'s **ReaRoute** is the convenient one - it ships with REAPER and appears as an ASIO device to other applications, and the fixture project below is a REAPER project.
 
+**You can import most of this instead of typing it.** The OBS side ships as two presets: a **profile** ([`docs/fixtures/obs-windows-profile/`](fixtures/)), which carries the channel count and the whole Recording tab, and a **scene collection** ([`docs/fixtures/obs-windows-atkaudio.json`](fixtures/)), which carries the four sources and their track assignments. Import them from OBS's **Profile > Import** and **Scene Collection > Import** menus and steps 2 to 5 are done bar the URL, which you still have to point at your own box. The steps are written out anyway, because it is worth knowing what the preset did and where to look when it does not work.
+
 ## 1. Send 16 channels into ReaRoute
 
 **REAPER's own audio device is irrelevant here.** ReaRoute is a hardware-output target, not a device REAPER has to be running on, so whatever sits in Preferences > Audio > Device can stay as it is - the captures below were made with REAPER on **Dummy Audio** and no sound card involved at all. This is the one real simplification Windows has over macOS, where the multichannel device does have to be selected.
@@ -34,19 +36,23 @@ Sixteen individual hardware outputs would work too. The bus is worth the extra t
 
 **Settings > Audio > Channels: `4.0`**
 
-This is a **separate gate** from anything configured in atkAudio, and it governs the channel *width* of every track in the output regardless of how many channels a source actually carries. Left at 7.1 every 4-channel track is widened to 8 and the recording reads back as 32 channels instead of 16, with nothing to warn you; it was caught here only because the verification step counted channels. Do not treat the extra channels as padding you can strip - a 7.1 layout carries an LFE slot that OBS mutes outright, which is what erases ACN 3 on macOS, and where a 4-channel source lands inside a 7.1 track was never measured on Windows. Treat a 7.1 capture as unusable rather than as something to salvage. Set it before you build anything else, so nothing downstream is measured against the wrong width.
+Not 7.1. This governs the channel *width* of every track in the output regardless of how many channels a source actually carries, and it is a **separate gate** from anything configured in atkAudio. Left at 7.1 every 4-channel track is widened to 8 and the recording reads back as 32 channels instead of 16, with nothing to warn you - that one was caught on Windows only because the verification step counts channels. A 7.1 layout also carries an LFE slot that OBS mutes outright: channel 4 of every track arrives digital-silent, measured at -99 dBFS on a real macOS capture, which for ambisonics erases ACN 3, the X axis. Exactly where a 4-channel source lands inside a 7.1 track was never measured, so treat a 7.1 capture as unusable rather than as padding you can strip. Set it before you build anything else, so nothing downstream is measured against the wrong width.
 
 **Channels is the only field on that page that matters.** Every global audio device dropdown can stay **Disabled** - your 16 channels arrive as *sources*, not as global devices.
 
 <div align="center"><img src="images/obs-windows/03_OBS-channels-setting.png" width="57%" alt="OBS Settings, Audio page on Windows: Sample Rate 48 kHz, Channels 4.0, and every entry under Global Audio Devices set to Disabled."></div>
 
-OBS then warns that surround sound is enabled, and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
+OBS then warns that surround sound is enabled and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
 
-While you are in Settings: **Advanced > Video > Color Format: NV12** (avoids obs-studio issue #8226; unrelated to audio, cheap to set).
+While you are in Settings: **Advanced > Video**. Leave **Color Range** on **Limited**, not Full. This project's rule is limited range throughout - full-range video broke the dash.js/MSE player with `PIPELINE_ERROR_DECODE` (see the [README's troubleshooting table](../README.md#troubleshooting)) - and under the passthrough video path OBS's H.264 reaches the player untouched, so OBS is the first place in the chain that can set it wrong. That was measured on VP9 rather than H.264, but limited range costs nothing either way.
+
+Setting **Color Format** to **NV12** at the same time is cheap insurance: NV12 is the 8-bit 4:2:0 layout H.264 encoders consume natively, so nothing has to convert each frame. That one is a precaution, not a measurement here - it comes from [obs-studio issue #8226](https://github.com/obsproject/obs-studio/issues/8226), a Windows report of heavy frame drops on the Custom Output (FFmpeg) path, closed as not planned.
 
 ## 3. Bring the 16 channels into OBS
 
 atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
+
+Steps 4 and 5 below are the fiddly ones, and they can be skipped: once the PluginHost2 window is open, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) into it and the wiring and the Discrete #4 layouts arrive already done. Confirm the device and sample rate afterwards under Options > Change Device Settings.
 
 1. **Add Source > atkAudio Source Mixer.** This exists only to host a filter. Do **not** try to use its own combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
 
@@ -62,7 +68,7 @@ atkAudio's real interface is a node-graph editor, and it is not where you would 
 
 4. **Plugins > Create Plug-in > OBS Output**, four times - one instance per group of four channels. Wire Audio Input ports 1-4 into the first, 5-8 into the second, 9-12 into the third, 13-16 into the fourth. Order matters: this is what preserves AmbiX channel order.
 
-   New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That also removes the Audio Input node, so recreate it; the Audio Output and MIDI in/out nodes come back by themselves.
+   New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That also clears the Audio Input node, which you do have to recreate. The Audio Output and MIDI in/out nodes go too and do not come back, but nothing here uses them, so leave them gone.
 
    <div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
 
@@ -80,8 +86,6 @@ atkAudio's real interface is a node-graph editor, and it is not where you would 
 The finished graph looks like this - one Audio Input node fanning out to four OBS Output nodes, four connections each:
 
 <div align="center"><img src="images/obs-windows/10_PluginHost2-wired-graph.png" width="66%" alt="The finished PluginHost2 graph: one Audio Input node fanning out to four OBS Output nodes, four connections each."></div>
-
-To skip steps 4 and 5 entirely, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) from the PluginHost2 window instead - it carries the wiring and the Discrete #4 layouts already. Confirm the device and sample rate afterwards under Options > Change Device Settings.
 
 Four sources now appear in the OBS **Sources** panel, with real level meters. Rename each one to carry its channel range - `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16`. Nothing downstream reads the names, but the next step asks you to match each source to a track number, and generic names make that easy to get wrong.
 
