@@ -24,6 +24,9 @@ The trailing `100 100` are this project's base frequency and step. `check-tones.
 
 ## The OBS presets
 
+> These files are exported from a real machine, so before committing an update, check that no local paths came with it. OBS stores three: `FFFilePath`, `FilePath` and `RecFilePath`. All three ship empty; OBS asks for a recording location the first time you need one, and this recipe streams to a URL rather than a file, so none of them is used by the documented flow.
+
+
 Import the profile with **Profile > Import** and the scene collection with **Scene Collection > Import**, then change two things:
 
 - the **URL** - it ships as `srt://<host>:8890?streamid=<your-name>&latency=2000000` and will not connect until you put your own host and name in it;
