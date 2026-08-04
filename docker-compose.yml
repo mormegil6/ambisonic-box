@@ -222,15 +222,14 @@ services:
       # guest disconnects, and the absolute session cap (enforced within
       # ~10 s of expiry, via the on_update ping).
       - GUEST_ENABLED=${GUEST_ENABLED:-0}
-      # shared secret with srt-gateway: realip attribution on the guest app is
-      # honored only when the publish arrives from the gateway's resolved
-      # address AND carries this value (constant-time compare). Empty = the
-      # substitution is refused entirely, so SRT guests would be logged and
-      # banned as the gateway container's IP - set it whenever SRT_ENABLED=1.
+      # OPTIONAL hardening for srt-gateway's real-caller-IP attribution. The
+      # gateway is authenticated by its container address either way (a remote
+      # publisher cannot forge nginx-rtmp's own addr=); setting this demands a
+      # matching token as well. Leave empty for a working default.
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
       # only so the dashboard knows whether to list srt-gateway among the
       # live-path services (it runs either way, idle when off)
-      - SRT_ENABLED=${SRT_ENABLED:-0}
+      - SRT_ENABLED=${SRT_ENABLED:-1}
       - GUEST_GRACE_S=${GUEST_GRACE_S:-120}
       - GUEST_MAX_S=${GUEST_MAX_S:-10800}
       # after a cap/kill-forced end, refuse guest publishes this long, so an
@@ -269,15 +268,17 @@ services:
   # grace, bans, kill, stall, demo-loop interlock) from the existing
   # nginx-rtmp callbacks. Privilege-separated on purpose: this container
   # parses hostile pre-auth internet bytes, so it holds NO docker socket, NO
-  # volumes, NO STREAM_KEY, no capabilities, read-only rootfs. OFF by default
-  # (SRT_ENABLED=0: the port stays unbound and packets to the mapping die);
-  # see .env.example before enabling.
+  # volumes, NO STREAM_KEY, no capabilities, read-only rootfs. ON by default:
+  # this is the recommended contribution path (stock OBS, one recipe on macOS
+  # and Windows). It still admits nobody unless GUEST_ENABLED=1 - the arbiter
+  # refuses every caller - so the port alone opens nothing. SRT_ENABLED=0
+  # leaves it unbound entirely.
   srt-gateway:
     build:
       context: ./services/srt-gateway
     image: hoa360-srt-gateway:local
     environment:
-      - SRT_ENABLED=${SRT_ENABLED:-0}
+      - SRT_ENABLED=${SRT_ENABLED:-1}
       - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
       - SRT_PASSPHRASE=${SRT_PASSPHRASE:-}
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}

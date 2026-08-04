@@ -116,7 +116,9 @@ vhw = node_halfwidth('VIEWER')
 # OBS sits left of the box (its left edge set by GAP); the viewer is centred on
 # the SAME vertical axis as OBS (OBS is wider, so the viewer is inset & centred,
 # not left-aligned). anchor_left is that shared left reference == OBS's left edge.
-GAP = float(sys.argv[3]) if len(sys.argv) > 3 else 152.0   # gutter (overridable)
+# gutter. Wide enough that the port labels ('RTMP :1935' is the widest) sit
+# between the external senders and the box wall without touching either.
+GAP = float(sys.argv[3]) if len(sys.argv) > 3 else 186.0   # gutter (overridable)
 ohw = node_halfwidth('OBS')
 anchor_left = box_left - GAP - 2 * vhw
 VX = anchor_left + ohw           # viewer centre == OBS centre
@@ -185,7 +187,10 @@ def set_label(eid, lx, ly):
 # 1) stock OBS -> srt-gateway: straight horizontal, crossing the box wall
 sr_sx, sr_ex = SX + shw, GX - ghw - 6.0
 set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{GY}L{sr_ex},{GY}")
-set_label('L_SRTOBS_GATEWAY_0', (sr_sx + (GX - ghw)) / 2.0, GY - 22.0)
+# centre both port labels on the gutter, measured from whichever external box
+# reaches furthest right, so the wider label cannot ride up onto it
+PORT_LX = (max(SX + shw, OX + ohw) + (GX - ghw)) / 2.0
+set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
 
 # 2) srt-gateway -> ingest: straight horizontal, completing the SRT run
 g_sx, g_ex = GX + ghw, ix - ihw - 6.0
@@ -204,7 +209,9 @@ o_ex, o_ey = ix - ihw - 6.0, iy + ihh * 0.62
 # runs UNDER the gateway to reach ingest directly, without grazing its corner.
 o_mid = o_sx + (o_ex - o_sx) * 0.78
 set_edge('L_OBS_INGEST_0', f"M{o_sx},{o_sy}C{o_mid},{o_sy} {o_mid},{o_ey} {o_ex},{o_ey}")
-set_label('L_OBS_INGEST_0', o_sx + (o_ex - o_sx) * 0.26, o_sy - 24.0)
+# share the SRT label's x so the two port labels line up vertically; the
+# curve is still flat here, so the label sits directly over its own line
+set_label('L_OBS_INGEST_0', PORT_LX, o_sy - 24.0)
 
 # === loop-source: mirror OBS on the right. Move it level with ingest, to its
 #     right, so RTMP (internal) runs straight right->left into ingest. It lives
@@ -231,7 +238,7 @@ s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+
 # gateway and ingest share a row but the gateway is the taller box, so the top
 # edge follows whichever actually reaches highest
 NEW_TOP = min(iy - ihh, GY - ghh) - 46.0  # room for the title on the edge
-tm = re.search(r'<g class="cluster-label" transform="translate\(([-\d.]+),\s*[-\d.]+\)"><foreignObject width="([-\d.]+)"', s)
+tm = re.search(r'<g class="cluster-label ?" transform="translate\(([-\d.]+),\s*[-\d.]+\)"><foreignObject width="([-\d.]+)"', s)
 tx, tw = float(tm.group(1)), float(tm.group(2))
 # 1. resize + round the cluster rect
 old_rect = re.search(r'<rect style="stroke-width:3px[^"]*"\s*x="[-\d.]+"\s*y="[-\d.]+"\s*width="[-\d.]+"\s*height="[-\d.]+"\s*/>', s).group(0)
@@ -247,7 +254,7 @@ mask = (f'<rect x="{tx - 12:.2f}" y="{NEW_TOP - 15:.2f}" width="{tw + 24:.2f}" h
         f'style="fill:#0f1830;stroke:#7b6cf0;stroke-width:1.5"/>')
 s = s.replace(old_rect, new_rect + mask, 1)
 # 3. move the title so its vertical centre sits on the new top edge
-s = re.sub(r'(<g class="cluster-label" transform="translate\()[-\d.]+,\s*[-\d.]+(\)")',
+s = re.sub(r'(<g class="cluster-label ?" transform="translate\()[-\d.]+,\s*[-\d.]+(\)")',
            lambda m: f"{m.group(1)}{tx}, {NEW_TOP - 12}{m.group(2)}", s, count=1)
 
 # 4) trim the viewBox: widen left for the viewer, trim the now-empty top down to
@@ -257,9 +264,13 @@ vb = re.search(r'viewBox="([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)"', s)
 x0, y0, w, h = map(float, vb.groups())
 leftmost = min(VX - vhw, OX - ohw, SX - shw)   # widest external box sets the left extent
 new_x0 = min(x0, leftmost - 20.0)
-new_w = w + (x0 - new_x0)
 new_y0 = NEW_TOP - 34.0                   # just above the title on the edge
 new_h = box_bottom - new_y0 + 22.0        # box is the lowest element
+# Trim the right to the real content instead of inheriting mermaid's width:
+# every node that used to sit out there has been repositioned, so the raw
+# layout's right extent is stale padding. The box wall is now the rightmost
+# thing in the drawing (loop-source is tucked inside it).
+new_w = (box_right + 22.0) - new_x0
 s = s.replace(vb.group(0), f'viewBox="{new_x0} {new_y0} {new_w} {new_h}"', 1)
 s = re.sub(r'max-width:\s*[-\d.]+px', f'max-width: {new_w:.2f}px', s, count=1)
 

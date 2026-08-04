@@ -633,20 +633,26 @@ def _gw_ip(force=False):
 
 
 def _gw_realip_ok(reporter, token, realip):
-    """Honor a ?realip= claim only when all four hold: a secret is configured,
-    the claimant knows it (constant-time compare), the publish really arrived
-    from the gateway's own resolved address, and the claimed value parses as
-    an IP. A remote publisher can put realip= in its publish URL, but it
-    cannot satisfy the address check (nginx-rtmp emits its own addr= before
-    the publish-URL args and parse_qs takes the first occurrence) and cannot
-    know the secret, so attribution stays unforgeable."""
-    if not (GUEST_GW_SECRET and token and realip):
+    """Honor a ?realip= claim only from the gateway itself.
+
+    The load-bearing check is the ADDRESS one: `reporter` is nginx-rtmp's own
+    addr=, taken from the TCP connection, and a publisher cannot forge it
+    (nginx emits addr= before appending the publisher's own publish-URL args,
+    and parse_qs returns the first occurrence). So a remote guest appending
+    ?realip= to its URL is refused because its address is its own, not the
+    gateway's - which is what keeps attribution, and therefore bans, honest.
+
+    GUEST_GW_SECRET is optional defence-in-depth on top of that: set it and a
+    matching token is also required, which additionally distinguishes the
+    gateway from any other container that might come to share its address.
+    Unset, attribution still works and the endpoint is usable out of the box."""
+    if not realip:
         return False
-    if not hmac.compare_digest(token, GUEST_GW_SECRET):
+    if GUEST_GW_SECRET and not (token and hmac.compare_digest(token, GUEST_GW_SECRET)):
         return False
-    # secret already matched, so this IS the gateway; a reporter mismatch here
-    # means the cache is stale (gateway just recreated), not an impostor - bust
-    # it once rather than misattribute this guest to the gateway's own address
+    # a mismatch is usually a stale cache (the gateway was just recreated)
+    # rather than an impostor, so re-resolve once before refusing - otherwise
+    # that guest gets logged, and bannable, as the gateway's own address
     if reporter != _gw_ip() and reporter != _gw_ip(force=True):
         return False
     try:

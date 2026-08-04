@@ -4,8 +4,8 @@
 %% architecture.svg / architecture.png. The subgraph deliberately has no
 %% `direction` (a nested one would give the SVG two coordinate systems).
 flowchart TD
-    SRTOBS["stock OBS<br/>macOS / Windows<br/>H.264 + 4 x 4-ch AAC"]
-    OBS["OBS Music Edition<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
+    SRTOBS["stock OBS ({{LOGO_APPLE}}&nbsp;/&nbsp;{{LOGO_WINDOWS}})<br/>live A/V, in sync<br/>H.264 + 4 x 4-ch AAC"]
+    OBS["OBS Music Edition ({{LOGO_WINDOWS}})<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["DOCKER COMPOSE"]
         GATEWAY["srt-gateway<br/>SRT terminator<br/>joins 4 tracks to 16-ch"]

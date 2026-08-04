@@ -1,6 +1,9 @@
 {
   "theme": "base",
-  "flowchart": { "curve": "basis" },
+  "flowchart": {
+    "curve": "basis",
+    "wrappingWidth": 300
+  },
   "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
   "themeVariables": {
     "darkMode": true,
@@ -13,5 +16,6 @@
     "edgeLabelBackground": "#0b1220",
     "tertiaryTextColor": "#dfe7f5",
     "nodeBorder": "#4a6ea5"
-  }
+  },
+  "securityLevel": "loose"
 }

@@ -11,7 +11,7 @@ The diagram draws the data path and compresses everything else. The omissions ar
 - **telemetry is not only a sink.** Undrawn control and output edges: it starts and stops `loop-source` for on-demand idling (a Docker-socket action, which is why the socket mount is read-write), writes the curated public `status.json` into the `status-public` volume that hoast-player serves, and sends Telegram alerts.
 - **the viewer's control path is invisible.** A visitor wakes the idle demo through exactly three `/api` routes that hoast-player reverse-proxies to telemetry; the diagram shows only the one HTTP edge. The route list, and why it is exactly three, is in [`docs/ENDPOINTS.md`](../ENDPOINTS.md).
 - **`rtmp-ingest`'s "auth" label compresses the mechanism**: the `on_publish` callback goes to an auth endpoint inside the same container, not to another service.
-- **`srt-gateway` is drawn as a peer of the other services, but it is off by default** (`SRT_ENABLED=0`): a stock `docker compose up` binds no UDP port and the SRT route does not exist. It is drawn first because it is the *recommended* contribution path (stock OBS, same recipe on macOS and Windows), not because it is the one running out of the box.
+- **`srt-gateway` is drawn first because it is the recommended contribution path** (stock OBS, same recipe on macOS and Windows) and it is on by default. What the drawing cannot show is that binding the port admits nobody on its own: the guest arbiter refuses every caller unless `GUEST_ENABLED=1`, which is itself off by default.
 - **the guest arbitration behind that gateway is invisible here.** The drawn edge into `rtmp-ingest` hides the whole session lifecycle the SRT route inherits by republishing into the existing `guest` application: single-slot admission, session cap, cooldown, reconnect grace, IP bans and the dashboard kill. See the guest section of the top-level `README.md`.
 - **only the `dash-output` volume is drawn**; `telemetry-data` (private dashboard history) and `status-public` (public status JSON) exist but carry no arrows here.
 
@@ -23,10 +23,11 @@ The diagram draws the data path and compresses everything else. The omissions ar
 | file | role |
 |---|---|
 | `architecture.mmd` | mermaid source - the only file you edit by hand |
+| `logos/` | the OS marks used in the two sender nodes (see below) |
 | `mermaid-config.json` | theme: colours, font, dagre curves |
 | `puppeteer-config.json` | Chromium-based browser path for mermaid-cli + rasteriser |
 | `postprocess.py` | rearranges mermaid's raw dagre layout (python stdlib only) |
-| `build.sh` | `mmdc` render -> `postprocess.py` -> `architecture.svg` + `.png` |
+| `build.sh` | inline the logos -> `mmdc` render -> `postprocess.py` -> `architecture.svg` + `.png` |
 | `architecture.svg` / `architecture.png` | generated outputs, committed |
 
 ## Regenerate
@@ -49,3 +50,18 @@ Two placements the source cannot express, both consequences of `srt-gateway` bei
 
 - the gateway has to sit *inside* the box on ingest's row, and dagre leaves nowhere near enough room there, so `postprocess.py` pushes the box's **left wall outward** until the gateway plus its edge label fit. The empty area this opens in the box's lower left is the cost of putting the gateway beside ingest rather than above it.
 - the legacy RTMP edge therefore has to reach ingest *past* the gateway. It is drawn as an S-curve (the same style as the dash-output volume edges) that stays flat until it is clear of the gateway and then lifts into ingest's left edge, which also reads correctly: that path bypasses the gateway entirely.
+
+## The OS logos
+
+`architecture.mmd` carries `{{LOGO_APPLE}}` / `{{LOGO_WINDOWS}}` placeholders rather than the artwork, so the source stays readable; `build.sh` substitutes them before `mmdc` runs, because dagre has to measure the real label width. They are inlined as base64 data URIs so the committed SVG renders standalone.
+
+Both marks come from Wikimedia Commons and are **public domain for copyright purposes** (simple geometry, below the threshold of originality) while remaining **registered trademarks** of their owners:
+
+| file | source |
+|---|---|
+| `logos/apple-white.svg` | [Apple_logo_white.svg](https://commons.wikimedia.org/wiki/File:Apple_logo_white.svg) |
+| `logos/windows-white.svg` | [Windows logo - 2002-2012 (Black)](https://commons.wikimedia.org/wiki/File:Windows_logo_-_2002%E2%80%932012_(Black).svg), recoloured white |
+
+They appear here only to state which platforms each sender runs on - nominative use, indicating compatibility. Nothing in this project is endorsed by, affiliated with, or certified by Apple or Microsoft.
+
+Two implementation notes, both learned the hard way and both load-bearing: the sources need an explicit `viewBox` (without one an `<img>` cannot preserve their aspect and they render as smears), and each logo must be wrapped in a fixed-size `inline-block` span, because mermaid forces `display:flex; flex-direction:column; width:100%` onto images inside labels - unwrapped, every logo becomes a full-width block on its own line. Substituting a raw `<svg>` element instead is not a way around it: mermaid's label parser mangles the surrounding text.

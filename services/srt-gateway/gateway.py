@@ -543,9 +543,11 @@ def main():
         signal.pause()
         return
     if MODE == "guest" and not GW_SECRET:
-        log("FATAL: SRT_ENABLED=1 in guest mode requires GUEST_GW_SECRET "
-            "(telemetry refuses realip attribution without it)")
-        sys.exit(1)
+        # not fatal: telemetry authenticates this gateway by its container
+        # address, which a remote publisher cannot forge. The secret is an
+        # extra layer, not the one holding attribution up.
+        log("note: GUEST_GW_SECRET unset - caller attribution rests on the "
+            "gateway's address alone; set one to add a shared-secret check")
     if MODE == "owner" and not STREAM_KEY:
         log("FATAL: owner mode requires STREAM_KEY")
         sys.exit(1)
