@@ -118,7 +118,7 @@ vhw = node_halfwidth('VIEWER')
 # not left-aligned). anchor_left is that shared left reference == OBS's left edge.
 # gutter. Wide enough that the port labels ('RTMP :1935' is the widest) sit
 # between the external senders and the box wall without touching either.
-GAP = float(sys.argv[3]) if len(sys.argv) > 3 else 186.0   # gutter (overridable)
+GAP = float(sys.argv[3]) if len(sys.argv) > 3 else 162.0   # gutter (overridable)
 ohw = node_halfwidth('OBS')
 anchor_left = box_left - GAP - 2 * vhw
 VX = anchor_left + ohw           # viewer centre == OBS centre
@@ -240,6 +240,9 @@ s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+
 NEW_TOP = min(iy - ihh, GY - ghh) - 46.0  # room for the title on the edge
 tm = re.search(r'<g class="cluster-label ?" transform="translate\(([-\d.]+),\s*[-\d.]+\)"><foreignObject width="([-\d.]+)"', s)
 tx, tw = float(tm.group(1)), float(tm.group(2))
+# dagre centred the title on the box it laid out; the left wall has since been
+# pushed outward to seat the gateway, so re-centre it on the box as drawn
+tx = (box_left + box_right) / 2.0 - tw / 2.0
 # 1. resize + round the cluster rect
 old_rect = re.search(r'<rect style="stroke-width:3px[^"]*"\s*x="[-\d.]+"\s*y="[-\d.]+"\s*width="[-\d.]+"\s*height="[-\d.]+"\s*/>', s).group(0)
 new_rect = (f'<rect style="stroke-width:3px !important" x="{box_left}" y="{NEW_TOP}" '
