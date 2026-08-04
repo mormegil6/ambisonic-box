@@ -86,7 +86,7 @@ New plug-ins land at a **random spot on the canvas**, and sometimes that spot is
 
 ### 3e. Set each node to Discrete #4
 
-**Each OBS Output node defaults to stereo.** Right-click the **node itself** (not a port, and not its OBS Properties dialog) > **Configure Audio I/O**, and set the **Input Configuration**'s Channel Layout to **Discrete #4**. Repeat for all four nodes. The Output Configuration can be left alone - that is the OBS-facing side, and it follows.
+**Each OBS Output node defaults to stereo.** Right-click the **node itself** (not a port, and not its OBS Properties dialog) > **Configure Audio I/O**, and set the **Input Configuration**'s Channel Layout to **Discrete #4**. Repeat for all four nodes: miss one and you get 4+4+4+2 = 14 channels rather than an obvious failure. Leave the Output Configuration alone - there is nothing there to set. The node declares an input bus only (`ObsOutput.h` in the plugin's AGPL source constructs with `withInput("Input", AudioChannelSet::stereo(), true)` and contains no `withOutput` at all), and the channel count OBS sees is that input bus width.
 
 Use "Discrete" rather than a named surround layout like Quad. That was a precaution, not a measurement: a named 4-channel layout asserts what its channels *mean*, and could imply an ordering or an LFE slot that has nothing to do with ACN 0-3, whereas discrete channels carry no such claim and cannot be reinterpreted downstream. Quad was never tested here, so it may well work too.
 
