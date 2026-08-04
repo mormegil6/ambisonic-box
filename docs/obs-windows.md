@@ -80,7 +80,7 @@ In that window: **Options > Change Device Settings**. Set Device to **ReaRoute A
 
 **Plugins > Create Plug-in > OBS Output**, four times - one instance per group of four channels. Wire Audio Input ports 1-4 into the first, 5-8 into the second, 9-12 into the third, 13-16 into the fourth. Order matters: this is what preserves AmbiX channel order.
 
-New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That also clears the Audio Input node, which you do have to recreate. The Audio Output and MIDI in/out nodes go too and do not come back, but nothing here uses them, so leave them gone.
+New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That clears every node, Audio Input included, and none of them return on their own. Recreate Audio Input from the same Plugins > Create Plug-in menu; Audio Output and the MIDI nodes can be put back the same way if you want them, though nothing in this recipe uses them.
 
 <div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
 
