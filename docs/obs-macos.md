@@ -2,11 +2,11 @@
 
 Everything here was established by pushing a per-channel tone ladder through real hardware and reading back what arrived. Where a setting looks arbitrary, it is not: the obvious-looking alternative fails silently, and the note says how.
 
-Verified on OBS Studio 32.2.1, macOS, with [BlackHole](https://github.com/ExistentialAudio/BlackHole) as the multichannel device.
+Verified on [OBS Studio](https://obsproject.com/) 32.2.1, macOS, with [BlackHole](https://github.com/ExistentialAudio/BlackHole) as the multichannel device.
 
 ## What you need
 
-- **OBS Studio** (stock - no patched fork).
+- **[OBS Studio](https://obsproject.com/)** (stock - no patched fork).
 - **A multichannel Core Audio device** carrying your 16 ambisonic channels. [BlackHole](https://github.com/ExistentialAudio/BlackHole) (16ch or 64ch) is the usual choice; an aggregate device built from your interface works too. Your DAW or player sends AmbiX (ACN/SN3D) channels 1-16 into it.
 
 <div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="82%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>

@@ -2,15 +2,15 @@
 
 Everything here was established by pushing a per-channel tone ladder through real hardware and reading back what arrived. Where a setting looks arbitrary, it is not: the obvious-looking alternative fails silently, and the note says how.
 
-Verified on OBS Studio 32.2.1 and REAPER 7.78 with ReaRoute, Windows 11.
+Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78 with ReaRoute, Windows 11.
 
 The stream settings are identical to [macOS](obs-macos.md). What differs is getting 16 channels *into* OBS in the first place: Windows has no BlackHole, so the route is ASIO.
 
 ## What you need
 
-- **OBS Studio 31.1.1 or newer** (stock - no patched fork).
+- **[OBS Studio](https://obsproject.com/) 31.1.1 or newer** (stock - no patched fork).
 - **[atkAudio plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/)** ([releases](https://github.com/atkAudio/PluginForObsRelease/releases/latest)). OBS has no native ASIO input, and `obs-asio` is abandoned with an open ReaRoute distortion bug on OBS 30+; atkAudio is its named successor. (OBS 33.0 is expected to bring a native ASIO host, which would make this plugin unnecessary.)
-- **An ASIO source of 16 channels.** REAPER's **ReaRoute** is the convenient one - it ships with REAPER and appears as an ASIO device to other applications. ReaRoute does *not* need to be REAPER's own audio device: it is an additional hardware-output target, so REAPER can run on Dummy Audio and still feed it.
+- **An ASIO source of 16 channels.** [REAPER](https://www.reaper.fm/)'s **ReaRoute** is the convenient one - it ships with REAPER and appears as an ASIO device to other applications. ReaRoute does *not* need to be REAPER's own audio device: it is an additional hardware-output target, so REAPER can run on Dummy Audio and still feed it.
 
 ## 1. Send 16 channels into ReaRoute
 
