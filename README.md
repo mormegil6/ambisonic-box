@@ -196,9 +196,12 @@ The player side-loads these as native `<track>` elements rather than reading a D
 
 ### Playing it on a standalone headset
 
-The clips play in a Meta Quest 3's own browser, with no app to install and nothing to configure: open the page and drag to look around. The headset's browser decodes the multichannel Opus directly and the page renders the sound field binaurally, head-tracked, the same as on desktop.
+The clips play in a Meta Quest 3's own browser, with no app to install and nothing to configure. The headset's browser decodes the multichannel Opus directly and the page renders the sound field binaurally, the same as on desktop. There are two ways to watch, and the difference matters:
 
-**Fully immersive playback works too** - the player's **VR** button is there to be pressed. It enters a WebXR immersive session, so you are inside the sphere with the headset's own head tracking driving the view and the ambisonic field rotating with it, rather than dragging a flat window around. Verified on a Quest 3 (2026-07-27). Note the difference in where the head tracking comes from: in the flat page it is the device orientation sensors, and in an immersive session it is WebXR itself - which is why the sensor-permission caveats that affect phones do not apply once you are in VR mode.
+- **In the flat page**, the video sits in a window and you drag to look around.
+- **In VR**, press the player's **VR** button. That enters a WebXR immersive session: you are inside the sphere, the headset's own tracking drives the view, and the ambisonic field rotates with your head. There is no dragging - you just look. Verified on a Quest 3 (2026-07-27).
+
+The head tracking comes from different places in the two modes: device orientation sensors in the flat page, WebXR itself in an immersive session. That is why the sensor-permission problems that affect phones cannot apply once you are in VR mode.
 
 <div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
 
