@@ -46,7 +46,7 @@ While you are in Settings: **Advanced > Video > Color Format: NV12** (avoids obs
 
 ## 5. Point OBS at the box
 
-Identical to macOS. **Settings > Output > Output Mode: `Advanced`**, then the **Streaming** tab:
+Identical to macOS. **Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
 | Setting | Value |
 |---|---|
@@ -58,9 +58,9 @@ Identical to macOS. **Settings > Output > Output Mode: `Advanced`**, then the **
 | Audio Track | tick **1, 2, 3, 4** |
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
 
-Two traps, both silent: **`latency` is in MICROSECONDS** (2 s is `2000000`), and the container's default audio encoder is **`mp2`, which flatly refuses more than 2 channels**. Leave Muxer Settings empty.
+Press **Start Recording** to push - Custom Output (FFmpeg) is a recording output even when its destination is a URL, so Start Streaming does nothing for it.
 
-Note that **Custom Output (FFmpeg) can be configured on either the Streaming or the Recording tab, and whichever one you set is the button that fires it** - configure it under Streaming and press Start Streaming; configure it under Recording and it only runs on Start Recording.
+Two traps, both silent: **`latency` is in MICROSECONDS** (2 s is `2000000`), and the container's default audio encoder is **`mp2`, which flatly refuses more than 2 channels**. Leave Muxer Settings empty.
 
 ## If it does not work
 

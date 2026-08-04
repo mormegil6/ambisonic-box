@@ -17,9 +17,11 @@ Containerised toolchain for live streaming 360 video with Higher-Order Ambisonic
 
 The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legacy RTMP/FLV cannot carry VP9/Opus). From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
-**Why 16 channels, and what it would take to go higher.** In practice: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are named AAC layouts; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 is not one. The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. Stock ffmpeg's AAC encoder can write that Program Config Element (PCE - the AAC header that spells out a channel layout the format has no name for; see below) for named layouts up to 22.2 (24 channels); earshot vendors a patched build so the image guarantees PCE support without depending on the host's ffmpeg version. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
+**Why 16 channels, and what it would take to go higher.** In practice: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are named AAC layouts; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 is not one. The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. Stock ffmpeg's AAC encoder can write that Program Config Element (PCE) for named layouts up to 22.2 (24 channels); earshot vendors a patched build so the image guarantees PCE support without depending on the host's ffmpeg version. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
 
-So **the on-demand path is 4th-order capable, verified end to end** - it never touches AAC, and the player reads the ambisonic order from the manifest, so a 25-channel clip plays as 4th order with no configuration. A synthetic 25-channel clip packaged by the same DASH tooling has been played through the full chain: auto-detected as order 4, rendered through the complete order-4 impulse-response set, audio and video clocks in sync. A real recording would sound different but exercise the identical code path, so nothing here is waiting on content. Raising the *live* path is a different matter, with two candidate routes. One stays on RTMP/AAC and gives up a channel: AAC's widest named layout is 22.2 (24 channels - encode, FLV mux and read-back verified on this stack's own ffmpeg), so dropping the 4th-order vertical harmonic (ACN 20) fits, the same perceptual trade Two Big Ears made when their 8-channel format dropped the 2nd-order vertical harmonic (ACN 6) - and here the order 1-3 vertical components (ACN 2, 6, 12) all survive. The other moves contribution off RTMP to SRT carrying **Opus** in MPEG-TS, which would delete the AAC transcode and with it the ceiling. Note that the SRT ingest this stack now ships is *not* that: it carries AAC, and its gateway rejoins the tracks into the same 16-channel AAC-over-RTMP leg as before, precisely so the whole guest arbiter applies to it unchanged. So SRT is here, but the live ceiling is not lifted - that would need the gateway to hand Opus to earshot directly, bypassing the RTMP hop, and it is architectural rather than configuration. The sender side has moved, though. Multitrack SRT already carries 16 channels from stock OBS as four 4-channel tracks, and OBS allows six tracks, so 4th order (25 ch) would fit as six 5-channel tracks: **live 4th order is therefore theoretically reachable, but it is untested and nothing here claims it.** It needs two independent things - that wider sender layout, and a gateway that stops funnelling through 16-channel AAC over RTMP. See [Beyond 3rd order](#beyond-3rd-order-sender-side) for the sender arithmetic and [docs/obs-macos.md](docs/obs-macos.md) / [docs/obs-windows.md](docs/obs-windows.md) for how the per-track joining actually works today. See the measurement notes (below, Documentation) for the numbers behind this.
+**PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's predefined layouts, so a stream carrying one has to spell the layout out in a PCE rather than name it. Without a PCE-capable encoder the contribution leg could not carry 16 channels over RTMP at all, which is why earshot vendors its own ffmpeg build rather than depending on the host's.
+
+So **the on-demand path is 4th-order capable, verified end to end** - it never touches AAC, and the player reads the ambisonic order from the manifest, so a 25-channel clip plays as 4th order with no configuration. A synthetic 25-channel clip packaged by the same DASH tooling has been played through the full chain: auto-detected as order 4, rendered through the complete order-4 impulse-response set, audio and video clocks in sync. A real recording would sound different but exercise the identical code path, so nothing here is waiting on content. Raising the *live* path is a different matter, with two candidate routes. One stays on RTMP/AAC and gives up a channel: AAC's widest named layout is 22.2 (24 channels - encode, FLV mux and read-back verified on this stack's own ffmpeg), so dropping the 4th-order vertical harmonic (ACN 20) fits, the same perceptual trade Two Big Ears made when their 8-channel TBE format dropped the 2nd-order vertical harmonic (ACN 6) - its published mapping simply does not carry that component ([Farina's channel-by-channel conversion](https://www.angelofarina.it/TBE-conversion.htm)) - and here the order 1-3 vertical components (ACN 2, 6, 12) all survive. The other moves contribution off RTMP to SRT carrying **Opus** in MPEG-TS, which would delete the AAC transcode and with it the ceiling. Note that the SRT ingest this stack now ships is *not* that: it carries AAC, and its gateway rejoins the tracks into the same 16-channel AAC-over-RTMP leg as before, precisely so the whole guest arbiter applies to it unchanged. So SRT is here, but the live ceiling is not lifted - that would need the gateway to hand Opus to earshot directly, bypassing the RTMP hop, and it is architectural rather than configuration. The sender side has moved, though. Multitrack SRT already carries 16 channels from stock OBS as four 4-channel tracks, and OBS allows six tracks, so 4th order (25 ch) would fit as six 5-channel tracks: **live 4th order is therefore theoretically reachable, but it is untested and nothing here claims it.** It needs two independent things - that wider sender layout, and a gateway that stops funnelling through 16-channel AAC over RTMP. See [Beyond 3rd order](#beyond-3rd-order-sender-side) for the sender arithmetic and [docs/obs-macos.md](docs/obs-macos.md) / [docs/obs-windows.md](docs/obs-windows.md) for how the per-track joining actually works today. See the measurement notes (below, Documentation) for the numbers behind this.
 
 **Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default: on the 2012 Mac Mini (quad-core i7) deployment host VP9 has been measured twice, scaled down and at the unscaled 4K this line would actually run, and the unscaled encode fell below realtime - so passthrough is the default. To check what a given host will actually do rather than trusting this paragraph:
 
@@ -27,7 +29,7 @@ So **the on-demand path is 4th-order capable, verified end to end** - it never t
 docker compose config | grep FFMPEG_FLAGS
 ```
 
-**PCE** is AAC's Program Config Element. Sixteen channels is not one of AAC's predefined layouts, so a stream carrying one has to spell the layout out in a PCE rather than name it. Stock ffmpeg does emit a PCE for named layouts like `hexadecagonal`; earshot vendors its own build so the image guarantees that regardless of the host's ffmpeg version. Without a PCE-capable encoder the contribution leg could not carry 16 channels over RTMP at all. `dash-output` is a Docker volume - the shared filesystem earshot segments into and nginx serves from, nothing to do with level.
+`dash-output` in the diagram is a Docker volume - the shared filesystem earshot segments into and nginx serves from, nothing to do with level.
 
 | Service | Role | Host port |
 |---|---|---|
@@ -38,6 +40,12 @@ docker compose config | grep FFMPEG_FLAGS
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
 | `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
 | `shaka` | Shaka Packager, offline only, never in the live path. Main job: `scripts/package-vod-dash.sh` runs the image standalone to package the on-demand clips into `content/vod/dash/` (the compose `tools` profile additionally drives the optional A/V-sync variant packaging, `scripts/package-dash-variants.sh`) | - |
+
+### What it looks like running
+
+<div align="center"> <img src="docs/images/telemetry-dashboard.png" width="88%" alt="The telemetry dashboard: a services row showing srt-gateway, rtmp-ingest, earshot, hoast-player and telemetry all healthy; reachability chips for the tunnel, the VOD origin and the backup; stream detail (resolution, bitrate, egress, RTMP links, segment age); host load, memory, disk and uptime; and three-hour history sparklines for viewers, CPU temperature and stream liveness."> </div>
+
+<p align="center"><em>The private telemetry dashboard on :8090 - service health, reachability, stream detail and host state. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
 
 ## Requirements
 
@@ -77,7 +85,7 @@ These settings are the same on macOS and Windows - only the audio routing differ
 | Setting | Value |
 |---|---|
 | Settings > Audio > Channels | **`4.0`** |
-| Settings > Output > Output Mode | **Advanced**, then the **Streaming** tab |
+| Settings > Output > Output Mode | **Advanced**, then the **Recording** tab |
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
 | File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000` |
@@ -85,6 +93,9 @@ These settings are the same on macOS and Windows - only the audio routing differ
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if hidden |
 | Audio Track | tick **1, 2, 3, 4** |
 | Muxer Settings | leave empty |
+| Start it with | **Start Recording** (not Start Streaming - see below) |
+
+Custom Output (FFmpeg) is a **Recording**-tab output in OBS, even though it is streaming to a URL, so **Start Recording** is the button that pushes. Nothing appears under Start Streaming.
 
 Feed those four tracks from four 4-channel sources - device channels 1-4, 5-8, 9-12, 13-16, downmixing off - assigned one per track in Advanced Audio Properties. The join is strictly positional (track 1 becomes channels 1-4, and so on, never a downmix), so AmbiX order survives end to end.
 
@@ -187,6 +198,8 @@ The player side-loads these as native `<track>` elements rather than reading a D
 
 The clips play in a Meta Quest 3's own browser, with no app to install and nothing to configure: open the page and drag to look around. The headset's browser decodes the multichannel Opus directly and the page renders the sound field binaurally, head-tracked, the same as on desktop.
 
+**Fully immersive playback works too** - the player's **VR** button is there to be pressed. It enters a WebXR immersive session, so you are inside the sphere with the headset's own head tracking driving the view and the ambisonic field rotating with it, rather than dragging a flat window around. Verified on a Quest 3 (2026-07-27). Note the difference in where the head tracking comes from: in the flat page it is the device orientation sensors, and in an immersive session it is WebXR itself - which is why the sensor-permission caveats that affect phones do not apply once you are in VR mode.
+
 <div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
 
 The panel in that shot is the `?dbg` capability probe (see the URL-flags note in [docs/ENDPOINTS.md](docs/ENDPOINTS.md)), reporting what the headset's browser actually managed:
@@ -257,7 +270,7 @@ Two gitignored directories at the repo root, with opposite guarantees.
 
 **Local / lab (AMD64):** the quick start above. Validated on WSL2 Ubuntu and Ubuntu Server 22.04.
 
-**Planned, not yet validated end to end:** Azure (for one-off events; raw TCP ingress for 1935 is the constraint to solve there) and Raspberry Pi 5 (all base images are multi-arch and `docker buildx build --platform linux/arm64` compiles, but no Pi has run a real stream yet). Treat both as directions, not documented paths; this section will grow real instructions when a real deployment produces them.
+**Planned, not yet validated end to end:** Azure (for one-off events; raw TCP ingress for 1935 is the constraint to solve there) and Raspberry Pi. All base images are multi-arch and `docker buildx build --platform linux/arm64` compiles. A **Pi 4** has since been measured directly on the committed default workload - H.264 passthrough plus the 16-channel Opus encode, sustained - and sat at ~9 % CPU and 65 C with no thermal throttling, so headroom is not the question; Docker's UDP source-address preservation (which the SRT guest attribution depends on) also checks out on arm64 there. What is still unproven is the whole compose stack running on a Pi and serving a real stream, so treat the platform as measured rather than deployed. Treat both as directions, not documented paths; this section will grow real instructions when a real deployment produces them.
 
 **Per-host overrides:** deployment-specific settings (bind the dashboard (:8090) to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry service, Telegram tokens, a branded landing page) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and adjust. The base stack runs without it.
 
@@ -306,7 +319,10 @@ This repository is the containerised successor of the toolchain described in the
 
 - Thomas Deppisch and Nils Meyer-Kahlen, [HOAST360](https://github.com/thomasdeppisch/hoast360), the higher-order Ambisonics 360 player this project patches and serves
 - [Envelop](https://envelop.us), Earshot, the multichannel RTMP-to-DASH transcoder
-- pkviet, [OBS Studio Music Edition](https://github.com/pkviet/obs-studio) and the PCE-capable FFmpeg fork
+- The [OBS Project](https://obsproject.com/), OBS Studio - the recommended sender needs no fork at all
+- pkviet, [OBS Studio Music Edition](https://github.com/pkviet/obs-studio) and the PCE-capable FFmpeg fork, which carried the 16-channel RTMP path before that
+- Existential Audio, [BlackHole](https://github.com/ExistentialAudio/BlackHole), the macOS multichannel loopback driver the macOS recipe routes through
+- atkAudio, [its OBS plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/), which is what gets ASIO into OBS on Windows
 - [Shaka project](https://github.com/shaka-project), Shaka Packager
 - Gdańsk University of Technology, [Department of Multimedia Systems](https://multimed.org/index_en.html)
 

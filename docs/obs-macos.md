@@ -34,7 +34,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 ## 3. Point OBS at the box
 
-**Settings > Output > Output Mode: `Advanced`**, then the **Streaming** tab:
+**Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
 | Setting | Value |
 |---|---|
@@ -54,9 +54,13 @@ Three traps in that table, all silent:
 
 Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver.
 
-## 4. Stream
+## 4. Push it
 
-Press **Start Streaming**. The stream appears on the player page within a few seconds of the first keyframe.
+Press **Start Recording**.
+
+That is not a typo. Custom Output (FFmpeg) is a *recording* output in OBS even when its destination is a URL, so it lives on the Recording tab and Start Recording is what pushes it. Start Streaming does nothing for it.
+
+The stream appears on the player page within a few seconds of the first keyframe.
 
 Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you have to press Start again; the guest endpoint holds your slot for a grace window (default 120 s) so a prompt reconnect continues the same session.
 
