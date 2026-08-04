@@ -9,6 +9,7 @@ type: software
 authors:
   - family-names: "Mróz"
     given-names: "Bartłomiej"
+    orcid: "https://orcid.org/0000-0002-8983-9050"
     email: "bartlomiej.mroz@pg.edu.pl"
     affiliation: "Department of Multimedia Systems, Gdańsk University of Technology"
 repository-code: "https://git.pg.edu.pl/p829296/hoa-360-stream"
@@ -27,10 +28,12 @@ preferred-citation:
   authors:
     - family-names: "Mróz"
       given-names: "Bartłomiej"
+      orcid: "https://orcid.org/0000-0002-8983-9050"
     - family-names: "Odya"
       given-names: "Piotr"
     - family-names: "Danowski"
       given-names: "Przemysław"
+      orcid: "https://orcid.org/0000-0002-3628-7547"
     - family-names: "Kabaciński"
       given-names: "Marek"
   collection-title: "Proceedings of the AES International Conference on Spatial and Immersive Audio"
