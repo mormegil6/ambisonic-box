@@ -18,7 +18,7 @@ To test the chain rather than your own content, open [`docs/fixtures/AmbiX16ch_S
 
 <div align="center"><img src="images/obs-windows/01_Reaper-tracks.png" width="82%" alt="REAPER on Windows with the fixture project: a 16-channel 3OA parent track above sixteen mono children ACN-00 to ACN-15, each running a Tone Generator, with the status bar showing Dummy Audio as REAPER own device."></div>
 
-**The routing is two layers, not sixteen hardware outputs.** Each mono track feeds a single 16-channel bus (`3OA`) through an internal send, one send per destination channel: `ACN-00` into channel 1, on up to `ACN-15` into channel 16. Only that bus carries a **hardware output**, mapped `1-16 -> ReaRoute 1..16`, and its **Master send is unticked** so the ladder never reaches your monitors.
+**The routing is two layers.** Each mono track feeds a single 16-channel bus (`3OA`) through an internal send, one send per destination channel: `ACN-00` into channel 1, on up to `ACN-15` into channel 16. Only that bus carries a **hardware output**, mapped `1-16 -> ReaRoute 1..16`, and its **Master send is unticked** so the ladder never reaches your monitors.
 
 Sixteen individual hardware outputs would work too. The bus is worth the extra track because it puts the entire channel mapping in one dialog you can read at a glance - and it is where an ambisonic encoder would sit if you were producing content rather than testing.
 

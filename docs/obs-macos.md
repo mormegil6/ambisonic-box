@@ -15,7 +15,7 @@ Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://ww
 
 <div align="center"><img src="images/obs-macos/02_Reaper-tracks.png" width="82%" alt="The fixture REAPER project: a 16-channel parent track named 3OA with sixteen mono child tracks ACN-00 to ACN-15, each running a Tone Generator, shown in the mixer with a descending level staircase."></div>
 
-**The routing is two layers, not sixteen hardware outputs.** Each mono child feeds a single 16-channel bus (`3OA`) through an internal send, one send per destination channel: `ACN-00` into channel 1, on up to `ACN-15` into channel 16. Only that bus carries a **hardware output**, mapped `1-16 -> Output 1..16`, and its **Master send is unticked** so the ladder never reaches your monitors.
+**The routing is two layers.** Each mono child feeds a single 16-channel bus (`3OA`) through an internal send, one send per destination channel: `ACN-00` into channel 1, on up to `ACN-15` into channel 16. Only that bus carries a **hardware output**, mapped `1-16 -> Output 1..16`, and its **Master send is unticked** so the ladder never reaches your monitors.
 
 Those outputs are numbered rather than named because on macOS the *device* is chosen back in Preferences > Audio > Device, so `Output 1..16` here means channels 1-16 of BlackHole. On Windows the same list shows ReaRoute by name instead.
 
