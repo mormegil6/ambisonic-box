@@ -19,7 +19,7 @@ The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legac
 
 **Why 16 channels, and what it would take to go higher.** In practice: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are named AAC layouts; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 is not one. The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. Stock ffmpeg's AAC encoder can write that Program Config Element (PCE - the AAC header that spells out a channel layout the format has no name for; see below) for named layouts up to 22.2 (24 channels); earshot vendors a patched build so the image guarantees PCE support without depending on the host's ffmpeg version. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
 
-So **the on-demand path is 4th-order capable, verified end to end** - it never touches AAC, and the player reads the ambisonic order from the manifest, so a 25-channel clip plays as 4th order with no configuration. A synthetic 25-channel clip packaged by the same DASH tooling has been played through the full chain: auto-detected as order 4, rendered through the complete order-4 impulse-response set, audio and video clocks in sync. A real recording would sound different but exercise the identical code path, so nothing here is waiting on content. Raising the *live* path is a different matter, with two candidate routes. One stays on RTMP/AAC and gives up a channel: AAC's widest named layout is 22.2 (24 channels - encode, FLV mux and read-back verified on this stack's own ffmpeg), so dropping the 4th-order vertical harmonic (ACN 20) fits, the same perceptual trade Two Big Ears made when their 8-channel format dropped the 2nd-order vertical harmonic (ACN 6) - and here the order 1-3 vertical components (ACN 2, 6, 12) all survive. The other moves contribution off RTMP to SRT carrying Opus in MPEG-TS, which deletes the AAC transcode - and with it the ceiling - entirely, but turns the sender into a custom ffmpeg command (OBS tops out at 8 audio channels, the Music Edition fork at 16) and needs ingest auth rebuilt for SRT. Either way it is architectural rather than configuration. See the measurement notes (below, Documentation) for the numbers behind this.
+So **the on-demand path is 4th-order capable, verified end to end** - it never touches AAC, and the player reads the ambisonic order from the manifest, so a 25-channel clip plays as 4th order with no configuration. A synthetic 25-channel clip packaged by the same DASH tooling has been played through the full chain: auto-detected as order 4, rendered through the complete order-4 impulse-response set, audio and video clocks in sync. A real recording would sound different but exercise the identical code path, so nothing here is waiting on content. Raising the *live* path is a different matter, with two candidate routes. One stays on RTMP/AAC and gives up a channel: AAC's widest named layout is 22.2 (24 channels - encode, FLV mux and read-back verified on this stack's own ffmpeg), so dropping the 4th-order vertical harmonic (ACN 20) fits, the same perceptual trade Two Big Ears made when their 8-channel format dropped the 2nd-order vertical harmonic (ACN 6) - and here the order 1-3 vertical components (ACN 2, 6, 12) all survive. The other moves contribution off RTMP to SRT carrying **Opus** in MPEG-TS, which would delete the AAC transcode and with it the ceiling. Note that the SRT ingest this stack now ships is *not* that: it carries AAC, and its gateway rejoins the tracks into the same 16-channel AAC-over-RTMP leg as before, precisely so the whole guest arbiter applies to it unchanged. So SRT is here, but the live ceiling is not lifted - that would need the gateway to hand Opus to earshot directly, bypassing the RTMP hop, and it is architectural rather than configuration. The sender side has moved, though. Multitrack SRT already carries 16 channels from stock OBS as four 4-channel tracks, and OBS allows six tracks, so 4th order (25 ch) would fit as six 5-channel tracks: **live 4th order is therefore theoretically reachable, but it is untested and nothing here claims it.** It needs two independent things - that wider sender layout, and a gateway that stops funnelling through 16-channel AAC over RTMP. See [Beyond 3rd order](#beyond-3rd-order-sender-side) for the sender arithmetic and [docs/obs-macos.md](docs/obs-macos.md) / [docs/obs-windows.md](docs/obs-windows.md) for how the per-track joining actually works today. See the measurement notes (below, Documentation) for the numbers behind this.
 
 **Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default: on the 2012 Mac Mini (quad-core i7) deployment host VP9 has been measured twice, scaled down and at the unscaled 4K this line would actually run, and the unscaled encode fell below realtime - so passthrough is the default. To check what a given host will actually do rather than trusting this paragraph:
 
@@ -58,48 +58,62 @@ docker compose up -d --build
 
 Without `content/demo.mp4` the stack still demos itself: on first start loop-source synthesises a spherical placeholder in-container (black sphere with a test-pattern screen at the front, and a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works). With `VOD_ENABLED=1` it also fetches the two `/vod/` reference masters from the pinned `vod-clips` release (~373 MB once, background, SHA-256 verified, fail-soft). Set `DEMO_CONTENT=0` to skip the synthesis, or replace `content/demo.mp4` with a real master any time (`docker compose restart loop-source` picks it up).
 
-## Stream your own content (the `live` application)
+## Stream your own content
 
-Use [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/) (supports 16.0 AAC):
+Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows, all 16 channels live.
+
+| | SRT (recommended) | RTMP (legacy) |
+|---|---|---|
+| Sender | stock OBS, macOS or Windows | OBS Studio Music Edition, Windows only |
+| Audio | 4 tracks x 4 channels, joined to 16 by `srt-gateway` | one 16-channel AAC track |
+| Enabled | on by default (`SRT_ENABLED=0` unbinds the port) | always |
+
+Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place and obey the same guest session rules.
+
+### Stock OBS over SRT
+
+These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
+
+| Setting | Value |
+|---|---|
+| Settings > Audio > Channels | **`4.0`** |
+| Settings > Output > Output Mode | **Advanced**, then the **Streaming** tab |
+| Type | **Custom Output (FFmpeg)** |
+| FFmpeg Output Type | **Output to URL** |
+| File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000` |
+| Container Format | **mpegts** |
+| Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if hidden |
+| Audio Track | tick **1, 2, 3, 4** |
+| Muxer Settings | leave empty |
+
+Feed those four tracks from four 4-channel sources - device channels 1-4, 5-8, 9-12, 13-16, downmixing off - assigned one per track in Advanced Audio Properties. The join is strictly positional (track 1 becomes channels 1-4, and so on, never a downmix), so AmbiX order survives end to end.
+
+Four of those values are exact rather than indicative. Each was established by pushing a per-channel tone ladder through real hardware and reading back what arrived, because each obvious-looking alternative fails **without any error**:
+
+- **`4.0`, never `7.1`** - OBS's 7.1 path mutes the LFE slot outright, which for ambisonics erases ACN 3, the X axis.
+- **plain `aac`, never `mp2` or `aac_at`** - `mp2` is the container default and refuses more than 2 channels; `aac_at` (CoreAudio, macOS) scrambles channel order within every track.
+- **`latency` is in MICROSECONDS** - 2 s is `2000000`, not `2000`.
+
+**Per-OS routing, step by step:**
+
+- **[docs/obs-macos.md](docs/obs-macos.md)** - a multichannel Core Audio device ([BlackHole](https://github.com/ExistentialAudio/BlackHole))
+- **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via REAPER's ReaRoute and the atkAudio plugin
+
+### Legacy: RTMP
+
+RTMP carries exactly one audio track, so 16 channels over it need [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only patched fork. It stays fully supported - the demo loop uses this path - but new setups should start with SRT above.
 
 | Setting | Value |
 |---|---|
 | Server | `rtmp://<host>:1935/live` |
 | Stream key | `hoast_demo` (or your `STREAM_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
-| Video | H.264, keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). 2 s is the measured default - it does not affect lip sync either way, it is a bitrate/buffer trade-off; [the study](lip-sync-test/RESULTS.md) has the numbers |
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `STREAM_KEY`: a custom stream key no longer moves the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
 
-### Stock OBS on macOS: record multitrack, merge, push
+### Beyond 3rd order (sender side)
 
-Live 16-channel contribution needs OBS Music Edition (stock OBS caps a stream at one audio track). But **stock OBS on macOS can still feed this stack** in a record-then-push flow, by spreading the channels across recording tracks. The settings below are the ones that survived per-channel verification (2026-07-31, OBS 32.2.1, tone-per-channel with level checks); the two obvious-looking alternatives both fail in ways nothing warns about, so treat this recipe as exact:
-
-- Settings > Audio > **Channels: 4.0** - four full-band channels per track. NOT 7.1: OBS's 7.1 path silently **mutes the LFE slot outright** (channel 4 of every track arrives digital-silent, which for ambisonics would erase ACN 3, the X axis).
-- Four capture sources on a multichannel Core Audio device (BlackHole 16/64ch, or an aggregate of your interface): device channels 1-4, 5-8, 9-12, 13-16, downmixing off, routed to recording tracks 1-4 respectively (Advanced Audio Properties), all four tracks enabled in Settings > Output > Recording.
-- Recording audio encoder: **FFmpeg AAC**, format mkv. NOT CoreAudio AAC: its 4-channel AAC decodes in MPEG transmission order (C, L, R, Cs), which reads back as a scrambled `[3,1,2,4]` within every track.
-
-Then one step, because OBS neither merges its own tracks nor tags them usefully:
-
-```bash
-# sanity-check the capture shape first: expect 4 tracks x 4 channels
-./scripts/merge-obs-tracks.sh --check recording.mkv
-
-# a) one 16-channel PCM master (archival, VOD packaging input) ...
-./scripts/merge-obs-tracks.sh recording.mkv master.mov --channels 16
-
-# b) ... or push straight to the ingest (video copied, audio re-encoded
-#    to 16-ch AAC with the PCE the RTMP leg needs, realtime-paced)
-./scripts/merge-obs-tracks.sh recording.mkv --channels 16 \
-    --push "rtmp://<host>:1935/live/<name>?token=<STREAM_KEY>"
-```
-
-The merge is strictly positional (track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix), so AmbiX channel order survives end to end. `scripts/test-obs-merge.sh` proves this with a per-channel tone ladder, offline and (with `--e2e` and the stack up) through ingest and transcode to the emitted DASH Opus; the same ladder played from a DAW into a real OBS capture is how the two failure modes above were caught. Keep the OBS video settings from the table above; the push copies video untouched.
-
-**Live over SRT, no merge step:** OBS's Custom Output (FFmpeg), set to "Output to URL" over SRT with an `mpegts` container, keeps multiple audio tracks genuinely separate and live - a real OBS capability (used in production for multi-language broadcast), not a hack, so OBS alone carries both video and this stack's 16-channel audio live. The receiving side is the `srt-gateway` service: it terminates SRT, joins the four 4-channel tracks into one 16-channel stream, and republishes into the same guest arbiter as RTMP, so the session cap, cooldown, reconnect grace, bans and dashboard kill all behave identically on both transports. It is **on by default** and is the recommended way in: one recipe, stock OBS, same on macOS and Windows. The port binding alone opens nothing - the arbiter refuses every caller unless `GUEST_ENABLED=1` - and `SRT_ENABLED=0` leaves the UDP port unbound entirely. See `.env.example` for the switches and the [guest section](#guest-test-endpoint-the-guest-application) for the recipe. Two encoder defaults to override, both silent failures otherwise: the container's default `mp2` flatly rejects more than 2 channels, and `aac_at` (CoreAudio, macOS) reproduces the recording path's transmission-order scramble - pick plain `aac` (tick "Show all codecs" if hidden). Proven end to end (OBS-shaped 4x4 SRT push through the gateway to 16-channel DASH Opus, every channel in its slot) on both macOS and Windows.
-
-**Future scaling, noted but not built:** the same per-track pattern extends past 3rd order. Six tracks of 5.0 (30 ch) comfortably covers 4th order (25 ch, with headroom); six tracks of 7.0 (42 ch) would cover 5th order (36 ch, `(5+1)^2`, with headroom - HOAST360's renderer is reportedly capable of it, though no impulse-response set exists for it yet). The `.1`/LFE slot is deliberately never used, matching the trap already documented above (7.1's LFE mutes outright; there's no reason to expect the other surround layouts' LFE slot behaves any better, and ambisonics has no channel that maps onto "LFE" anyway). 4.0 stays the actual recipe for now - this is a note for when it's needed, not a plan to build it early.
-
+Noted, not built. The same per-track pattern extends past 3rd order. Six tracks of 5.0 (30 ch) comfortably covers 4th order (25 ch, with headroom); six tracks of 7.0 (42 ch) would cover 5th order (36 ch, `(5+1)^2`, with headroom - HOAST360's renderer is reportedly capable of it, though no impulse-response set exists for it yet). The `.1`/LFE slot is deliberately never used (7.1's LFE mutes outright; there is no reason to expect other surround layouts' LFE slot behaves any better, and ambisonics has no channel that maps onto "LFE" anyway). Note this is the *sender* side only - the gateway still rejoins to 16-channel AAC over RTMP internally, so raising the live order needs that hop changed too. 4.0 stays the actual recipe for now.
 
 **Channel counts:** the pipeline is order-flexible where the tools allow it. Earshot's transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder only accepts *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) work while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders). A plain stereo or mono push produces no output at all and is auto-ended on the guest endpoint with that reason.
 
@@ -114,7 +128,7 @@ Anyone with an ambisonic microphone rig and OBS Music Edition can test their str
 | Server (RTMP) | `rtmp://<host>:1935/guest` |
 | Server (SRT, recommended) | `srt://<host>:8890?streamid=<name>&latency=2000000` |
 | Stream key / streamid | anything you like (it names your session in the status pages) |
-| Audio / video | same requirements as the `live` application [above](#stream-your-own-content-the-live-application) |
+| Audio / video | same requirements as the `live` application [above](#stream-your-own-content) |
 
 How it behaves:
 
@@ -131,7 +145,7 @@ How it behaves:
 - **Stalled transcodes:** a guest pushing the wrong audio layout (plain stereo/mono is the classic mistake) produces no playable output; the session is ended automatically after ~45 s and the reason is shown on the player page, with no cooldown so a corrected retry works immediately.
 - **Fail-closed:** if telemetry is down, guest publishes are rejected while the token-authed `live` application and the demo loop keep working.
 - **Owner preemption:** a successful stream-key push to `/live` now ends any in-progress guest session automatically (the owner's `/auth` success signals the arbiter, which drops the guest the same way the dashboard's End session button does, within one liveness-ping interval). You no longer have to clear the slot by hand before an owner broadcast.
-- **SRT as well as RTMP:** the same arbiter also accepts native OBS multitrack over SRT via the `srt-gateway` service (`srt://<host>:8890?streamid=<name>`); slot, cap, cooldown, grace, bans and kill are shared across both transports, so the rules above apply identically however a guest connects. See the [multitrack recipe](#stock-obs-on-macos-record-multitrack-merge-push) for the OBS settings.
+- **SRT as well as RTMP:** the same arbiter also accepts native OBS multitrack over SRT via the `srt-gateway` service (`srt://<host>:8890?streamid=<name>`); slot, cap, cooldown, grace, bans and kill are shared across both transports, so the rules above apply identically however a guest connects. See [docs/obs-macos.md](docs/obs-macos.md) or [docs/obs-windows.md](docs/obs-windows.md) for the OBS settings.
 
 **Network prerequisite:** the RTMP guest endpoint is exactly as public as TCP port 1935; the SRT endpoint (if enabled) is exactly as public as UDP 8890. If your host sits behind a firewall or NAT, the one thing to arrange is inbound access to whichever port(s) you use; everything else ships in this compose file.
 
@@ -142,6 +156,10 @@ How it behaves:
 When enabled, the player serves on-demand reference clips at `/vod/` (`/vod/?clip=<name>`). Delivery location is a `brand.json` choice: `vodBase` empty or absent serves the clips from this host's `/vod-dash/` route; setting it to a URL serves them from an external host that mirrors the `vod-dash/` tree (see "Optional: serving VOD from object storage" below for the CORS requirements). The player reads the key at clip start, so switching needs no rebuild. Two are published as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips) - no media is committed here, only the generators and the player wiring: `directions` (a 360 orientation test - the equirectangular test card from `scripts/make-360-testcard.py`, an ambisonic energy-visualisation overlay, and spoken front/right/left/top reads from an ambisonic recording, so only the audio is not generated here) and `colortones` (colour-and-tone A/V-sync pattern, fully generated by `scripts/make-colortones.sh`). Put the masters in `content/vod/masters/` (gitignored); `scripts/encode-vod-ladder.sh` builds the resolution ladder and `scripts/package-vod-dash.sh` packages it into combined-MPD DASH under `content/vod/dash/<clip>/`, served at `/vod-dash/`.
 
 **360 test card.** `scripts/make-360-testcard.py` renders six flat broadcast test screens and arranges them as the walls of a cube around the viewer, then inverse-projects that into equirectangular. Each wall spans exactly 90°, so a 360 viewer at a normal field of view sees a flat, undistorted card: circles stay round and straight lines stay straight, and any bend, softening or colour shift is the pipeline's doing rather than the projection's. Each face carries EBU 75 % colour bars, a grey staircase, PLUGE, a multiburst, a checkerboard, a band-limited detail patch and a Siemens star, plus its own name and centre bearing - so the picture reports resolution, gamma, range handling and compression damage in whichever direction you happen to be looking. The poles become ordinary ceiling and floor walls instead of smeared blobs. Drawing directly in equirectangular cannot do this: the pattern is pre-distorted, so nothing in it has a known shape by the time it reaches the eye.
+
+<div align="center"> <img src="docs/images/testcard-360-equirect.png" width="88%" alt="The 360 test card in equirectangular projection: six broadcast test screens arranged as the walls of a cube (FRONT, LEFT, RIGHT, BACK, UP, DOWN), each labelled with its centre bearing and carrying colour bars, a grey staircase, PLUGE, a multiburst, a checkerboard, a detail patch and a Siemens star. The cube geometry is what makes the faces bow outward in this projection and appear flat and undistorted inside a 360 viewer."> </div>
+
+<p align="center"><em>The card as stored (equirectangular). The bowing is the projection: inside a 360 viewer each face reads flat, square and undistorted.</em></p>
 
 ```
 scripts/make-360-testcard.py -o content/vod/masters/testcard-360_8k.png
@@ -249,7 +267,7 @@ Two gitignored directories at the repo root, with opposite guarantees.
 - [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
-- [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): full segment-duration / lip-sync study
+- [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
 - [.env.example](.env.example): configuration reference, including how to prepare `content/demo.mp4`
 
 ## License
