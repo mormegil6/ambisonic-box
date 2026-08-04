@@ -11,6 +11,12 @@ Verified on [OBS Studio](https://obsproject.com/) 32.2.1, macOS, with [BlackHole
 
 <div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="82%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
 
+**To test the chain rather than your own content**, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/): a 16-channel `3OA` parent with sixteen mono children, `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level. One tone per channel is what makes channel order and channel loss *visible* rather than a matter of opinion, and it needs only a stock REAPER JS plugin.
+
+**Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
+
+<div align="center"><img src="images/obs-macos/02_Reaper-tracks.png" width="82%" alt="The fixture REAPER project: a 16-channel parent track named 3OA with sixteen mono child tracks ACN-00 to ACN-15, each running a Tone Generator, shown in the mixer with a descending level staircase."></div>
+
 
 ## 1. Set the global channel layout
 
@@ -38,6 +44,10 @@ Turn **downmixing off** on each. Assign tracks in **Advanced Audio Properties** 
 
 <div align="center"><img src="images/obs-macos/04_OBS-adding-4ch-audio-device.png" width="82%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
 
+Name them so the channel range is visible at a glance - the four in the fixture preset are `BlackHole16ch 01-04`, `05-08`, `09-12` and `13-16`. With the tone ladder playing, all four should show signal:
+
+<div align="center"><img src="images/obs-macos/05_OBS-four-4ch-devices.png" width="82%" alt="The OBS main window with four sources named BlackHole16ch 01-04 through 13-16, and the Audio Mixer showing all four with live signal."></div>
+
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
 
@@ -57,6 +67,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
+| Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
 Three traps in that table, all silent:
 
@@ -77,9 +88,6 @@ That is not a typo. Custom Output (FFmpeg) is a *recording* output in OBS even w
 
 The stream appears on the player page within a few seconds of the first keyframe.
 
-<div align="center"><img src="images/obs-macos/05_OBS-four-4ch-devices.png" width="82%" alt="The OBS main window with four sources named BlackHole16ch 01-04 through 13-16, and the Audio Mixer showing all four with live signal."></div>
-
-
 Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you have to press Start again; the guest endpoint holds your slot for a grace window (default 120 s) so a prompt reconnect continues the same session.
 
 ## If it does not work
@@ -93,10 +101,7 @@ Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you 
 
 ## Proving the channel order
 
-Do not trust the chain by ear. Send a distinct tone per channel from your DAW - [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) is a ready REAPER project that does exactly that - a 16-channel `3OA` parent track with sixteen mono children `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level, using only a stock JS plugin - then record locally and check what came back:
-
-<div align="center"><img src="images/obs-macos/02_Reaper-tracks.png" width="82%" alt="The fixture REAPER project: a 16-channel parent track named 3OA with sixteen mono child tracks ACN-00 to ACN-15, each running a Tone Generator, shown in the mixer with a descending level staircase."></div>
-
+Do not trust the chain by ear. Play the tone-ladder project from [What you need](#what-you-need) above, record locally, and check what came back:
 
 ```bash
 ./scripts/merge-obs-tracks.sh --check recording.mkv     # expect: 4 track(s), channels per track: 4 4 4 4

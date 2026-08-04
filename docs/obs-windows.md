@@ -18,6 +18,8 @@ In REAPER, route each of your 16 ambisonic channels to a distinct ReaRoute outpu
 
 To test the chain rather than your content, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) - 16 tracks already carrying a 100-1600 Hz tone ladder, one tone per channel, routed to ReaRoute 1-16.
 
+**Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
+
 ## 2. Bring ReaRoute into OBS
 
 atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
@@ -61,6 +63,7 @@ Identical to macOS. **Settings > Output > Output Mode: `Advanced`**, then the **
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
+| Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
 Press **Start Recording** to push - Custom Output (FFmpeg) is a recording output even when its destination is a URL, so Start Streaming does nothing for it.
 
