@@ -44,9 +44,11 @@ Not 7.1. This governs the channel *width* of every track in the output regardles
 
 OBS then warns that surround sound is enabled and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
 
-While you are in Settings: **Advanced > Video**. Leave **Color Range** on **Limited**, not Full. This project's rule is limited range throughout - full-range video broke the dash.js/MSE player with `PIPELINE_ERROR_DECODE` (see the [README's troubleshooting table](../README.md#troubleshooting)) - and under the passthrough video path OBS's H.264 reaches the player untouched, so OBS is the first place in the chain that can set it wrong. That was measured on VP9 rather than H.264, but limited range costs nothing either way.
+While you are in Settings, two fields under **Advanced > Video** are worth setting, and they turn out to be the same story.
 
-Setting **Color Format** to **NV12** at the same time is cheap insurance: NV12 is the 8-bit 4:2:0 layout H.264 encoders consume natively, so nothing has to convert each frame. That one is a precaution, not a measurement here - it comes from [obs-studio issue #8226](https://github.com/obsproject/obs-studio/issues/8226), a Windows report of heavy frame drops on the Custom Output (FFmpeg) path, closed as not planned.
+**Color Range: Limited**, not Full. This project's rule is limited range throughout - full-range video broke the dash.js/MSE player with `PIPELINE_ERROR_DECODE` (see the [README's troubleshooting table](../README.md#troubleshooting)) - and under the passthrough video path OBS's H.264 reaches the player untouched, so OBS is the first place in the chain that can set it wrong. That was measured on VP9 rather than H.264, but limited range costs nothing either way.
+
+**Color Format: NV12**, the 8-bit 4:2:0 layout H.264 encoders consume natively, so nothing has to convert each frame. This one is a precaution rather than a measurement here: it comes from [obs-studio issue #8226](https://github.com/obsproject/obs-studio/issues/8226), a Windows report of heavy frame drops on the Custom Output (FFmpeg) path that switching to NV12 cured, closed as not planned. Read that report alongside the paragraph above, though - having fixed the drops, the reporter complained that NV12 gave "horribly burned/washed out colors", which is the signature of a range mismatch rather than anything NV12 did. Setting the range explicitly is what keeps you out of that second problem.
 
 ## 3. Bring the 16 channels into OBS
 
