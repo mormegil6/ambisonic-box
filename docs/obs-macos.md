@@ -9,7 +9,7 @@ Verified on [OBS Studio](https://obsproject.com/) 32.2.1, macOS, with [BlackHole
 - **[OBS Studio](https://obsproject.com/)** (stock - no patched fork).
 - **A multichannel Core Audio device** carrying your 16 ambisonic channels. [BlackHole](https://github.com/ExistentialAudio/BlackHole) (16ch or 64ch) is the usual choice; an aggregate device built from your interface works too. Your DAW or player sends AmbiX (ACN/SN3D) channels 1-16 into it.
 
-<div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="82%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
+<div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="41%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
 
 **To test the chain rather than your own content**, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/): a 16-channel `3OA` parent with sixteen mono children, `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level. One tone per channel is what makes channel order and channel loss *visible* rather than a matter of opinion, and it needs only a stock REAPER JS plugin.
 
@@ -26,7 +26,7 @@ Not 7.1. OBS's 7.1 path mutes the LFE slot outright - channel 4 of every track a
 
 This setting governs the width of every track, independently of how many channels a source actually carries. It has to match the shape you intend or the output is silently padded.
 
-<div align="center"><img src="images/obs-macos/03_OBS-channels-setting.png" width="82%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
+<div align="center"><img src="images/obs-macos/03_OBS-channels-setting.png" width="57%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
 
 
 ## 2. Four capture sources, one per track
@@ -42,7 +42,7 @@ Add four **Audio Input Capture** sources on your multichannel device, one per gr
 
 Turn **downmixing off** on each. Assign tracks in **Advanced Audio Properties** (right-click any source in the Audio Mixer): tick exactly one track per source, and untick the rest.
 
-<div align="center"><img src="images/obs-macos/04_OBS-adding-4ch-audio-device.png" width="82%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
+<div align="center"><img src="images/obs-macos/04_OBS-adding-4ch-audio-device.png" width="41%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
 
 Name them so the channel range is visible at a glance - the four in the fixture preset are `BlackHole16ch 01-04`, `05-08`, `09-12` and `13-16`. With the tone ladder playing, all four should show signal:
 
@@ -51,7 +51,7 @@ Name them so the channel range is visible at a glance - the four in the fixture 
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
 
-<div align="center"><img src="images/obs-macos/06_OBS-tracks-routing.png" width="82%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
+<div align="center"><img src="images/obs-macos/06_OBS-tracks-routing.png" width="66%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
 
 
 ## 3. Point OBS at the box
