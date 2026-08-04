@@ -4,14 +4,14 @@ Two small files that reproduce the exact setup the [macOS](../obs-macos.md) and 
 
 | File | What it is |
 |---|---|
-| `AmbiX16ch_StreamTest.RPP` | A REAPER project: a 16-channel `3OA` parent track with sixteen mono children, `ACN-00` to `ACN-15`. Each child carries one tone of a 100 → 1600 Hz ladder (100 Hz per step) at its own level, so both channel order and channel loss are visible. |
+| `AmbiX16ch_StreamTest-Mac.RPP` / `-Win.RPP` | A REAPER project, one per platform - the hardware-output routing differs (a multichannel Core Audio device on macOS, ReaRoute on Windows), so they are not interchangeable. Otherwise identical: a 16-channel `3OA` parent track with sixteen mono children, `ACN-00` to `ACN-15`. Each child carries one tone of a 100 → 1600 Hz ladder (100 Hz per step) at its own level, so both channel order and channel loss are visible. |
 | `obs-macos-blackhole.json` | OBS **scene collection** for macOS: four Audio Input Capture sources on BlackHole 16ch, channels 1-4 / 5-8 / 9-12 / 13-16, one per track. |
 | `obs-macos-profile/` | OBS **profile** for macOS: Advanced output, Custom Output (FFmpeg) to an SRT URL, mpegts, `h264_videotoolbox`, keyframe interval 60, `aac` at 384 kbit/s, tracks 1-4, Channels 4.0. |
 | `ReaRoute16ch-atkAudioPluginHost2.filtergraph` | The atkAudio PluginHost2 graph from the Windows guide: ReaRoute ASIO in, 16 channels wired to four "OBS Output" nodes of 4 channels each. Windows only. |
 
-## The REAPER project
+## The REAPER projects
 
-Open it and route the 16 hardware outputs at your end - ReaRoute on Windows, or your multichannel Core Audio device on macOS. The tones come from `synthesis/tonegenerator`, a **stock REAPER JS plugin**, so nothing needs installing.
+Open the one for your platform. They differ only in where the 16 hardware outputs go - ReaRoute on Windows, your multichannel Core Audio device on macOS - but that routing is stored in the project, so the wrong one will look correct and feed nothing. The tones come from `synthesis/tonegenerator`, a **stock REAPER JS plugin**, so nothing needs installing.
 
 One tone per channel is the whole point: it makes channel order and channel loss *visible* rather than a matter of opinion. Play it, capture at the far end, and run the check from either guide:
 

@@ -3,8 +3,27 @@
 Operations monitoring for the HOA 360° stack, shipped as a compose service so any deployment gets it for free. Three outputs from one small stdlib collector:
 
 1. **Private dashboard** - `http://<host>:8090/` (service health, encoder speed, viewers + countries, CPU temp, disk, uptime, sparklines). Bind `:8090` to a private interface (e.g. Tailscale) in `docker-compose.override.yml`; never publish it.
-2. **Breakage-only Telegram alerts** - fire on the *rising edge* of a sustained problem (debounced: must persist `DEBOUNCE` consecutive checks) and again on recovery, so transient blips stay quiet. Disabled unless `BOT_TOKEN`/`CHAT_ID` are set.
+2. **Breakage-only push alerts** (Telegram out of the box; see [Alerting](#alerting) to swap it) - fire on the *rising edge* of a sustained problem (debounced: must persist `DEBOUNCE` consecutive checks) and again on recovery, so transient blips stay quiet. Disabled unless `BOT_TOKEN`/`CHAT_ID` are set.
 3. **Curated public `status.json`** - written to the shared `status-public` volume and served by hoast-player at `/status/status.json` for the player's collapsible status panel. Deliberately excludes host internals (temp, disk, load stay on the private dashboard).
+
+## Alerting
+
+Telegram ships as the default because it needs the least: create a bot, set `BOT_TOKEN`/`CHAT_ID`, done - no account approval, no daemon, one HTTPS POST. Unset either variable and nothing is sent or contacted.
+
+If you would rather not use it, swapping is deliberately small: `telegram()` in `collect.py` is 19 lines with four call sites, and it only ever needs to turn a string into one outbound request. The constraint to respect is that this service is **stdlib only** (see the Dockerfile), so a replacement should be reachable with `urllib` or `smtplib` rather than a vendor SDK. These are all straightforward\*:
+
+| Instead of Telegram | Why |
+|---|---|
+| **[ntfy](https://ntfy.sh)** | Purpose-built for this: POST to a topic, push notification on your phone, no account. Open source and **self-hostable**, so alerts never leave your own infrastructure. About three lines. |
+| **[Matrix](https://matrix.org)** | Federated, self-hostable, end-to-end capable. A bot posting to a room is a plain authenticated PUT. More setup than ntfy, strongest open-standards story. |
+| **Email (SMTP)** | `smtplib` is stdlib and you probably already have a mailbox. Less immediate than push, but no new vendor. |
+| **Slack / Discord webhooks** | The least work of all - one POST to a webhook URL - though both are corporate-hosted, so no privacy gain over Telegram. |
+
+\* *Not shipped. Each is a small edit to one function, but you are writing and testing it, not configuring it.*
+
+**Signal, WhatsApp and Messenger are poor fits here**, on mechanics rather than reputation. Signal has no bot API: you would run `signal-cli` as a separate daemon with its own registered number and linked session to keep alive. WhatsApp and Messenger need a Meta Business account, app review, and template messages outside a 24-hour session window - which is precisely the situation an unattended 3 a.m. alert is in.
+
+**What actually leaves the box.** Alerts carry the host name (`TEL_HOST`), the dashboard URL, and - for guest-endpoint events - a guest's stream name, source IP and country. That is a copy of personal data living in a chat history, outside the retention window the CSVs promise (`GUEST_RETENTION_DAYS`). Changing hosted messenger does not address that; self-hosting ntfy or Matrix does. Worth a thought before adding anyone else to the chat.
 
 ## How it reads the stack
 

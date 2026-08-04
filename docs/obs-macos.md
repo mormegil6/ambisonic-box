@@ -11,7 +11,7 @@ Verified on [OBS Studio](https://obsproject.com/) 32.2.1, macOS, with [BlackHole
 
 <div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="41%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
 
-**To test the chain rather than your own content**, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/): a 16-channel `3OA` parent with sixteen mono children, `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level. One tone per channel is what makes channel order and channel loss *visible* rather than a matter of opinion, and it needs only a stock REAPER JS plugin.
+**To test the chain rather than your own content**, open [`docs/fixtures/AmbiX16ch_StreamTest-Mac.RPP`](fixtures/): a 16-channel `3OA` parent with sixteen mono children, `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level. One tone per channel is what makes channel order and channel loss *visible* rather than a matter of opinion, and it needs only a stock REAPER JS plugin.
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 

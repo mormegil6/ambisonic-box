@@ -1,0 +1,801 @@
+<REAPER_PROJECT 0.1 "7.78/win64" 1785850242 0
+  RIPPLE 0 0
+  GROUPOVERRIDE 0 0 0 0
+  AUTOXFADE 129
+  ENVATTACH 0
+  POOLEDENVATTACH 0
+  TCPUIFLAGS 0
+  MIXERUIFLAGS 11 49 0
+  ENVFADESZ10 40
+  PEAKGAIN 1
+  FEEDBACK 0
+  PANLAW 1
+  PROJOFFS 0 0 0
+  MAXPROJLEN 0 600
+  GRID 3199 8 1 8 1 0 0 0
+  TIMEMODE 1 5 -1 30 0 0 -1 0
+  VIDEO_CONFIG 0 0 256
+  PANMODE 3
+  CURSOR 0
+  ZOOM 0.3214680568073 0 0
+  VZOOMEX 10.91417313 0
+  USE_REC_CFG 0
+  RECMODE 1
+  SMPTESYNC 0 30 100 40 1000 300 0 0 1 0 0
+  LOOP 0
+  LOOPGRAN 0 4
+  RECORD_PATH "Media" ""
+  <RECORD_CFG
+    ZXZhdxgAAA==
+  >
+  <APPLYFX_CFG
+  >
+  RENDER_FILE ""
+  RENDER_PATTERN ""
+  RENDER_FMT 0 2 48000
+  RENDER_1X 0
+  RENDER_RANGE 1 0 0 18 1000
+  RENDER_RESAMPLE 10 0 1
+  RENDER_ADDTOPROJ 0
+  RENDER_STEMS 2056
+  RENDER_DITHER 0
+  RENDER_TRIM 0.000001 0.000001 0 0
+  TIMELOCKMODE 1
+  TEMPOENVLOCKMODE 1
+  ITEMMIX 0
+  DEFPITCHMODE 589824 0
+  MISCOPTS 4
+  TAKELANE 1
+  SAMPLERATE 48000 1 0
+  <RENDER_CFG
+    ZXZhdxgAAA==
+  >
+  LOCK 1
+  <METRONOME 6 2
+    VOL 0.25 0.125
+    BEATLEN 4
+    FREQ 800 1600 1
+    SAMPLES "" "" "" ""
+    SPLIGNORE 0 0
+    SPLDEF 2 660 "" 0 ""
+    SPLDEF 3 440 "" 0 ""
+    PATTERN 0 169
+    PATTERNSTR ABBB
+    MULT 1
+  >
+  GLOBAL_AUTO -1
+  TEMPO 120 4 4 0
+  PLAYRATE 1 0 0.25 4
+  SELECTION 0 0
+  SELECTION2 0 0
+  MASTERAUTOMODE 0
+  MASTERTRACKHEIGHT 0 0
+  MASTERPEAKCOL 16576
+  MASTERMUTESOLO 0
+  MASTERTRACKVIEW 0 0.571429 0.5 0.5 0 0 0 0 0 0 0 0 0 0 1
+  MASTERHWOUT 0 0 1 0 1 0 0 -1
+  MASTER_NCH 2 2
+  MASTER_VOLUME 1 0 -1 -1 1
+  MASTER_FX 1
+  MASTER_TRACKID {9CBDB840-0525-5847-AAA8-793679A934E4}
+  MASTER_SEL 0
+  <MASTERPLAYSPEEDENV
+    EGUID {00FE296D-1B7F-F647-9B02-73A171976547}
+    ACT 0 -1
+    VIS 0 1 1
+    LANEHEIGHT 0 0
+    ARM 0
+    DEFSHAPE 0 -1 -1
+  >
+  <TEMPOENVEX
+    EGUID {6D19E233-AF06-704F-B8F8-1312F0D4AC98}
+    ACT 0 -1
+    VIS 1 0 1
+    LANEHEIGHT 0 0
+    ARM 0
+    DEFSHAPE 1 -1 -1
+  >
+  RULERHEIGHT 75 86
+  RULERLANE 1 4 "" 0 -1 0
+  RULERLANE 2 8 "" 0 -1 0
+  <PROJBAY
+  >
+  <TRACK {36DE255A-BB05-C343-8CD8-24DEDF96FD9B}
+    NAME 3OA
+    PEAKCOL 26345376
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 1 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 1 1
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 0 0 0 0 0 0 0 0
+    VU 66
+    TRACKHEIGHT 99 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 16
+    FX 1
+    TRACKID {36DE255A-BB05-C343-8CD8-24DEDF96FD9B}
+    PERF 0
+    AUXRECV 1 0 1 0 0 0 0 0 1024 -1:U 0 -1 ''
+    AUXRECV 2 0 1 0 0 0 0 0 1025 -1:U 0 -1 ''
+    AUXRECV 3 0 1 0 0 0 0 0 1026 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 4 0 1 0 0 0 0 0 1027 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 5 0 1 0 0 0 0 0 1028 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 6 0 1 0 0 0 0 0 1029 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 7 0 1 0 0 0 0 0 1030 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 8 0 1 0 0 0 0 0 1031 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 9 0 1 0 0 0 0 0 1032 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 10 0 1 0 0 0 0 0 1033 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 11 0 1 0 0 0 0 0 1034 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 12 0 1 0 0 0 0 0 1035 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 13 0 1 0 0 0 0 0 1036 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 14 0 1 0 0 0 0 0 1037 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 15 0 1 0 0 0 0 0 1038 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    AUXRECV 16 0 1 0 0 0 0 0 1039 -1:U 0 -1 ''
+    AUXRECV_SLOT_HINT 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    HWOUT 512 0 1 0 0 0 8192 -1:U -1
+  >
+  <TRACK {14EF1ED0-546D-2C4F-A292-3605EF587CBC}
+    NAME ACN-00
+    PEAKCOL 24194304
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.02238721138568 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {14EF1ED0-546D-2C4F-A292-3605EF587CBC}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 100 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {6C96C47B-A120-E14D-AB77-1C1E9DF906FD}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {AFEE749A-BE12-894E-A613-6EB2C0FDD1B7}
+    NAME ACN-01
+    PEAKCOL 24787213
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.04466835921509 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {AFEE749A-BE12-894E-A613-6EB2C0FDD1B7}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 200 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {EFEFCBB6-82CE-6D43-BE36-D3DF1422A398}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {977D2AEE-5414-8F4C-81F5-233C1447CD6E}
+    NAME ACN-02
+    PEAKCOL 25380122
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.08912509381338 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {977D2AEE-5414-8F4C-81F5-233C1447CD6E}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 300 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {A482F876-B1D1-504F-AC33-203896C5E2BB}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {180F0BF1-6C07-7145-9E85-4B0AE5635C39}
+    NAME ACN-03
+    PEAKCOL 26038568
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.17782794100389 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {180F0BF1-6C07-7145-9E85-4B0AE5635C39}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 400 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {DFC1FDF0-6028-7643-8928-203D33138701}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {CCCABB3F-F6BA-CC40-93AA-AE806BCADCFD}
+    NAME ACN-04
+    PEAKCOL 26631477
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.35481338923358 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {CCCABB3F-F6BA-CC40-93AA-AE806BCADCFD}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 500 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {0F88383E-4505-2544-AA23-A6BB0EAD6ECA}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {8E44CEF3-DD0F-1240-816C-54EFC850787A}
+    NAME ACN-05
+    PEAKCOL 27289923
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.70794578438414 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {8E44CEF3-DD0F-1240-816C-54EFC850787A}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 600 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {6DDA9062-B7D1-D94E-8F4B-29AD354A5FF6}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {FA628317-AB6C-1E42-9CDD-064C234463FF}
+    NAME ACN-06
+    PEAKCOL 27882832
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 1.41253754462276 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {FA628317-AB6C-1E42-9CDD-064C234463FF}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 700 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {34B67689-FE97-2745-AED2-03ADC77E78D0}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {8CC09B2A-25F2-8846-9802-1FD0E79AEB6A}
+    NAME ACN-07
+    PEAKCOL 28541277
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 2.81838293126445 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {8CC09B2A-25F2-8846-9802-1FD0E79AEB6A}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 800 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {703C96DB-2673-0C4A-A53B-B04AACA92709}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {47220954-95C1-4849-B33B-07DC54F591B8}
+    NAME ACN-08
+    PEAKCOL 29134187
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 1.99526231496887 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {47220954-95C1-4849-B33B-07DC54F591B8}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 900 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {07E82E75-D871-C741-9D30-F4116BB8A001}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {3ECCED88-671F-4A40-BB2D-8265098A6764}
+    NAME ACN-09
+    PEAKCOL 29792632
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 1 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {3ECCED88-671F-4A40-BB2D-8265098A6764}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1000 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {B89B97C0-C4A7-E547-A0C3-9C6B3B3797E7}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {88A2565E-8F98-1946-9F4A-68F8879FB80F}
+    NAME ACN-10
+    PEAKCOL 30385542
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.50118723362728 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {88A2565E-8F98-1946-9F4A-68F8879FB80F}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1100 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {2F96FEA6-13F6-144A-A1FE-C57A763AA77F}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {5A13AF11-9766-3C47-85A7-EEC29B1BAE63}
+    NAME ACN-11
+    PEAKCOL 31043987
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.25118864315095 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {5A13AF11-9766-3C47-85A7-EEC29B1BAE63}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1200 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {AD054272-AEC7-9644-85F5-2B3A29DF8A2A}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {C6DD85A7-A535-2D49-9487-B56DEA6A555E}
+    NAME ACN-12
+    PEAKCOL 31636896
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.12589254117941 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {C6DD85A7-A535-2D49-9487-B56DEA6A555E}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1300 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {BE8A443C-3F48-3C43-9186-15F29AB1130F}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {F2649872-89E9-AF44-9A3A-16BF8050C9C2}
+    NAME ACN-13
+    PEAKCOL 32295342
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.06309573444802 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {F2649872-89E9-AF44-9A3A-16BF8050C9C2}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1400 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {D008AEA3-5B07-CE4B-9B7C-AF7648276C75}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {88AE5D6A-8DE0-4547-A871-372D3A090642}
+    NAME ACN-14
+    PEAKCOL 32888251
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.03162277660168 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {88AE5D6A-8DE0-4547-A871-372D3A090642}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1500 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {85FEDA73-95D9-0941-A9C0-AD5C459C27B8}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+  <TRACK {51A81C78-C522-C042-A339-81FE7B401103}
+    NAME ACN-15
+    PEAKCOL 33546697
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 0.01584893192461 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 -1 2 2 0 0 0 0
+    VU 66
+    TRACKHEIGHT 70 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {51A81C78-C522-C042-A339-81FE7B401103}
+    PERF 0
+    MIDIOUT -1 -1
+    MAINSEND 0 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 1600 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS -1888 825 554 223
+      FXID {8F41DDDC-F8CA-8643-98E6-8E70D2DF9B4F}
+      PARM_TCP 2
+      WAK 0 0
+    >
+  >
+>

@@ -16,7 +16,7 @@ The stream settings are identical to [macOS](obs-macos.md). What differs is gett
 
 In REAPER, route each of your 16 ambisonic channels to a distinct ReaRoute output (track 1 → ReaRoute 1, ... track 16 → ReaRoute 16), via each track's hardware output.
 
-To test the chain rather than your content, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) - 16 tracks already carrying a 100-1600 Hz tone ladder, one tone per channel, routed to ReaRoute 1-16.
+To test the chain rather than your content, open [`docs/fixtures/AmbiX16ch_StreamTest-Win.RPP`](fixtures/) - 16 tracks already carrying a 100-1600 Hz tone ladder, one tone per channel, routed to ReaRoute 1-16.
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 
