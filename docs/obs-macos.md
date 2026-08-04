@@ -77,9 +77,9 @@ Three traps in that table, all silent:
 
 Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver.
 
-<div align="center"><img src="images/obs-macos/07_OBS-recording-streaming-settings.png" width="82%" alt="OBS Settings, Output, Recording tab: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, an srt:// URL, Container Format mpegts, Video Bitrate 6000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
+<div align="center"><img src="images/obs-macos/07_OBS-recording-streaming-settings.png" width="57%" alt="OBS Settings, Output, Recording tab: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, an srt:// URL, Container Format mpegts, Video Bitrate 6000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
 
-<p align="center"><em>The URL shown is a local loopback target used while capturing. Use the form in the table above, including <code>&amp;latency=2000000</code> - SRT's default is about 120 ms, which survives loopback and little else.</em></p>
+<p align="center"><em>Captured against a local test listener; point the host and port at your own box. The URL form is what matters - note <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else.</em></p>
 
 
 ## 4. Push it
