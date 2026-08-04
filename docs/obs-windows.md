@@ -16,6 +16,8 @@ The stream settings are identical to [macOS](obs-macos.md). What differs is gett
 
 In REAPER, route each of your 16 ambisonic channels to a distinct ReaRoute output (track 1 → ReaRoute 1, ... track 16 → ReaRoute 16), via each track's hardware output.
 
+To test the chain rather than your content, open [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) - 16 tracks already carrying a 100-1600 Hz tone ladder, one tone per channel, routed to ReaRoute 1-16.
+
 ## 2. Bring ReaRoute into OBS
 
 atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
@@ -31,6 +33,8 @@ atkAudio's real interface is a node-graph editor, and it is not where you would 
    This step is undocumented upstream. A search of the plugin's forum thread, its whole changelog, its reviews and every GitHub issue turned up no mention of it; without it, each node stays stereo and you cannot get past 8 channels.
 
 Four sources named `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16` now appear in OBS with real level meters.
+
+To skip steps 4 and 5, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) from the PluginHost2 window instead - it carries the wiring and the Discrete #4 layouts already. Confirm the device and sample rate afterwards under Options > Change Device Settings.
 
 ## 3. Assign one source per track
 
@@ -74,7 +78,7 @@ Two traps, both silent: **`latency` is in MICROSECONDS** (2 s is `2000000`), and
 
 ## Proving the channel order
 
-Do not trust the chain by ear. Send a distinct tone per channel from REAPER (say 100 Hz, 200 Hz, ... 1600 Hz - a Tone Generator JS plugin per track does it), record locally, and check what came back:
+Do not trust the chain by ear. Send a distinct tone per channel from REAPER (the fixture project above does it), record locally, and check what came back:
 
 ```bash
 ./scripts/merge-obs-tracks.sh --check <recording>.mkv    # expect: 4 track(s), channels per track: 4 4 4 4

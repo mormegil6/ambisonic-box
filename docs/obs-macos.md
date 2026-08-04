@@ -75,7 +75,7 @@ Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you 
 
 ## Proving the channel order
 
-Do not trust the chain by ear. Send a distinct tone per channel from your DAW (say 100 Hz, 200 Hz, ... 1600 Hz), record locally, and check what came back:
+Do not trust the chain by ear. Send a distinct tone per channel from your DAW - [`docs/fixtures/AmbiX16ch_StreamTest.RPP`](fixtures/) is a ready REAPER project that does exactly that, 100 Hz to 1600 Hz in 100 Hz steps, using only a stock JS plugin - then record locally and check what came back:
 
 ```bash
 ./scripts/merge-obs-tracks.sh --check recording.mkv     # expect: 4 track(s), channels per track: 4 4 4 4
