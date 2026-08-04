@@ -1,0 +1,580 @@
+{
+    "name": "AmbiX16ch_atkaudio",
+    "groups": [],
+    "scene_order": [
+        {
+            "name": "Scene"
+        }
+    ],
+    "current_scene": "Scene",
+    "current_program_scene": "Scene",
+    "canvases": [],
+    "current_transition": "Fade",
+    "transition_duration": 300,
+    "transitions": [],
+    "quick_transitions": [
+        {
+            "name": "Cut",
+            "duration": 300,
+            "hotkeys": [],
+            "id": 1,
+            "fade_to_black": false
+        },
+        {
+            "name": "Fade",
+            "duration": 300,
+            "hotkeys": [],
+            "id": 2,
+            "fade_to_black": false
+        },
+        {
+            "name": "Fade",
+            "duration": 300,
+            "hotkeys": [],
+            "id": 3,
+            "fade_to_black": true
+        }
+    ],
+    "saved_projectors": [],
+    "preview_locked": false,
+    "scaling_enabled": false,
+    "scaling_level": -22,
+    "scaling_off_x": 0.0,
+    "scaling_off_y": 0.0,
+    "virtual-camera": {
+        "type2": 3
+    },
+    "modules": {
+        "scripts-tool": [],
+        "output-timer": {
+            "streamTimerHours": 0,
+            "streamTimerMinutes": 0,
+            "streamTimerSeconds": 30,
+            "recordTimerHours": 0,
+            "recordTimerMinutes": 0,
+            "recordTimerSeconds": 30,
+            "autoStartStreamTimer": false,
+            "autoStartRecordTimer": false,
+            "pauseRecordTimer": true
+        },
+        "auto-scene-switcher": {
+            "interval": 300,
+            "non_matching_scene": "",
+            "switch_if_not_matching": false,
+            "active": false,
+            "switches": []
+        },
+        "captions": {
+            "source": "",
+            "enabled": false,
+            "lang_id": 2057,
+            "provider": "mssapi"
+        }
+    },
+    "resolution": {
+        "x": 1920,
+        "y": 1080
+    },
+    "version": 2,
+    "sources": [
+        {
+            "prev_ver": 537001985,
+            "name": "atkAudio Source Mixer",
+            "uuid": "1a5d0f2c-fabc-4100-bf91-718165968e79",
+            "id": "atkaudio_source_mixer",
+            "versioned_id": "atkaudio_source_mixer",
+            "settings": {
+                "sidechain_source1": "none",
+                "sidechain_source2": "none",
+                "sidechain_source3": "none",
+                "sidechain_source4": "none",
+                "sidechain_source5": "none",
+                "sidechain_source6": "none",
+                "sidechain_source7": "none",
+                "sidechain_source8": "none"
+            },
+            "mixers": 192,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.unmute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {},
+            "filters": [
+                {
+                    "prev_ver": 537001985,
+                    "name": "atkAudio PluginHost2 (ReaRoute)",
+                    "uuid": "4c5fce7d-ea52-4d52-bea8-1d14c3d91bbd",
+                    "id": "atkaudio_plugin_host2",
+                    "versioned_id": "atkaudio_plugin_host2",
+                    "settings": {
+                        "atkaudio_plugin_host2": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n\r\n<atkAudioPluginHost2State>\r\n  <DEVICESETUP deviceType=\"PluginHost2 Audio\" audioOutputDeviceName=\"ReaRoute ASIO (x64)\"\r\n               audioInputDeviceName=\"ReaRoute ASIO (x64)\" audioDeviceRate=\"48000.0\"\r\n               audioDeviceBufferSize=\"128\"/>\r\n  <AUDIOSERVER>\r\n    <DEVICE name=\"ReaRoute ASIO (x64)\" sampleRate=\"48000.0\" bufferSize=\"128\"/>\r\n  </AUDIOSERVER>\r\n  <FILTERGRAPH>\r\n    <FILTER uid=\"10\" x=\"0.4835858585858586\" y=\"0.1060606060606061\" useARA=\"0\">\r\n      <PLUGIN name=\"Audio Input\" descriptiveName=\"\" format=\"Internal\" category=\"I/O devices\"\r\n              manufacturer=\"JUCE\" version=\"1.0\" file=\"\" uniqueId=\"246006c0\"\r\n              isInstrument=\"0\" fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"0\"\r\n              numOutputs=\"16\" isShell=\"0\" hasARAExtension=\"0\" uid=\"246006c0\"/>\r\n      <STATE>0.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </INPUTS>\r\n        <OUTPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16\"/>\r\n        </OUTPUTS>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"11\" x=\"0.2411616161616162\" y=\"0.9134199134199135\" useARA=\"0\">\r\n      <PLUGIN name=\"Audio Output\" descriptiveName=\"\" format=\"Internal\" category=\"I/O devices\"\r\n              manufacturer=\"JUCE\" version=\"1.0\" file=\"\" uniqueId=\"724248cb\"\r\n              isInstrument=\"0\" fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"16\"\r\n              numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"724248cb\"/>\r\n      <STATE>0.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16\"/>\r\n        </INPUTS>\r\n        <OUTPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </OUTPUTS>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"12\" x=\"0.8876262626262627\" y=\"0.1406926406926407\" useARA=\"0\">\r\n      <PLUGIN name=\"MIDI Input\" descriptiveName=\"\" format=\"Internal\" category=\"I/O devices\"\r\n              manufacturer=\"JUCE\" version=\"1.0\" file=\"\" uniqueId=\"a9e4f9eb\"\r\n              isInstrument=\"0\" fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"0\"\r\n              numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"a9e4f9eb\"/>\r\n      <STATE>0.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </INPUTS>\r\n        <OUTPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </OUTPUTS>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"13\" x=\"0.8838383838383839\" y=\"0.8181818181818182\" useARA=\"0\">\r\n      <PLUGIN name=\"MIDI Output\" descriptiveName=\"\" format=\"Internal\" category=\"I/O devices\"\r\n              manufacturer=\"JUCE\" version=\"1.0\" file=\"\" uniqueId=\"9d5bbb00\"\r\n              isInstrument=\"0\" fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"0\"\r\n              numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"9d5bbb00\"/>\r\n      <STATE>0.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </INPUTS>\r\n        <OUTPUTS>\r\n          <BUS index=\"0\" layout=\"disabled\"/>\r\n        </OUTPUTS>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"14\" x=\"0.2828282828282828\" y=\"0.4372294372294372\" useARA=\"0\"\r\n            uiLastX_IO=\"366\" uiLastY_IO=\"259\" uiopen_IO=\"0\">\r\n      <PLUGIN name=\"OBS Output\" format=\"Internal\" category=\"OBS\" manufacturer=\"atkAudio\"\r\n              version=\"0.33.1\" file=\"OBS Output\" uniqueId=\"748d8061\" isInstrument=\"0\"\r\n              fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"4\" numOutputs=\"0\"\r\n              isShell=\"0\" hasARAExtension=\"0\" uid=\"748d8061\"/>\r\n      <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhLyDSYlUlXzzhLwLSNsPyMwDSKhM1L4zRY0DVM1HFMvHSYlIlHu3C.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4\"/>\r\n        </INPUTS>\r\n        <OUTPUTS/>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"15\" x=\"0.4078282828282828\" y=\"0.4783549783549784\" useARA=\"0\"\r\n            uiLastX_IO=\"175\" uiLastY_IO=\"149\" uiopen_IO=\"0\">\r\n      <PLUGIN name=\"OBS Output\" format=\"Internal\" category=\"OBS\" manufacturer=\"atkAudio\"\r\n              version=\"0.33.1\" file=\"OBS Output\" uniqueId=\"748d8061\" isInstrument=\"0\"\r\n              fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"4\" numOutputs=\"0\"\r\n              isShell=\"0\" hasARAExtension=\"0\" uid=\"748d8061\"/>\r\n      <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HRXwLCM3jiX2zRX0TSXsPCMlYSKgUlXwzxLjQiY3jiM2.yX4jiHu3C.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4\"/>\r\n        </INPUTS>\r\n        <OUTPUTS/>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"16\" x=\"0.547979797979798\" y=\"0.4848484848484849\" useARA=\"0\"\r\n            uiLastX_IO=\"234\" uiLastY_IO=\"489\" uiopen_IO=\"0\">\r\n      <PLUGIN name=\"OBS Output\" format=\"Internal\" category=\"OBS\" manufacturer=\"atkAudio\"\r\n              version=\"0.33.1\" file=\"OBS Output\" uniqueId=\"748d8061\" isInstrument=\"0\"\r\n              fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"4\" numOutputs=\"0\"\r\n              isShell=\"0\" hasARAExtension=\"0\" uid=\"748d8061\"/>\r\n      <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhY3HSMyLiM3zBN1.SYsPyL2PVKhEiLj0RM3jSLgUlX0bCNz.iHu3C.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4\"/>\r\n        </INPUTS>\r\n        <OUTPUTS/>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <FILTER uid=\"17\" x=\"0.6856060606060606\" y=\"0.4761904761904762\" useARA=\"0\"\r\n            uiLastX_IO=\"378\" uiLastY_IO=\"412\" uiopen_IO=\"0\">\r\n      <PLUGIN name=\"OBS Output\" format=\"Internal\" category=\"OBS\" manufacturer=\"atkAudio\"\r\n              version=\"0.33.1\" file=\"OBS Output\" uniqueId=\"748d8061\" isInstrument=\"0\"\r\n              fileTime=\"0\" infoUpdateTime=\"0\" numInputs=\"4\" numOutputs=\"0\"\r\n              isShell=\"0\" hasARAExtension=\"0\" uid=\"748d8061\"/>\r\n      <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HxLiISY1D1LzzxLwPSMsPCMlUSK4L1Ml0hMjY1XjciY3HiX4DlHu3C.</STATE>\r\n      <LAYOUT>\r\n        <INPUTS>\r\n          <BUS index=\"0\" layout=\"1 2 3 4\"/>\r\n        </INPUTS>\r\n        <OUTPUTS/>\r\n      </LAYOUT>\r\n    </FILTER>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"0\" dstFilter=\"14\" dstChannel=\"0\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"1\" dstFilter=\"14\" dstChannel=\"1\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"2\" dstFilter=\"14\" dstChannel=\"2\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"3\" dstFilter=\"14\" dstChannel=\"3\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"4\" dstFilter=\"15\" dstChannel=\"0\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"5\" dstFilter=\"15\" dstChannel=\"1\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"6\" dstFilter=\"15\" dstChannel=\"2\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"7\" dstFilter=\"15\" dstChannel=\"3\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"8\" dstFilter=\"16\" dstChannel=\"0\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"9\" dstFilter=\"16\" dstChannel=\"1\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"10\" dstFilter=\"16\" dstChannel=\"2\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"11\" dstFilter=\"16\" dstChannel=\"3\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"12\" dstFilter=\"17\" dstChannel=\"0\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"13\" dstFilter=\"17\" dstChannel=\"1\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"14\" dstFilter=\"17\" dstChannel=\"2\"/>\r\n    <CONNECTION srcFilter=\"10\" srcChannel=\"15\" dstFilter=\"17\" dstChannel=\"3\"/>\r\n  </FILTERGRAPH>\r\n  <MIDISTATE state=\"&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#13;&#10;&#13;&#10;&lt;MidiClientState/&gt;&#13;&#10;\"/>\r\n</atkAudioPluginHost2State>\r\n"
+                    },
+                    "mixers": 255,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                }
+            ]
+        },
+        {
+            "prev_ver": 537001985,
+            "name": "Ph2Out 01-04",
+            "uuid": "231efeb4-2139-4711-bc39-e5a56b402efb",
+            "id": "atkaudio_ph2helper",
+            "versioned_id": "atkaudio_ph2helper",
+            "settings": {},
+            "mixers": 193,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.unmute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001985,
+            "name": "Ph2Out 05-08",
+            "uuid": "a13489b7-a55a-44f6-aeb1-3d4f89670c99",
+            "id": "atkaudio_ph2helper",
+            "versioned_id": "atkaudio_ph2helper",
+            "settings": {},
+            "mixers": 194,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.unmute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001985,
+            "name": "Ph2Out 09-12",
+            "uuid": "f8253368-860e-437d-b12d-5891aeb57840",
+            "id": "atkaudio_ph2helper",
+            "versioned_id": "atkaudio_ph2helper",
+            "settings": {},
+            "mixers": 196,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.unmute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001985,
+            "name": "Ph2Out 13-16",
+            "uuid": "3c2e6a34-3145-44f5-9c7f-6dfcd7f82b9a",
+            "id": "atkaudio_ph2helper",
+            "versioned_id": "atkaudio_ph2helper",
+            "settings": {},
+            "mixers": 200,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.unmute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001985,
+            "name": "Scene",
+            "uuid": "e4c853e1-ea92-485c-876a-715fefbf7488",
+            "id": "scene",
+            "versioned_id": "scene",
+            "settings": {
+                "id_counter": 52,
+                "custom_size": false,
+                "items": [
+                    {
+                        "name": "atkAudio Source Mixer",
+                        "source_uuid": "1a5d0f2c-fabc-4100-bf91-718165968e79",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 42,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -1.7777777910232544,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 300
+                        },
+                        "hide_transition": {
+                            "duration": 300
+                        },
+                        "private_settings": {}
+                    },
+                    {
+                        "name": "Ph2Out 01-04",
+                        "source_uuid": "231efeb4-2139-4711-bc39-e5a56b402efb",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 49,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -1.7777777910232544,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 0
+                        },
+                        "hide_transition": {
+                            "duration": 0
+                        },
+                        "private_settings": {}
+                    },
+                    {
+                        "name": "Ph2Out 05-08",
+                        "source_uuid": "a13489b7-a55a-44f6-aeb1-3d4f89670c99",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 50,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -1.7777777910232544,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 0
+                        },
+                        "hide_transition": {
+                            "duration": 0
+                        },
+                        "private_settings": {}
+                    },
+                    {
+                        "name": "Ph2Out 09-12",
+                        "source_uuid": "f8253368-860e-437d-b12d-5891aeb57840",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 51,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -1.7777777910232544,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 0
+                        },
+                        "hide_transition": {
+                            "duration": 0
+                        },
+                        "private_settings": {}
+                    },
+                    {
+                        "name": "Ph2Out 13-16",
+                        "source_uuid": "3c2e6a34-3145-44f5-9c7f-6dfcd7f82b9a",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 52,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -1.7777777910232544,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 0
+                        },
+                        "hide_transition": {
+                            "duration": 0
+                        },
+                        "private_settings": {}
+                    }
+                ]
+            },
+            "mixers": 0,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "OBSBasic.SelectScene": [],
+                "libobs.show_scene_item.42": [],
+                "libobs.hide_scene_item.42": [],
+                "libobs.show_scene_item.49": [],
+                "libobs.hide_scene_item.49": [],
+                "libobs.show_scene_item.50": [],
+                "libobs.hide_scene_item.50": [],
+                "libobs.show_scene_item.51": [],
+                "libobs.hide_scene_item.51": [],
+                "libobs.show_scene_item.52": [],
+                "libobs.hide_scene_item.52": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "canvas_uuid": "6c69626f-6273-4c00-9d88-c5136d61696e",
+            "private_settings": {}
+        }
+    ]
+}

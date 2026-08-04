@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <FILTERGRAPH>
-  <FILTER uid="12" x="0.3253388946819604" y="0.09777777777777778" useARA="0">
+  <FILTER uid="10" x="0.4835858585858586" y="0.1060606060606061" useARA="0">
     <PLUGIN name="Audio Input" descriptiveName="" format="Internal" category="I/O devices"
             manufacturer="JUCE" version="1.0" file="" uniqueId="246006c0"
             isInstrument="0" fileTime="0" infoUpdateTime="0" numInputs="0"
@@ -16,23 +16,7 @@
       </OUTPUTS>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="13" x="0.1351010101010101" y="0.3852813852813853" useARA="0"
-          uiLastX_Normal="1122" uiLastY_Normal="460" uiopen_Normal="0"
-          uiLastX_Generic="179" uiLastY_Generic="364" uiopen_Generic="0"
-          uiLastX_IO="399" uiLastY_IO="108" uiopen_IO="0">
-    <PLUGIN name="OBS Output" format="Internal" category="OBS" manufacturer="atkAudio"
-            version="0.33.1" file="OBS Output" uniqueId="748d8061" isInstrument="0"
-            fileTime="0" infoUpdateTime="0" numInputs="4" numOutputs="0"
-            isShell="0" hasARAExtension="0" uid="748d8061"/>
-    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HRNgISN4TSX1zRLvDCNsPiXkMVKhMSY4zBMlQCN1TlMyfCYkUlHu3C.</STATE>
-    <LAYOUT>
-      <INPUTS>
-        <BUS index="0" layout="1 2 3 4"/>
-      </INPUTS>
-      <OUTPUTS/>
-    </LAYOUT>
-  </FILTER>
-  <FILTER uid="16" x="0.2702020202020202" y="0.8450363196125908" useARA="0">
+  <FILTER uid="11" x="0.2411616161616162" y="0.9134199134199135" useARA="0">
     <PLUGIN name="Audio Output" descriptiveName="" format="Internal" category="I/O devices"
             manufacturer="JUCE" version="1.0" file="" uniqueId="724248cb"
             isInstrument="0" fileTime="0" infoUpdateTime="0" numInputs="16"
@@ -47,7 +31,7 @@
       </OUTPUTS>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="22" x="0.7914494264859229" y="0.1488888888888889" useARA="0">
+  <FILTER uid="12" x="0.8876262626262627" y="0.1406926406926407" useARA="0">
     <PLUGIN name="MIDI Input" descriptiveName="" format="Internal" category="I/O devices"
             manufacturer="JUCE" version="1.0" file="" uniqueId="a9e4f9eb"
             isInstrument="0" fileTime="0" infoUpdateTime="0" numInputs="0"
@@ -62,7 +46,7 @@
       </OUTPUTS>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="23" x="0.7659019812304484" y="0.3655555555555556" useARA="0">
+  <FILTER uid="13" x="0.8838383838383839" y="0.8181818181818182" useARA="0">
     <PLUGIN name="MIDI Output" descriptiveName="" format="Internal" category="I/O devices"
             manufacturer="JUCE" version="1.0" file="" uniqueId="9d5bbb00"
             isInstrument="0" fileTime="0" infoUpdateTime="0" numInputs="0"
@@ -77,13 +61,13 @@
       </OUTPUTS>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="24" x="0.5353535353535354" y="0.3825665859564165" useARA="0"
-          uiLastX_IO="28" uiLastY_IO="63" uiopen_IO="0">
+  <FILTER uid="14" x="0.2828282828282828" y="0.4372294372294372" useARA="0"
+          uiLastX_IO="366" uiLastY_IO="259" uiopen_IO="0">
     <PLUGIN name="OBS Output" format="Internal" category="OBS" manufacturer="atkAudio"
             version="0.33.1" file="OBS Output" uniqueId="748d8061" isInstrument="0"
             fileTime="0" infoUpdateTime="0" numInputs="4" numOutputs="0"
             isShell="0" hasARAExtension="0" uid="748d8061"/>
-    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhYxbSY2DVNxzRMwTVXsPSN3TSKhcyM4zRYgMVLigiL4LyLzLiHu3C.</STATE>
+    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhLyDSYlUlXzzhLwLSNsPyMwDSKhM1L4zRY0DVM1HFMvHSYlIlHu3C.</STATE>
     <LAYOUT>
       <INPUTS>
         <BUS index="0" layout="1 2 3 4"/>
@@ -91,13 +75,13 @@
       <OUTPUTS/>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="25" x="0.2361111111111111" y="0.5076335877862596" useARA="0"
-          uiLastX_IO="469" uiLastY_IO="101" uiopen_IO="0">
+  <FILTER uid="15" x="0.4078282828282828" y="0.4783549783549784" useARA="0"
+          uiLastX_IO="175" uiLastY_IO="149" uiopen_IO="0">
     <PLUGIN name="OBS Output" format="Internal" category="OBS" manufacturer="atkAudio"
             version="0.33.1" file="OBS Output" uniqueId="748d8061" isInstrument="0"
             fileTime="0" infoUpdateTime="0" numInputs="4" numOutputs="0"
             isShell="0" hasARAExtension="0" uid="748d8061"/>
-    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhMvfyLjMlYyzxLiUVLsPyXxbSK4jCLzzhLvHFY2L1LhYlXgIlHu3C.</STATE>
+    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HRXwLCM3jiX2zRX0TSXsPCMlYSKgUlXwzxLjQiY3jiM2.yX4jiHu3C.</STATE>
     <LAYOUT>
       <INPUTS>
         <BUS index="0" layout="1 2 3 4"/>
@@ -105,13 +89,13 @@
       <OUTPUTS/>
     </LAYOUT>
   </FILTER>
-  <FILTER uid="26" x="0.3712121212121212" y="0.5932203389830508" useARA="0"
-          uiLastX_IO="47" uiLastY_IO="204" uiopen_IO="0">
+  <FILTER uid="16" x="0.547979797979798" y="0.4848484848484849" useARA="0"
+          uiLastX_IO="234" uiLastY_IO="489" uiopen_IO="0">
     <PLUGIN name="OBS Output" format="Internal" category="OBS" manufacturer="atkAudio"
             version="0.33.1" file="OBS Output" uniqueId="748d8061" isInstrument="0"
             fileTime="0" infoUpdateTime="0" numInputs="4" numOutputs="0"
             isShell="0" hasARAExtension="0" uid="748d8061"/>
-    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HxM4fSXxDyM0zRXzXyLsPSLwXVK4DyXg0hMlcSLw.iYjE1LxTiHu3C.</STATE>
+    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HhY3HSMyLiM3zBN1.SYsPyL2PVKhEiLj0RM3jSLgUlX0bCNz.iHu3C.</STATE>
     <LAYOUT>
       <INPUTS>
         <BUS index="0" layout="1 2 3 4"/>
@@ -119,20 +103,34 @@
       <OUTPUTS/>
     </LAYOUT>
   </FILTER>
-  <CONNECTION srcFilter="12" srcChannel="0" dstFilter="13" dstChannel="0"/>
-  <CONNECTION srcFilter="12" srcChannel="1" dstFilter="13" dstChannel="1"/>
-  <CONNECTION srcFilter="12" srcChannel="2" dstFilter="13" dstChannel="2"/>
-  <CONNECTION srcFilter="12" srcChannel="3" dstFilter="13" dstChannel="3"/>
-  <CONNECTION srcFilter="12" srcChannel="12" dstFilter="24" dstChannel="0"/>
-  <CONNECTION srcFilter="12" srcChannel="13" dstFilter="24" dstChannel="1"/>
-  <CONNECTION srcFilter="12" srcChannel="14" dstFilter="24" dstChannel="2"/>
-  <CONNECTION srcFilter="12" srcChannel="15" dstFilter="24" dstChannel="3"/>
-  <CONNECTION srcFilter="12" srcChannel="4" dstFilter="25" dstChannel="0"/>
-  <CONNECTION srcFilter="12" srcChannel="5" dstFilter="25" dstChannel="1"/>
-  <CONNECTION srcFilter="12" srcChannel="6" dstFilter="25" dstChannel="2"/>
-  <CONNECTION srcFilter="12" srcChannel="7" dstFilter="25" dstChannel="3"/>
-  <CONNECTION srcFilter="12" srcChannel="8" dstFilter="26" dstChannel="0"/>
-  <CONNECTION srcFilter="12" srcChannel="9" dstFilter="26" dstChannel="1"/>
-  <CONNECTION srcFilter="12" srcChannel="10" dstFilter="26" dstChannel="2"/>
-  <CONNECTION srcFilter="12" srcChannel="11" dstFilter="26" dstChannel="3"/>
+  <FILTER uid="17" x="0.6856060606060606" y="0.4761904761904762" useARA="0"
+          uiLastX_IO="378" uiLastY_IO="412" uiopen_IO="0">
+    <PLUGIN name="OBS Output" format="Internal" category="OBS" manufacturer="atkAudio"
+            version="0.33.1" file="OBS Output" uniqueId="748d8061" isInstrument="0"
+            fileTime="0" infoUpdateTime="0" numInputs="4" numOutputs="0"
+            isShell="0" hasARAExtension="0" uid="748d8061"/>
+    <STATE>117.VMjLgvF....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOPElbg0VYzUlbyABZkwFbkI2TuUmbiUVU0kFY8HxLiISY1D1LzzxLwPSMsPCMlUSK4L1Ml0hMjY1XjciY3HiX4DlHu3C.</STATE>
+    <LAYOUT>
+      <INPUTS>
+        <BUS index="0" layout="1 2 3 4"/>
+      </INPUTS>
+      <OUTPUTS/>
+    </LAYOUT>
+  </FILTER>
+  <CONNECTION srcFilter="10" srcChannel="0" dstFilter="14" dstChannel="0"/>
+  <CONNECTION srcFilter="10" srcChannel="1" dstFilter="14" dstChannel="1"/>
+  <CONNECTION srcFilter="10" srcChannel="2" dstFilter="14" dstChannel="2"/>
+  <CONNECTION srcFilter="10" srcChannel="3" dstFilter="14" dstChannel="3"/>
+  <CONNECTION srcFilter="10" srcChannel="4" dstFilter="15" dstChannel="0"/>
+  <CONNECTION srcFilter="10" srcChannel="5" dstFilter="15" dstChannel="1"/>
+  <CONNECTION srcFilter="10" srcChannel="6" dstFilter="15" dstChannel="2"/>
+  <CONNECTION srcFilter="10" srcChannel="7" dstFilter="15" dstChannel="3"/>
+  <CONNECTION srcFilter="10" srcChannel="8" dstFilter="16" dstChannel="0"/>
+  <CONNECTION srcFilter="10" srcChannel="9" dstFilter="16" dstChannel="1"/>
+  <CONNECTION srcFilter="10" srcChannel="10" dstFilter="16" dstChannel="2"/>
+  <CONNECTION srcFilter="10" srcChannel="11" dstFilter="16" dstChannel="3"/>
+  <CONNECTION srcFilter="10" srcChannel="12" dstFilter="17" dstChannel="0"/>
+  <CONNECTION srcFilter="10" srcChannel="13" dstFilter="17" dstChannel="1"/>
+  <CONNECTION srcFilter="10" srcChannel="14" dstFilter="17" dstChannel="2"/>
+  <CONNECTION srcFilter="10" srcChannel="15" dstFilter="17" dstChannel="3"/>
 </FILTERGRAPH>

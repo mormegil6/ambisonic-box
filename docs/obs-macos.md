@@ -2,7 +2,7 @@
 
 Everything here was established by pushing a per-channel tone ladder through real hardware and reading back what arrived. Where a setting looks arbitrary, it is not: the obvious-looking alternative fails silently, and the note says how.
 
-Verified on [OBS Studio](https://obsproject.com/) 32.2.1, macOS, with [BlackHole](https://github.com/ExistentialAudio/BlackHole) as the multichannel device.
+Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78, macOS, with [BlackHole](https://github.com/ExistentialAudio/BlackHole) as the multichannel device.
 
 ## What you need
 

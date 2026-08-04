@@ -20,27 +20,47 @@ To test the chain rather than your content, open [`docs/fixtures/AmbiX16ch_Strea
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 
+<div align="center"><img src="images/obs-windows/01_Reaper-tracks.png" width="82%" alt="REAPER on Windows with the fixture project: a 16-channel 3OA parent track above sixteen mono children ACN-00 to ACN-15, each running a Tone Generator, routed to ReaRoute 1-16, with the status bar showing Dummy Audio as REAPER own device."></div>
+
 ## 2. Bring ReaRoute into OBS
 
 atkAudio's real interface is a node-graph editor, and it is not where you would expect - the source's own OBS **Properties** dialog says "No properties available" by design.
 
 1. **Add Source > atkAudio Source Mixer.** This exists only to host a filter. Do **not** try to use its own combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
+
+<div align="center"><img src="images/obs-windows/02_OBS-add-source.png" width="57%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
 2. Right-click that source > **Filters > + > atkAudio Plugin Host2**. A separate floating **atkAudio PluginHost2** window opens. That is the real interface.
+
+<div align="center"><img src="images/obs-windows/03_OBS-add-pluginhost2-filter.png" width="50%" alt="The Filters dialog for the atkAudio Source Mixer source, with the add-filter list open and atkAudio PluginHost2 highlighted."></div>
 3. In that window: **Options > Change Device Settings**. Set Device to **ReaRoute ASIO**, sample rate to match your REAPER project (48000 Hz), and tick all 16 channels under **Active INPUT channels** ("ReaRoute REAPER=>CLIENT" - audio coming *from* REAPER). Leave the Active OUTPUT list alone; that direction sends OBS audio back to REAPER and is not used here.
+
+<div align="center"><img src="images/obs-windows/04_PluginHost2-device-settings.png" width="66%" alt="The PluginHost2 Audio Settings panel: Device is ReaRoute ASIO (x64), the Active input channels list shows ReaRoute REAPER to CLIENT entries ticked, and the sample rate is 48000 Hz."></div>
 4. **Plugins > Create Plug-in > OBS Output**, four times - one instance per group of four channels. Wire Audio Input ports 1-4 into the first, 5-8 into the second, 9-12 into the third, 13-16 into the fourth. Order matters: this is what preserves AmbiX channel order.
+
+<div align="center"><img src="images/obs-windows/05_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
 5. **Each OBS Output node defaults to stereo.** Right-click the **node itself** (not a port, and not its OBS Properties dialog) > **Configure Audio I/O**, and set the Channel Layout to **Discrete #4** on *both* the Input and Output Configuration. Repeat for all four nodes.
 
    Use "Discrete", not a named surround layout like Quad - untagged channels cannot be semantically remapped by anything downstream.
 
    This step is undocumented upstream. A search of the plugin's forum thread, its whole changelog, its reviews and every GitHub issue turned up no mention of it; without it, each node stays stereo and you cannot get past 8 channels.
 
+<div align="center"><img src="images/obs-windows/06_PluginHost2-configure-audio-io.png" width="57%" alt="Right-clicking an OBS Output node in the PluginHost2 graph opens a context menu with Configure Audio I/O highlighted, alongside Save and Load plugin state."></div>
+
+<div align="center"><img src="images/obs-windows/07_PluginHost2-discrete-4.png" width="41%" alt="The OBS Output node Configure Audio I/O panel with the Channel Layout dropdown open, Stereo currently ticked and Discrete #4 highlighted."></div>
+
 Four sources named `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16` now appear in OBS with real level meters.
 
+<div align="center"><img src="images/obs-windows/09_OBS-four-ph2out-sources.png" width="82%" alt="The OBS main window on Windows showing sources Ph2Out 01-04 through 13-16 plus the atkAudio Source Mixer, with the Audio Mixer showing live signal on all four."></div>
+
 To skip steps 4 and 5, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.filtergraph`](fixtures/) from the PluginHost2 window instead - it carries the wiring and the Discrete #4 layouts already. Confirm the device and sample rate afterwards under Options > Change Device Settings.
+
+<div align="center"><img src="images/obs-windows/08_PluginHost2-wired-graph.png" width="66%" alt="The finished PluginHost2 graph: one Audio Input node fanning out to four OBS Output nodes, four connections each."></div>
 
 ## 3. Assign one source per track
 
 **Advanced Audio Properties** (right-click any source in the Audio Mixer): assign `Ph2Out 01-04` to Track 1, `05-08` to Track 2, `09-12` to Track 3, `13-16` to Track 4. Tick exactly one track per source and untick the rest.
+
+<div align="center"><img src="images/obs-windows/10_OBS-tracks-routing.png" width="66%" alt="OBS Advanced Audio Properties on Windows: the four Ph2Out sources each have exactly one of tracks 1 to 4 ticked."></div>
 
 ## 4. Set the global channel layout
 
@@ -49,6 +69,8 @@ To skip steps 4 and 5, load [`docs/fixtures/ReaRoute16ch-atkAudioPluginHost2.fil
 This is a **separate gate** from anything configured in atkAudio, and it governs the channel *width* of every track in the output regardless of how many channels a source actually carries. Left at 7.1 it silently pads each 4-channel track to 8 (4 real + 4 silent) - the recording reads back as 32 channels instead of 16, and nothing warns you. It was caught here only because the verification step counted channels.
 
 While you are in Settings: **Advanced > Video > Color Format: NV12** (avoids obs-studio issue #8226; unrelated to audio, cheap to set).
+
+The Audio settings page is identical to macOS, so it is not repeated here - see [the macOS guide](obs-macos.md#1-set-the-global-channel-layout) for a picture of it.
 
 ## 5. Point OBS at the box
 
@@ -66,6 +88,8 @@ Identical to macOS. **Settings > Output > Output Mode: `Advanced`**, then the **
 | Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
 Press **Start Recording** to push - Custom Output (FFmpeg) is a recording output even when its destination is a URL, so Start Streaming does nothing for it.
+
+<div align="center"><img src="images/obs-windows/11_OBS-recording-settings.png" width="57%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with an srt URL carrying latency, mpegts, 6000 Kbps, keyframe interval 60, libx264, 384 Kbps audio, tracks 1 to 4, aac."></div>
 
 Two traps, both silent: **`latency` is in MICROSECONDS** (2 s is `2000000`), and the container's default audio encoder is **`mp2`, which flatly refuses more than 2 channels**. Leave Muxer Settings empty.
 
