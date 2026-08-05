@@ -23,19 +23,37 @@
 # splice lands 39 ms early and can click if the bed does not end on silence).
 # `native` keeps 11.122 s and ignores the frame grid.
 #
-# Usage: scripts/make-directions-clip.sh ENERGY.mp4 VOICE_16CH.wav BED_16CH.wav [OUT] [CARD] [W] [H]
+# INPUTS. Two release assets, because neither can be generated from this repo
+# (the card can: scripts/make-360-testcard.py generates it):
+#
+#   1. SOURCE - one self-contained file carrying the energy-map VIDEO and the
+#      16-channel dry voice AUDIO it was rendered from. Bundling them is
+#      deliberate: they are one take, they must stay frame-aligned, and the
+#      single file is useful on its own (you see the blob and hear the word
+#      that names it). MOV with PCM rather than MP4, since MP4 has no portable
+#      way to carry multichannel PCM and the stem should not be recompressed.
+#   2. BED - a 16-channel musical loop whose LENGTH defines the loop period.
+#
+# To rebuild SOURCE from a new recording: render the energy map from the DRY
+# VOICE stem (not the mix, or a diffuse bed washes out the direction blobs)
+# with AmbisonicEnergyRenderer.py, then mux the two together:
+#   python AmbisonicEnergyRenderer.py -i voice_16ch.wav --fps 30 \
+#          --encoder h264_videotoolbox --bitrate 12M
+#   ffmpeg -i energy.mp4 -i voice_16ch.wav -map 0:v -map 1:a \
+#          -c:v copy -c:a pcm_s24le directions-source_energy+voice16ch.mov
+#
+# Usage: scripts/make-directions-clip.sh SOURCE.mov BED_16CH.wav [OUT] [CARD] [W] [H]
 #   env: BED_FIT=tempo|trim|native  LOOP_PERIOD=<s>  TOTAL=120  OFFSET=1.0
 #        BED_GAIN=<linear>  VOICE_GAIN=<linear>  KEY_THRESH/KEY_TOL/KEY_SOFT
 #        FPS=24  (the frame grid the period is quantised to)
 # Preview fast with W H = 1920 960.
 set -euo pipefail
 
-ENERGY="${1:?energy map mp4 (AmbisonicEnergyRenderer, DRY VOICE stem)}"
-VOICE="${2:?16-channel ACN/SN3D voice stem}"
-BED="${3:?16-channel ACN/SN3D musical bed (defines the loop period)}"
-OUT="${4:-content/vod/masters/directions-energy_8k360_16ch.webm}"
-CARD="${5:-content/vod/masters/testcard-360_8k.png}"
-W="${6:-7680}"; H="${7:-3840}"
+SOURCE="${1:?directions source asset: energy-map video + 16-ch voice audio}"
+BED="${2:?16-channel ACN/SN3D musical bed (defines the loop period)}"
+OUT="${3:-content/vod/masters/directions_8k360_16ch.webm}"
+CARD="${4:-content/vod/masters/testcard-360_8k.png}"
+W="${5:-7680}"; H="${6:-3840}"
 
 BED_FIT="${BED_FIT:-tempo}"
 TOTAL="${TOTAL:-120}"
@@ -49,7 +67,7 @@ BED_GAIN="${BED_GAIN:-0.537}"       # -5.4 dB
 VOICE_GAIN="${VOICE_GAIN:-1.0}"
 KEY_THRESH="${KEY_THRESH:-0.10}"; KEY_TOL="${KEY_TOL:-0.30}"; KEY_SOFT="${KEY_SOFT:-0.18}"
 
-for f in "$ENERGY" "$VOICE" "$BED" "$CARD"; do
+for f in "$SOURCE" "$BED" "$CARD"; do
     [ -f "$f" ] || { echo "missing: $f" >&2; exit 1; }
 done
 mkdir -p "$(dirname "$OUT")"
@@ -78,13 +96,13 @@ ffmpeg -y -hide_banner -loglevel error -i "$BED" \
     -af "${BEDF},volume=${BED_GAIN}" -c:a pcm_s24le "$TMP/bed_unit.wav"
 
 # --- one loop unit of VOICE audio: OFFSET of silence, then the read, padded --
-ffmpeg -y -hide_banner -loglevel error -i "$VOICE" \
+ffmpeg -y -hide_banner -loglevel error -i "$SOURCE" -map 0:a:0 \
     -af "aresample=48000,volume=${VOICE_GAIN},adelay=delays=$(python3 -c "print(int($OFFSET*1000))"):all=1,apad,atrim=0:${PERIOD},asetpts=N/SR/TB" \
     -c:a pcm_s24le "$TMP/voice_unit.wav"
 
 # --- one loop unit of ENERGY video: same OFFSET, padded to PERIOD -----------
 # padded with black, which the luma key turns transparent, so no seam
-ffmpeg -y -hide_banner -loglevel error -i "$ENERGY" \
+ffmpeg -y -hide_banner -loglevel error -i "$SOURCE" -map 0:v:0 \
     -vf "tpad=start_duration=${OFFSET}:stop_mode=add:stop_duration=${PERIOD},trim=0:${PERIOD},setpts=PTS-STARTPTS,fps=${FPS}" \
     -an -c:v libx264 -preset ultrafast -crf 14 -pix_fmt yuv420p "$TMP/energy_unit.mp4"
 
