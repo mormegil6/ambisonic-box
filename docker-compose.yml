@@ -180,7 +180,12 @@ services:
       - status-public:/usr/share/nginx/html/status:ro   # curated telemetry (status.json)
       - ./content/vod/dash:/usr/share/nginx/html/vod-dash:ro   # on-demand VOD DASH clips
     ports:
-      - "8080:80"
+      # Player HTTP. Defaults to loopback so `docker compose up` never exposes the
+      # player directly on the LAN; the cloudflared tunnel and any local reverse
+      # proxy reach it on localhost. PLAYER_BIND=0.0.0.0 restores all-interfaces;
+      # to also reach it over Tailscale, add a second bind to the box's Tailscale
+      # IP in an override (the same way :8090/:8081 are bound).
+      - "${PLAYER_BIND:-127.0.0.1}:8080:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/index.html"]
       interval: 10s
