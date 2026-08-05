@@ -102,9 +102,10 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 The screenshot shows **`h264_videotoolbox`**, Apple's hardware encoder, which keeps the work off the CPU. `libx264` is the software fallback and is present on every machine. Whichever you choose, keep the keyframe interval at 60 frames - 2 s at 30 fps - because that is what the segment duration downstream is aligned to.
 
-Three traps in that table, all silent:
+Four traps in that table, all silent:
 
 - **`latency` is in MICROSECONDS.** 2 s is `2000000`. Writing `2000` asks for 2 ms and the stream will not survive the smallest amount of loss.
+- **Through a tunnel, cap the packet size.** SRT's default packet is about 1316 bytes, but a WireGuard or Tailscale tunnel carries a 1280-byte MTU, so every packet fragments - and under load a large share of the fragments never reassemble, so the picture arrives shredded (blocky green and magenta, the player aborting with a decode error) while SRT still reports the link up. Add `&pkt_size=1128` (six 188-byte transport packets, which fits) to the URL; it is harmless on an ordinary 1500-byte path and essential on a tunnelled one.
 - **The default audio encoder is `mp2`, which flatly refuses more than 2 channels.** You get "Failed to open audio codec: Invalid argument" and nothing else.
 - **Never `aac_at`.** That is Apple's CoreAudio encoder, and its 4-channel AAC decodes in MPEG transmission order (C, L, R, Cs) - which reads back as a scrambled `[3, 1, 2, 4]` inside every track. Plain `aac` round-trips cleanly.
 

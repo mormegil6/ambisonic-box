@@ -134,9 +134,10 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 The screenshot shows **`libx264`**, the software encoder, which is present on every machine. With an NVIDIA card, `h264_nvenc` moves the work onto the GPU and is worth picking if you have one. AMD and Intel have equivalents in the same dropdown (`h264_amf`, `h264_qsv`) when the hardware and drivers are there, though neither was tested here. Whichever you choose, keep the keyframe interval at 60 frames - 2 s at 30 fps - because that is what the segment duration downstream is aligned to.
 
-Two traps in that table, both silent:
+Three traps in that table, all silent:
 
 - **`latency` is in MICROSECONDS.** 2 s is `2000000`. Writing `2000` asks for 2 ms and the stream will not survive the smallest amount of loss.
+- **Through a tunnel, cap the packet size.** SRT's default packet is about 1316 bytes, but a WireGuard or Tailscale tunnel carries a 1280-byte MTU, so every packet fragments - and under load a large share of the fragments never reassemble, so the picture arrives shredded (blocky green and magenta, the player aborting with a decode error) while SRT still reports the link up. Add `&pkt_size=1128` (six 188-byte transport packets, which fits) to the URL; it is harmless on an ordinary 1500-byte path and essential on a tunnelled one.
 - **The default audio encoder is `mp2`, which flatly refuses more than 2 channels.** You get "Failed to open audio codec: Invalid argument" and nothing else.
 
 Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver.
