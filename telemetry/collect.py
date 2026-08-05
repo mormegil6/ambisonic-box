@@ -387,6 +387,14 @@ def source_start():
         if guest_busy:
             return {"ok": False, "state": "guest_active",
                     "error": "a guest session holds the stream"}
+        # same rule for an owner broadcast: this endpoint is public (the
+        # player's start button), and starting the loop beside a live owner
+        # would be the two-writers hole all over again
+        with _owner_lock:
+            owner_busy = _owner["live"]
+        if owner_busy:
+            return {"ok": False, "state": "owner_active",
+                    "error": "an owner broadcast holds the stream"}
         # coalesce a burst of start clicks, but ONLY while that start is still
         # in flight: a stop issued after it (a guest handover) supersedes it,
         # and coalescing then reports "starting" while nothing is starting -
@@ -608,6 +616,36 @@ _guest_view = {"peak": 0, "sum": 0, "n": 0}
 _guest_timer = [None]      # the pending grace-expiry threading.Timer
 _resume_flag = [False]     # a resume attempt is owed (retried from guest_tick)
 _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint updates
+
+# --- owner-live latch --------------------------------------------------
+# Set when an EXTERNAL owner (a /live publish whose name is not the demo
+# loop's) goes live; cleared by its publish_done or by the owner_tick
+# backstop. While set: guests are refused for the WHOLE owner session (not
+# just preempted at takeover), and neither a visitor's start button nor a
+# guest-end resume may put the demo loop back beside the owner.
+# The discriminator is the loop's PUBLISH NAME, which is DASH_NAME - the
+# loop publishes /live/${DASH_NAME:-hoast_demo}?token=<key>, so its name is
+# never the key (comparing against STREAM_KEY was the review's blocker: on
+# any box where the key is a real secret, the loop's own publish would read
+# as an owner and stop itself in a start/stop flap). This also means the
+# key itself never needs to reach this container. An owner must simply not
+# publish UNDER the loop's name (earshot would refuse the same-name
+# duplicate anyway); the owner gateway's streamid and the documented
+# name-as-key RTMP form both satisfy that on their own.
+# An older nginx template forwards no name at all: every /rtmp/live/notify
+# then falls back to the legacy preempt-at-takeover behavior and the latch
+# never engages - safe in either rollout order.
+# The latch is memory-only: after a telemetry restart mid-owner-broadcast,
+# guests are still kept out by the handover's _earshot_unwound check (earshot
+# never goes quiet under a live owner), just with a clumsier 503, and the
+# loop stays down because source_start sees "already_publishing".
+LOOP_NAME = os.environ.get("DASH_NAME", "hoast_demo")
+_owner_lock = threading.Lock()
+_owner = {"live": False, "name": None, "since": None}
+_owner_miss = [0]          # consecutive owner_tick probes with no publisher
+OWNER_END_REASON = "ended for an owner broadcast"   # NOT in _guest_end_locked's
+                           # cooldown list on purpose: a guest preempted for an
+                           # owner is innocent, so no 300 s cooldown afterwards
 
 
 def _guest_sanitize(name):
@@ -934,6 +972,22 @@ def _resume_after_guest():
     later, exactly as if the guest had never existed."""
     if _guest["state"] != "free":
         return
+    # A guest killed FOR an owner takeover reaches here via its own
+    # publish_done while the owner is live: resuming the loop now would put
+    # it beside the owner on one MPD. The resume is not owed to anyone - the
+    # owner's publish_done (or the owner_tick backstop) re-runs this when the
+    # slot is genuinely free - so the flag is cleared, not left for the
+    # guest_tick retry.
+    # NOTE the lock is released before the refresh: _refresh_pub_endpoint
+    # takes _guest_lock (via guest_public), and guest_publish's flip re-check
+    # nests _guest_lock -> _owner_lock, so calling it under _owner_lock here
+    # would be the AB-BA deadlock the round-3 review caught
+    with _owner_lock:
+        owner_live = _owner["live"]
+    if owner_live:
+        _resume_flag[0] = False
+        _refresh_pub_endpoint()         # the guest's end must not sit unshown
+        return                          # for a full collect cycle
     # A cap/kill ends the session the instant on_publish_done arrives, which
     # can be BEFORE the dropped guest's relay finishes tearing down at
     # earshot. source_start would then see "publishing", no-op, and report
@@ -1020,6 +1074,14 @@ def guest_publish(name, addr):
     if _ban_blocks(addr):
         print(f"guest publish rejected (banned): {addr}", flush=True)
         return 403
+    # the owner-live latch: guests stay out for the whole owner session, not
+    # just at takeover (without this, a guest arriving two minutes into an
+    # owner broadcast would claim the slot and race the owner at earshot)
+    with _owner_lock:
+        if _owner["live"]:
+            print(f"guest publish rejected (owner live): {name} from {addr}",
+                  flush=True)
+            return 403
     name = _guest_sanitize(name)
     with _guest_lock:
         if _guest["state"] in ("live", "handover"):
@@ -1047,11 +1109,16 @@ def guest_publish(name, addr):
         # kill: disconnecting must not launder a kill away.
         start = _guest["start"] if resumed_session and _guest["start"] else time.time()
         keep_kill = _guest["kill"] if resumed_session else False
+        # a carried kill must keep its carried REASON too: an owner-preempt
+        # kill that rode a handover-timeout grace into this reconnect would
+        # otherwise end as "operator kill" at the first update ping and arm
+        # the 300 s cooldown the owner-preempt reason deliberately avoids
+        keep_term = _guest["terminating"] if resumed_session and keep_kill else None
         if _guest_timer[0]:
             _guest_timer[0].cancel(); _guest_timer[0] = None
         _guest.update(state="handover", name=name, addr=addr, start=start,
                       last_seen=time.time(), grace_started=None, kill=keep_kill,
-                      terminating=None, cooldown_until=None)
+                      terminating=keep_term, cooldown_until=None)
         _guest_save()
     # Loop handover, serialised against source_start via _start_lock so a
     # visitor's start cannot interleave with the stop and connect the loop
@@ -1078,13 +1145,38 @@ def guest_publish(name, addr):
     # handover complete: flip to live, but only if the slot still belongs to
     # this publish (a pusher that died mid-unwind has already moved it to
     # grace via on_publish_done; do not resurrect it)
+    refused_for_owner = False
     with _guest_lock:
-        if _guest["state"] == "handover" and _guest["name"] == name:
+        # owner-latch re-check INSIDE the critical section: an owner who
+        # latched after the admission check up top found this guest still
+        # 'free', so its guest_kill armed nothing - flipping live here
+        # would put the guest beside the owner with no one left to end it.
+        # (_guest_lock -> _owner_lock nesting exists only here; nothing may
+        # ever call out of a _guest_lock or _owner_lock section into
+        # anything that takes the other - _refresh_pub_endpoint takes
+        # _guest_lock, which is why the refresh below sits AFTER the block.)
+        with _owner_lock:
+            owner_live = _owner["live"]
+        if owner_live:
+            # end the slot only if it is still THIS publish's handover; a
+            # slot that already moved on (grace via a mid-unwind death, or
+            # freed by the owner's own preempt) must not be ended twice -
+            # that logged a spurious all-None CSV row and re-stamped
+            # last_end under someone else's session
+            if _guest["state"] == "handover" and _guest["name"] == name:
+                _guest_end_locked(OWNER_END_REASON)
+            refused_for_owner = True
+        elif _guest["state"] == "handover" and _guest["name"] == name:
             _guest.update(state="live", last_seen=time.time())
             _guest_save()
         else:
             print(f"guest vanished during handover: {name}", flush=True)
             return 201          # its session is already closing; nothing to hold
+    if refused_for_owner:
+        print(f"guest refused at flip: owner went live during handover "
+              f"({name} from {addr})", flush=True)
+        _refresh_pub_endpoint()
+        return 403
     print(f"guest publishing: {name} from {addr}"
           + (" (reconnect)" if resumed_session else ""), flush=True)
     _guest_stall_arm()
@@ -1193,6 +1285,147 @@ def guest_kill():
     return {"ok": True, "state": "free"}
 
 
+def _ingest_live_publishing(stream_name=None):
+    """Does ingest's stat page show a publisher on the LIVE application -
+    optionally a publisher under one specific stream name? This is where the
+    owner's publisher actually lives, and unlike earshot's stat it survives
+    an earshot-only restart (nginx-rtmp resolves its push target once, so
+    earshot can look publisher-less forever while the owner is still very
+    much connected at ingest). The name-specific form exists for owner_tick:
+    an any-publisher check would let the demo loop's own publisher pin a
+    stale owner latch forever."""
+    x = sh(f"curl -s --max-time 4 {INGEST_STAT}")
+    seg = x.split("<name>live</name>", 1)
+    if len(seg) != 2:
+        return False
+    app = seg[1].split("</application>", 1)[0]
+    if stream_name is None:
+        return "<publishing/>" in app
+    s2 = app.split(f"<name>{stream_name}</name>", 1)
+    return len(s2) == 2 and "<publishing/>" in s2[1].split("</stream>", 1)[0]
+
+
+def owner_notify(name_arg):
+    """/rtmp/live/notify: a publish just passed the key check at rtmp-ingest.
+    Three cases:
+      - no name forwarded (an older nginx template): the legacy behavior,
+        an unconditional preempt-at-takeover
+      - name == LOOP_NAME: the demo loop. Keep the legacy guest_kill here
+        too - it is load-bearing for the one path where the loop starts
+        OUTSIDE telemetry's control beside a live guest (`docker compose up
+        -d` recreating loop-source), where the old code deterministically
+        let the loop win within ~10 s
+      - anything else: an EXTERNAL owner. Kill any live guest (with its own
+        no-cooldown reason), stop the loop, and latch owner-live so guests
+        stay out until the owner leaves."""
+    if name_arg is None or name_arg == LOOP_NAME:
+        guest_kill()
+        return
+    with _owner_lock:
+        # first owner wins: a SECOND token-authed publisher under a different
+        # name while an owner is latched must not re-point the latch - its
+        # later publish_done would then pass owner_done's identity check and
+        # clear the latch under the still-live first owner (round-2 finding).
+        # Both publishers are the operator's own devices, so just log it.
+        # A SAME-name notify is the owner's reconnect: re-arm the latch.
+        if _owner["live"] and _owner["name"] != name_arg:
+            print(f"second owner publisher ({name_arg}) while "
+                  f"{_owner['name']} is latched; latch unchanged", flush=True)
+            return
+        _owner.update(live=True, name=name_arg, since=time.time())
+        _owner_miss[0] = 0
+    # targeted kill rather than guest_kill(): the preempted guest is
+    # innocent, so it gets a reason that (a) shows on the player and (b) is
+    # not in _guest_end_locked's cooldown list - no 300 s lockout for the
+    # next guest once the owner leaves
+    ended = None
+    with _guest_lock:
+        if _guest["state"] in ("live", "handover"):
+            _guest["kill"] = True
+            _guest["terminating"] = _guest["terminating"] or OWNER_END_REASON
+            _guest_save()
+        elif _guest["state"] == "grace":
+            ended = OWNER_END_REASON
+            _guest_end_locked(ended)
+    if ended:
+        _refresh_pub_endpoint()     # no resume: the owner holds the slot now
+    print(f"owner publishing: {name_arg}; guests locked out", flush=True)
+    # the loop stop probes docker and serializes on _start_lock (possibly
+    # behind a source_start's `docker start`, up to ~30 s), far over this
+    # callback's 3 s nginx budget - and the owner's publish is deliberately
+    # not gated on it (fail-open), so do it off-thread. Until the stop lands
+    # there is a bounded two-writer window, same as the pre-latch behavior.
+    def _handover():
+        with _start_lock:
+            source_stop("owner handover", kill_after_s=3)
+    threading.Thread(target=_handover, daemon=True).start()
+
+
+def owner_done(name_arg):
+    """/rtmp/live/done: a /live publisher left. The demo loop's own
+    unpublish needs nothing here (telemetry drives the loop itself); the
+    LATCHED owner leaving clears the latch and hands the slot back through
+    the same resume rule a guest's end uses (loop only if somebody watches).
+    Two guards against clearing the wrong session:
+      - identity: only the latched owner's own name may clear (a second
+        token-authed publisher under another name coming and going must not)
+      - freshness: on an encoder reconnect nginx can deliver the OLD
+        connection's done after the NEW connection's notify re-latched;
+        a done arriving within seconds of the latch belongs to that dead
+        predecessor, not to the owner now live. A genuinely aborted <5 s
+        session leaves the latch to the owner_tick backstop instead."""
+    if name_arg is None or name_arg == LOOP_NAME:
+        return
+    resume = False
+    with _owner_lock:
+        if not _owner["live"] or name_arg != _owner["name"]:
+            return
+        if time.time() - (_owner["since"] or 0) < 5:
+            print(f"owner done ignored (stale, latch re-armed): {name_arg}",
+                  flush=True)
+            return
+        _owner.update(live=False, name=None, since=None)
+        _owner_miss[0] = 0
+        resume = True
+    if resume:
+        print(f"owner left: {name_arg}", flush=True)
+        _resume_after_guest()
+
+
+def owner_tick():
+    """Per-cycle backstop for the latch: if the owner's publish_done was
+    lost (an rtmp-ingest restart is the realistic path), the latch would
+    lock guests out and hold the loop down forever. Clear it once a settled
+    latch (>60 s old) has shown no live-app publisher UNDER THE LATCHED NAME
+    at ingest on two consecutive cycles - name-specific, because the demo
+    loop publishes to the same application and an any-publisher probe would
+    let a compose-recreated loop pin a stale latch forever (round-2 finding).
+    The clear is identity-checked on the latch's own `since`: a fresh notify
+    re-arming the latch mid-probe changes it, and the stale clear must then
+    abort rather than wipe the new session. The miss counter is only touched
+    under the same identity check, so a probe overlapping a session change
+    can never lend its miss to the wrong session."""
+    with _owner_lock:
+        live, since, oname = _owner["live"], _owner["since"], _owner["name"]
+    if not live or time.time() - (since or 0) < 60:
+        return
+    publishing = _ingest_live_publishing(oname)
+    with _owner_lock:
+        if not _owner["live"] or _owner["since"] != since:
+            return                  # re-latched mid-probe; not ours to touch
+        if publishing:
+            _owner_miss[0] = 0
+            return
+        _owner_miss[0] += 1
+        if _owner_miss[0] < 2:
+            return
+        _owner.update(live=False, name=None, since=None)
+        _owner_miss[0] = 0
+    print("owner latch cleared by backstop (no live-app publisher at ingest)",
+          flush=True)
+    _resume_after_guest()
+
+
 # --- ban store ---------------------------------------------------------
 # guest_bans.csv rows: banned_at,ip,cc,expires_at,reason,state
 # Three end states: active (enforced, IP present), unbanned (lifted early,
@@ -1273,6 +1506,12 @@ def guest_precheck_snapshot():
         cd = _guest.get("cooldown_until")
         available = st in ("free", "grace") and not (cd and time.time() < cd)
         grace_addr = _guest.get("addr") if st == "grace" else None
+    # owner-live latch: reflected here too so srt-gateway rejects guests at
+    # the SRT handshake instead of spawning a relay that guest_publish will
+    # only refuse a second later
+    with _owner_lock:
+        if _owner["live"]:
+            available = False
     return {"enabled": True, "available": available,
             "grace_addr": grace_addr, "bans": _bans_active_ips()}
 
@@ -1926,6 +2165,7 @@ def collect_once():
                 pass
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
+    owner_tick()                        # backstop for the owner-live latch
     with _guest_lock:
         if _guest["state"] == "live":
             v = vw["now"]
@@ -2023,12 +2263,17 @@ def serve():
                     if call and call != "update_publish":
                         return self._json(200, {})
                     return self._json(guest_update(name), {})
-            # Owner /live publish just passed the STREAM_KEY check at
-            # rtmp-ingest; preempt any in-progress guest session the same way
-            # the dashboard's kill button does. nginx already fails this
-            # open, so the response here doesn't gate anything.
+            # A /live publish just passed the STREAM_KEY check at rtmp-ingest
+            # (the demo loop or an external owner - owner_notify tells them
+            # apart by the forwarded name). nginx already fails these open,
+            # so the responses here don't gate anything.
             if p == "/rtmp/live/notify":
-                guest_kill()
+                args = urllib.parse.parse_qs(q)
+                owner_notify((args.get("name") or [None])[0])
+                return self._json(200, {})
+            if p == "/rtmp/live/done":
+                args = urllib.parse.parse_qs(q)
+                owner_done((args.get("name") or [None])[0])
                 return self._json(200, {})
             return super().do_GET()
 

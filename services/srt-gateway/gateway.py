@@ -70,6 +70,15 @@ PUBLISH_BUDGET_S = 20  # a child must become an nginx publisher within this
                        # session is torn down and the caller memoized - closes
                        # both the probe-hang wedge and the die-and-reloop
 JANITOR_S     = 2      # manager-thread maintenance tick when idle
+OWNER_MAX_S   = int(os.environ.get("SRT_OWNER_MAX_S", "86400"))
+                       # owner sessions bypass the guest arbiter's cap, so the
+                       # first hard limit they would meet is the mpegts PTS
+                       # wrap (33-bit @ 90 kHz, ~26.5 h), and the demux ->
+                       # join -> FLV chain's behavior at that rollover is
+                       # unverified. End the session cleanly well before it:
+                       # a planned daily reconnect beats an unpredicted
+                       # overflow. 0 disables the ceiling. Guest mode never
+                       # reads this (telemetry's 3 h cap fires first).
 _SECRET_RE    = re.compile(r"\b(gw|token)=[^&\s]+")   # scrub creds from logs
 
 _log_lock = threading.Lock()
@@ -298,17 +307,29 @@ class Gateway:
             self._memoize(ip)
             self._drop_caller()
             return
+        # confirmed starts True in owner mode: _confirm_published can only see
+        # the GUEST endpoint via the arbiter, so an owner session could never
+        # confirm - the watchdog would tear it down at PUBLISH_BUDGET_S and
+        # memoize the caller, a 20 s-on / 5 s-off sawtooth. It also keeps
+        # child_exit's early-death memo from punishing an owner whose relay
+        # dies at startup (an immediate manual retry should just work).
         s = {"name": name, "ip": ip, "sock_id": sock_id, "child": child,
              "buf": collections.deque(), "bytes": 0,
              "cond": threading.Condition(), "closing": False,
-             "overflowed": False, "confirmed": False, "since": time.time()}
+             "overflowed": False, "confirmed": MODE == "owner",
+             "since": time.time()}
         with self.lock:
             self.pending = None
             self.session = s
         threading.Thread(target=self._writer, args=(s,), daemon=True).start()
         threading.Thread(target=self._child_log, args=(s,), daemon=True).start()
         threading.Thread(target=self._reaper, args=(s,), daemon=True).start()
-        threading.Thread(target=self._watchdog, args=(s,), daemon=True).start()
+        if MODE == "guest":
+            # the watchdog exists to catch a child that never becomes an
+            # ARBITER-VISIBLE publisher; the owner has no arbiter view (its
+            # /auth is fail-open and /api/live only reports guests), so for
+            # owner the confirm can never pass and the thread must not run
+            threading.Thread(target=self._watchdog, args=(s,), daemon=True).start()
         log(f"session start: {name} from {ip} (child pid {child.pid})")
 
     def _writer(self, s):
@@ -406,6 +427,23 @@ class Gateway:
         if stale:
             log(f"pending timeout: {pend[1]} from {pend[0]} never connected")
             self._drop_caller()
+        # owner session ceiling (see OWNER_MAX_S). The janitor tick is the
+        # natural place: it runs every JANITOR_S whenever the event queue is
+        # idle, which a healthy long session is. The event carries the
+        # SESSION it targets, not just a reason: a bare force_teardown
+        # dispatched after this session already ended (its 'removed' can be
+        # queued ahead of us) would wrongly drop an innocent reconnect's
+        # fresh pending handshake. Teardown drops the caller, no memoize, so
+        # an immediate reconnect starts fresh with a fresh PTS epoch.
+        if MODE == "owner" and OWNER_MAX_S > 0:
+            with self.lock:
+                s = self.session
+                expired = (s is not None and not s["closing"]
+                           and time.time() - s["since"] > OWNER_MAX_S)
+            if expired:
+                self.events.put(("ceiling_teardown", s,
+                                 f"owner session ceiling {OWNER_MAX_S}s "
+                                 f"(mpegts PTS-wrap guard); reconnect to continue"))
 
     def manage_forever(self):
         while True:
@@ -447,6 +485,10 @@ class Gateway:
                     with self.lock:
                         self._memoize(dead["ip"])
                 self.end_session(s, drop_caller=True, reason=f"relay exited rc={rc}")
+        elif kind == "ceiling_teardown":
+            _, target, reason = ev
+            if s is target:                 # already gone = nothing to do;
+                self.end_session(s, drop_caller=True, reason=reason)
         elif kind == "force_teardown":
             if s:
                 self.end_session(s, drop_caller=True, reason=ev[1])

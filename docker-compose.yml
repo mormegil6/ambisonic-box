@@ -136,6 +136,10 @@ services:
     entrypoint: ["/bin/sh", "/opt/loop-source/entrypoint.sh"]
     environment:
       - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+      # the loop's publish NAME (the entrypoint reads it and defaulted to
+      # hoast_demo all along; passing it keeps a custom DASH_NAME in step
+      # with telemetry's copy, whose loop/owner discrimination keys on it)
+      - DASH_NAME=${DASH_NAME:-hoast_demo}
       # Demo content, ON by default: synthesise content/demo.mp4 in-container
       # when missing (no network involved) and fetch the two VOD reference
       # masters from the pinned vod-clips-v1 release (~373 MB once, background,
@@ -235,6 +239,13 @@ services:
       # only so the dashboard knows whether to list srt-gateway among the
       # live-path services (it runs either way, idle when off)
       - SRT_ENABLED=${SRT_ENABLED:-1}
+      # the demo loop's PUBLISH NAME (it publishes /live/${DASH_NAME}), so
+      # telemetry can tell the loop's own /live publish apart from an
+      # EXTERNAL owner broadcast. Drives the owner-live latch: loop stopped
+      # for the owner, guests refused while the owner is live. Deliberately
+      # the NAME and not the key - the key never needs to enter this
+      # container. Must stay in step with loop-source's DASH_NAME below.
+      - DASH_NAME=${DASH_NAME:-hoast_demo}
       - GUEST_GRACE_S=${GUEST_GRACE_S:-120}
       - GUEST_MAX_S=${GUEST_MAX_S:-10800}
       # after a cap/kill-forced end, refuse guest publishes this long, so an
