@@ -234,7 +234,7 @@ function friendlyWindow(sec){
   if(!h) return m+"m";
   return h+"h "+m+"m";
 }
-function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=88?col('--amb') : col('--grn'); }
+function tempColor(t){ return t==null?col('--dim') : t>=98?col('--red') : t>=78?col('--amb') : col('--grn'); }
 
 // A 0/1 series drawn as a line, labelled "max 1", says nothing. As blocks it
 // answers the question on-demand idling created: what fraction of the window
@@ -509,7 +509,7 @@ async function tick(){
   const t = s.system ? s.system.temp_c : null;
   $('temp').textContent = t!=null ? t+"°C" : "—";
   $('temp').style.color = tempColor(t);
-  $('tempSub').textContent = t==null?" " : t>=98?"critical" : t>=88?"hot (encoding)" : "cool";
+  $('tempSub').textContent = t==null?" " : t>=98?"critical" : t>=88?"hot (encoding)" : t>=78?"warm" : "cool";
 
   // encoder
   const e = s.encoder||{};
