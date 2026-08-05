@@ -255,6 +255,15 @@ services:
       # collect.py (ban expiry and IP redaction are the same event)
       - GUEST_RETENTION_DAYS=${GUEST_RETENTION_DAYS:-30}
       - GUEST_BAN_DAYS=${GUEST_BAN_DAYS:-30}
+      # Resource guard: a guest must not be able to cook the host. Both OFF by
+      # default (0) because the right numbers are a property of YOUR hardware,
+      # not of this stack - measure with the deployment repo's thermal-ladder
+      # harness. Temperature is the safety net (it sees room heat, dust and
+      # soak); bitrate is only a coarse pre-filter. Enforced on the same 10 s
+      # ping as the cap, after GUEST_LIMIT_STRIKES consecutive breaches.
+      - GUEST_MAX_TEMP_C=${GUEST_MAX_TEMP_C:-0}
+      - GUEST_MAX_MBPS=${GUEST_MAX_MBPS:-0}
+      - GUEST_LIMIT_STRIKES=${GUEST_LIMIT_STRIKES:-3}
       # optional Cloudflare Web Analytics (VOD page arrivals on the dashboard);
       # both empty = feature off, panel hidden
       - CF_ANALYTICS_TOKEN=${CF_ANALYTICS_TOKEN:-}

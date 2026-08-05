@@ -601,6 +601,28 @@ REPORT_COOLDOWN_S = 900      # one alert per session per this window
 # to fix and retry immediately.
 GUEST_STALL_S = 45
 
+# --- resource guard: a guest must not be able to cook the host --------------
+# Nothing else stops a guest pushing 60 Mbps at whatever hardware this runs on.
+# Two limits, deliberately asymmetric in role:
+#   GUEST_MAX_TEMP_C is the SAFETY NET and the authority. It is measured on the
+#   device, so it accounts for room temperature, dust, thermal soak and any
+#   load the bitrate figure cannot see. 0 disables.
+#   GUEST_MAX_MBPS is only a coarse PRE-FILTER that turns away the obvious
+#   abuser at the door. A bitrate number alone is a bad safety net: on the
+#   2012 Mac Mini deployment, a synthetic 42 Mbps ladder peaked at 87 C while a
+#   real 45.5 Mbps session ran 87-96 C with ZERO viewers, a ~9 C gap that no
+#   bitrate threshold could have predicted (docs/evidence/thermal-2026-08-05
+#   in the deployment repo). 0 disables.
+# Both default OFF so a generic deployment behaves exactly as before, and both
+# are per-device: the right numbers come from measuring the host, not from code.
+GUEST_MAX_TEMP_C = int(os.environ.get("GUEST_MAX_TEMP_C", "0"))
+GUEST_MAX_MBPS   = float(os.environ.get("GUEST_MAX_MBPS", "0"))
+# Sustained, not instantaneous: one hot sample or one bitrate spike during a
+# keyframe must not end a session. Both limits must hold for this many
+# consecutive update pings (~10 s apart) before the session is dropped.
+GUEST_LIMIT_STRIKES = int(os.environ.get("GUEST_LIMIT_STRIKES", "3"))
+_guest_strikes = {"temp": 0, "rate": 0}
+
 _guest_lock = threading.Lock()
 _guest = {"state": "free", "name": None, "addr": None, "start": None,
           "last_seen": None, "grace_started": None, "kill": False,
@@ -954,6 +976,9 @@ def _guest_end_locked(reason):
                 else None)
     if _stall_timer[0]:
         _stall_timer[0].cancel(); _stall_timer[0] = None
+    # strikes belong to the session that earned them: a guest ended for heat
+    # must not hand its counters to the innocent next one
+    _guest_strikes["temp"] = _guest_strikes["rate"] = 0
     _guest.update(state="free", name=None, addr=None, start=None,
                   last_seen=None, grace_started=None, kill=False,
                   terminating=None, cooldown_until=cooldown,
@@ -1233,6 +1258,13 @@ def guest_update(name):
                 _guest["terminating"] = "session cap"
                 _guest_save()
                 return 403
+            # resource guard, evaluated on the same 10 s ping that enforces the
+            # cap and the kill (see GUEST_MAX_TEMP_C / GUEST_MAX_MBPS)
+            hit = _guest_limits_exceeded()
+            if hit:
+                _guest["terminating"] = hit
+                _guest_save()
+                return 403
             _guest_save()
             return 200
         if _guest["state"] == "free":
@@ -1263,6 +1295,48 @@ def guest_update(name):
             _guest_save()
             print(f"guest re-adopted from grace on update ping: {name}", flush=True)
     return 200
+
+
+def _guest_limits_exceeded():
+    """Resource guard for a live guest, called from the update ping. Returns a
+    termination reason (shown to the pusher on the player page) or None.
+
+    Strikes rather than a single sample: temperature swings a few degrees
+    between reads and a keyframe can spike the manifest bandwidth, so a limit
+    must hold for GUEST_LIMIT_STRIKES consecutive pings (~30 s at the default
+    3) before it ends a session. A single good sample resets that limit's
+    counter, so a session that backs off is forgiven rather than accumulating
+    strikes forever."""
+    if not (GUEST_MAX_TEMP_C or GUEST_MAX_MBPS):
+        return None
+    reason = None
+
+    if GUEST_MAX_TEMP_C:
+        t = temp_c()                     # cheap sysfs read, no docker call
+        if t is not None and t >= GUEST_MAX_TEMP_C:
+            _guest_strikes["temp"] += 1
+            print(f"guest resource guard: {t}C >= {GUEST_MAX_TEMP_C}C "
+                  f"({_guest_strikes['temp']}/{GUEST_LIMIT_STRIKES})", flush=True)
+            if _guest_strikes["temp"] >= GUEST_LIMIT_STRIKES:
+                reason = f"host temperature {t}C (limit {GUEST_MAX_TEMP_C}C)"
+        else:
+            _guest_strikes["temp"] = 0
+
+    if GUEST_MAX_MBPS and not reason:
+        f = stream_fmt()                 # reads the MPD, no docker call
+        bps = (f.get("video_bitrate") or 0) + (f.get("audio_bitrate") or 0)
+        m = bps / 1_000_000
+        if m > GUEST_MAX_MBPS:
+            _guest_strikes["rate"] += 1
+            print(f"guest resource guard: {m:.1f} Mbps > {GUEST_MAX_MBPS} Mbps "
+                  f"({_guest_strikes['rate']}/{GUEST_LIMIT_STRIKES})", flush=True)
+            if _guest_strikes["rate"] >= GUEST_LIMIT_STRIKES:
+                reason = (f"stream bitrate {m:.1f} Mbps exceeds this server's "
+                          f"limit of {GUEST_MAX_MBPS:g} Mbps")
+        else:
+            _guest_strikes["rate"] = 0
+
+    return reason
 
 
 def guest_kill():
