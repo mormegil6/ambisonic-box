@@ -46,6 +46,13 @@
 #   env: BED_FIT=tempo|trim|native  LOOP_PERIOD=<s>  TOTAL=120  OFFSET=1.0
 #        BED_GAIN=<linear>  VOICE_GAIN=<linear>  KEY_THRESH/KEY_TOL/KEY_SOFT
 #        FPS=24  (the frame grid the period is quantised to)
+# AV1 (SVT-AV1), matching the delivery ladder rather than introducing a second
+# codec: the ladder re-encodes from this file, so a VP9 master would add a
+# whole lossy generation for nothing. PRESET 5 is the floor SVT-AV1 accepts at
+# 8K on current builds (it refuses slower presets outright rather than
+# degrading); CRF 28 sits a little above the ladder's 30 because this is the
+# source the rungs are cut from. Override with AV1_CRF / AV1_PRESET.
+#
 # Preview fast with W H = 1920 960.
 set -euo pipefail
 
@@ -119,8 +126,8 @@ lumakey=threshold=${KEY_THRESH}:tolerance=${KEY_TOL}:softness=${KEY_SOFT}[key];\
 [bg][key]overlay=format=auto,format=yuv420p[v];\
 [2:a][3:a]amix=inputs=2:normalize=0:duration=longest[a]" \
     -map "[v]" -map "[a]" -t "$TOTAL" -r "$FPS" \
-    -c:v libvpx-vp9 -b:v 0 -crf 30 -row-mt 1 -tile-columns 4 -threads 8 \
-    -speed 2 -g "$FPS" -pix_fmt yuv420p -color_range tv \
+    -c:v libsvtav1 -crf "${AV1_CRF:-28}" -preset "${AV1_PRESET:-5}" \
+    -svtav1-params "tune=0" -g "$((FPS*2))" -pix_fmt yuv420p -color_range tv \
     -c:a libopus -mapping_family 255 -b:a 1024k -ar 48000 \
     "$OUT"
 

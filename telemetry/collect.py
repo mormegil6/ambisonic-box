@@ -578,7 +578,10 @@ GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
 GUEST_GW_SECRET = os.environ.get("GUEST_GW_SECRET", "")
 TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
 # only for deciding whether srt-gateway belongs in the dashboard's service row;
-# the gateway itself is the authority on whether it is actually listening
+# the gateway itself is the authority on whether it is actually listening.
+# The "0" is the bare-process fallback for the var being absent entirely;
+# compose injects SRT_ENABLED=${SRT_ENABLED:-1} here too, so under the shipped
+# stack this reads True unless the operator sets 0.
 SRT_ENABLED = os.environ.get("SRT_ENABLED", "0") == "1"
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 # Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
@@ -735,7 +738,7 @@ def _guest_save():
 # statistics, but the IP column is REDACTED once it ages past the window. The
 # country, resolved at write time and kept, is the aggregate-level residue,
 # exactly like viewers.csv's country codes. Container stdout logs rotate by
-# size, not by days; stdout logs rotate by size, so they are a retention residual.
+# size, not by days, so they are a retention residual.
 GUEST_RETENTION_S = int(os.environ.get("GUEST_RETENTION_DAYS", "30")) * 86400
 # IP bans (dashboard "End + ban"). Clamped to the retention window on
 # purpose: expiry and IP redaction are ONE event, so a ban outliving the

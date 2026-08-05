@@ -8,7 +8,7 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 |---|---|---|---|
 | 1935 | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
 | 8890/udp | `srt-gateway` | SRT contribution `srt://<host>:8890?streamid=<name>` (native OBS multitrack), the recommended ingest; bound by default, but admits nobody unless `GUEST_ENABLED=1` (`SRT_ENABLED=0` unbinds it) | public if you run the SRT guest endpoint. The gateway is privilege-separated (no docker socket, no volumes, no STREAM_KEY, read-only rootfs) because it terminates hostile pre-auth internet bytes |
-| 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET) and `/api/start` (POST, rate-limited 6r/m burst 3) | **public** (front with TLS / a tunnel) |
+| 8080 | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET), `/api/start` (POST, rate-limited 6r/m burst 3) and `/api/guest/report` (POST, 1r/m burst 3) | **public** (front with TLS / a tunnel) |
 | 8081 | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so a plain override list can widen but not narrow a base mapping (narrowing needs `!override`/`!reset` on the key). Firewall the port or edit the base file |
 | 8090 | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
 
@@ -31,16 +31,17 @@ Internal-only, never published: earshot's RTMP relay + `on_publish` callback (19
 
 ### Control routes proxied on 8080
 
-`hoast-player` reverse-proxies exactly three telemetry routes to the public port (`/api/live`, `/api/start`, `/api/guest/report`), both as exact-match `location =` blocks, so nothing else on 8090 is reachable from outside:
+`hoast-player` reverse-proxies exactly three telemetry routes to the public port (`/api/live`, `/api/start`, `/api/guest/report`), all three as exact-match `location =` blocks, so nothing else on 8090 is reachable from outside:
 
 | Route | Method | Proxies to | Notes |
 |---|---|---|---|
 | `/api/live` | GET | `telemetry:8090/api/live` | readiness poll while a visitor waits out a cold start |
 | `/api/start` | POST | `telemetry:8090/api/start` | starts the loop source; `limit_req` zone `startreq`, 6r/m, burst 3 |
+| `/api/guest/report` | POST | `telemetry:8090/api/guest/report` | viewer's abuse report against the live guest session; `limit_req` zone `reportreq`, 1r/m, burst 3, keyed on `$viewer_ip` rather than `$binary_remote_addr` so a tunnel does not share one bucket. nginx passes the reporter's IP and country as `X-Viewer-IP` / `X-Viewer-CC` for the moderation alert |
 
 `/api/stop` is deliberately **not** proxied: stopping the source is the one verb a visitor could use to spoil the demo for everyone else, so it stays on telemetry's own 127.0.0.1-bound port.
 
-The docker socket telemetry mounts is read-write, because starting and stopping the source needs it. What keeps that safe is this route list, not the mount: if you add a third `/api` route here, it must not pass any request-controlled string into a docker invocation.
+The docker socket telemetry mounts is read-write, because starting and stopping the source needs it. What keeps that safe is this route list, not the mount: if you add a fourth `/api` route here, it must not pass any request-controlled string into a docker invocation.
 
 ### Player URL flags
 

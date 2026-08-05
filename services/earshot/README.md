@@ -44,7 +44,7 @@ A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's `sugg
 
 ### 4. `src/nginx-transcoder/nginx*.conf`: `wait_key` / `wait_video` on the relay
 
-The transcoder is an nginx-rtmp `exec` ffmpeg that *subscribes* to the internal relay, and a subscriber joining a live stream gets audio immediately but no decodable video until the next keyframe - up to a full GOP later. The DASH muxer records that skew as a leading empty edit (`elst media_time = -1`) on the video track, which Firefox honours and Chromium's MSE does not, so Chromium paints video early by the same amount. These two directives start the relayed video at a keyframe and hold audio until video flows, so the tracks start together and no edit box is written at all. Measured: empty edits on 10/10 joins without them, `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 with them. See the measurement notes being written up for publication (see the top-level README, Documentation).
+The transcoder is an nginx-rtmp `exec` ffmpeg that *subscribes* to the internal relay, and a subscriber joining a live stream gets audio immediately but no decodable video until the next keyframe - up to a full GOP later. The DASH muxer records that skew as a leading empty edit (`elst media_time = -1`) on the video track, which Firefox honours and Chromium's MSE does not, so Chromium paints video early by the same amount. These two directives start the relayed video at a keyframe and hold audio until video flows, so the tracks start together and no edit box is written at all. Measured in the restart-loop run: empty edits on 10/10 joins without them, `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 encoder restarts with them. That run is the source of both counts, and `src/nginx-transcoder/nginx-no-ssl.conf:30-34` quotes the same two figures beside the directives; see the measurement notes being written up for publication (top-level README, Documentation) for the run itself.
 
 ### 5. `entrypoint.sh` + both nginx confs: `DASH_NAME` default and validation
 
@@ -66,9 +66,11 @@ nginx-rtmp accepts the relayed stream from `rtmp-ingest` on :1935 (internal only
 
 ```
 ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
-  -strict -2 -c:a libopus -mapping_family 255 ${FFMPEG_FLAGS} \
+  -strict -2 -c:a libopus -mapping_family 255 -b:a 1024k ${FFMPEG_FLAGS} \
   -f dash /opt/data/dash/${DASH_NAME}.mpd
 ```
+
+That is the line as it stands in `src/nginx-transcoder/nginx-no-ssl.conf:58`, which is the canonical copy: read the rationale for `-b:a 1024k` and for keeping `$name` on `-i` only in the comment block directly above it (`nginx-no-ssl.conf:38-57`) rather than here. `nginx.conf` (the `SSL_ENABLED=true` variant) must carry the identical exec line; it lost `-b:a 1024k` at one point, which meant an SSL deployment ran an audio configuration that was never tested, so diff the two lines whenever either changes.
 
 16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see `.env.example` at the repo root - `-c:v copy` passthrough by default, VP9 realtime documented as the opt-in codec policy). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
 

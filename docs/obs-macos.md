@@ -89,7 +89,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 |---|---|
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000` |
+| File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000&pkt_size=1128` |
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
@@ -98,7 +98,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 <div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="57%" alt="OBS Settings, Output, Recording tab: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, an srt:// URL, Container Format mpegts, Video Bitrate 6000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
 
-<p align="center"><em>Captured against a local test listener; point the host and port at your own box. The URL form is what matters - note <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else.</em></p>
+<p align="center"><em>Captured against a local test listener; point the host and port at your own box. The URL form is what matters - note <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else. The capture also predates the packet-size finding, so its URL has no <code>&amp;pkt_size=1128</code>; the table above does, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>.</em></p>
 
 The screenshot shows **`h264_videotoolbox`**, Apple's hardware encoder, which keeps the work off the CPU. `libx264` is the software fallback and is present on every machine. Whichever you choose, keep the keyframe interval at 60 frames - 2 s at 30 fps - because that is what the segment duration downstream is aligned to.
 

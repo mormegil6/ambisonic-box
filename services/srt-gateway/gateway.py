@@ -46,7 +46,12 @@ import time
 import urllib.request
 
 MODE          = os.environ.get("SRT_MODE", "guest")           # guest | owner
-ENABLED       = os.environ.get("SRT_ENABLED", "0") == "1"
+ENABLED       = os.environ.get("SRT_ENABLED", "0") == "1"     # "0" is the
+                                                              # bare-process fallback for the var
+                                                              # being absent entirely; compose
+                                                              # always injects
+                                                              # SRT_ENABLED=${SRT_ENABLED:-1}, so
+                                                              # the shipped default is ENABLED
 LISTEN_PORT   = 8890                                          # container-side, fixed;
                                                               # SRT_PORT only moves the host mapping
 LATENCY_MS    = int(os.environ.get("SRT_LATENCY_MS", "2000"))
@@ -579,8 +584,13 @@ def main():
     gw = Gateway()
     threading.Thread(target=serve_status, args=(gw,), daemon=True).start()
     if not ENABLED:
-        # disabled is the shipped default: never bind the SRT port, keep the
-        # health endpoint up so compose healthchecks stay green
+        # Reached only when SRT_ENABLED=0 is set explicitly: the shipped
+        # default is ENABLED (docker-compose.yml injects ${SRT_ENABLED:-1} for
+        # this service and for telemetry; see .env.example and the README
+        # variable table). Disabled means never bind the SRT port while
+        # keeping the health endpoint up, so compose healthchecks stay green.
+        # The port alone admits nobody anyway: guest mode still needs
+        # GUEST_ENABLED=1.
         log(f"srt-gateway idle (SRT_ENABLED=0); status on :{STATUS_PORT}")
         signal.pause()
         return

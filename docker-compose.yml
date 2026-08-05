@@ -61,13 +61,17 @@ services:
       # (services/hoast-player/nginx.conf) and telemetry globs both.
       # Two consequences of the shorter flag list, both deliberate: with no
       # -g at this stage the GOP is whatever the contribution encoder sends,
-      # and with no -seg_duration the muxer falls back to its 5 s default,
-      # cut at the next contribution keyframe. Add -seg_duration 2 back if you
-      # need the 2 s cadence the VP9 default used.
+      # and with no -seg_duration the muxer's segment boundary follows those
+      # contribution keyframes. Measured, not assumed: at -g 60 / 29.97 fps that
+      # is a uniform 2.002 s cadence (lip-sync-test/RESULTS.md, "Decision: 2 s"),
+      # matching the 2 s grid the VP9 default used.
       # Realtime VP9 remains supported and is kept as a documented alternative
-      # in .env.example. It is not the default because the only VP9 config ever
-      # measured cost 310 % CPU / 90.3 C at half resolution, and the unscaled
-      # 4K variant has never been run outside the small synthetic test source.
+      # in .env.example. It is not the default because VP9 has been measured
+      # TWICE on this host and both runs were over budget: 310 % CPU / 90.3 C at
+      # half resolution, and 459.6 % CPU BELOW REALTIME at the unscaled 4K the
+      # .env.example line would actually run. 4K VP9 is measured-and-failed here,
+      # not untried, and that second run is the strongest argument for this
+      # default. Conditions behind the numbers: README, "Video codec".
       # For the VP9 line, keep -g at segment duration x fps (-g 60 at 29.97/30,
       # -g 50 at 25) or the muxer cuts at the next keyframe past the target.
       # suggestedPresentationDelay >= 30 s is patched into the muxer itself
@@ -142,7 +146,7 @@ services:
       - DASH_NAME=${DASH_NAME:-hoast_demo}
       # Demo content, ON by default: synthesise content/demo.mp4 in-container
       # when missing (no network involved) and fetch the two VOD reference
-      # masters from the pinned vod-clips-v1 release (~373 MB once, background,
+      # masters from the pinned vod-clips release (~373 MB once, background,
       # SHA-256-pinned, fail-soft). 0 = neither: the loop idles until you
       # provide content/demo.mp4 yourself.
       - DEMO_CONTENT=${DEMO_CONTENT:-1}
