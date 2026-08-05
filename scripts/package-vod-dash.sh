@@ -30,3 +30,17 @@ docker run --rm -v "$ROOT":/content google/shaka-packager:v3.7.2 packager \
   $args --mpd_output "/content/$drel/$MPD"
 
 echo "packaged: $DASH/$MPD"; ls -lh "$DASH"
+
+# Caption sidecars, if the clip has any. These are NOT packaged into the MPD
+# (side-loaded native text tracks are used deliberately - see PAPER-NOTES 14),
+# so nothing else copies them, and a repackage into an existing directory
+# would otherwise leave the PREVIOUS clip's captions in place. That is exactly
+# what happened on the 2026-08-05 six-direction rebuild: the manifest and every
+# rendition were new, the captions still said front/right/left/top.
+CLIP_BASE="$(basename "$DASH")"
+for _vtt in "$(dirname "$LADDER")"/masters/*"${CLIP_BASE}"*_captions_*.vtt; do
+    [ -e "$_vtt" ] || continue
+    _lang="${_vtt##*_captions_}"; _lang="${_lang%.vtt}"
+    cp "$_vtt" "$DASH/captions_${_lang}.vtt"
+    echo "  captions: $(basename "$_vtt") -> captions_${_lang}.vtt"
+done
