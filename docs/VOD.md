@@ -33,6 +33,27 @@ scripts/make-360-testcard.py --pattern dummy --width 3072   # projection check
 
 The rendered 8K card ships as a **release asset** alongside the clip masters and caption sidecars; only the generator is tracked here, so a fresh clone reproduces the card rather than downloading it.
 
+### Sphere tessellation: what the same card also caught
+
+The card doubles as a check on the *player's* rendering, not just the delivery pipeline. HOAST360 textures the sphere with three.js's `SphereGeometry`: UV coordinates are exact at each mesh vertex but interpolated **linearly** across every quad, while the equirect-to-sphere mapping is trigonometric - so a straight line in the source bows slightly inside each quad. This is a rendering artefact only: the delivered bytes never change, only how densely the sphere is triangulated.
+
+videojs-xr's own default is a 32x32 mesh (11.25° per quad). On photographic content the bowing hides in the noise; on this card's grids, colour-bar edges, concentric circles and Siemens star, it does not, which is exactly why a line-based test card is the right instrument for catching it. `scripts/measure-sphere-distortion.py` quantifies the error for a cone of viewing rays, comparing each ray's true direction against the direction its *sampled* texel actually belongs to, then expresses it in screen pixels at the player's 75° FOV over a 1920 px viewport (one pixel = 2.34 arcmin):
+
+| mesh | equator | nadir |
+|---|---|---|
+| 32x32 (was) | 5.3 px | 7.1 px |
+| 128x64 | 0.55 px | 0.88 px |
+| **256x128 (shipped)** | **0.14 px** | **0.22 px** |
+| 512x256 | 0.03 px | 0.05 px |
+
+The error falls off roughly quadratically, so 256x128 is the knee of the curve rather than an arbitrary round number: it sits about 5x under the one-pixel threshold even at the nadir, where the mesh's quads degenerate into slivers and every meridian converges, so the same magnitude reads far louder there than the numbers alone suggest. Doubling again to 512x256 would spend four times the triangles shrinking an error that is already invisible.
+
+<div align="center"> <img src="images/sphere-tessellation-before-after.png" width="85%" alt="Two renders of the same 360 test card's DOWN wall, viewed near the nadir at 60 degree FOV: the left panel rendered through a 32x32 sphere mesh, the right through the shipped 256x128 mesh. Both show a Siemens star; the geometric bowing the measurement quantifies is a fraction of a degree and reads most clearly at native resolution in the spokes nearest the crosshair, not in a downscaled comparison."> </div>
+
+<p align="center"><em>The measured fix, rendered rather than only asserted: the same source bytes sampled through the old 32x32 mesh (left) and the shipped 256x128 mesh (right), reproducing the player's own faceted sampling on a still frame rather than a screenshot. Deliberately the worst case, not the typical one - the nadir is where the error reads loudest, per the reasoning above - so a straight-on view shows even less. Reproduce with <code>scripts/render-sphere-distortion.py</code>.</em></p>
+
+This is a player-side fix, not specific to this stack: it landed in the vendored videojs-xr copy and improves every equirect stream the player renders, live HOA feed included, with no re-encode and no change to the delivered DASH package.
+
 ## Captions
 
 Each clip carries WebVTT subtitles beside its segments as `captions_<lang>.vtt`, declared per clip in the `CLIPS` table in `services/hoast-player/index.html`:
