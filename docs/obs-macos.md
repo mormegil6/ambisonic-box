@@ -96,7 +96,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
 | Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
-<div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="75%" alt="OBS Settings, Output, Recording tab on macOS: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
+<div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="92%" alt="OBS Settings, Output, Recording tab on macOS: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
 
 <p align="center"><em>The URL carries both parameters that matter: <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else, and <code>&amp;pkt_size=1128</code>, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>. Substitute your own host and stream name for the two placeholders. The 20000 Kbps here is for 8K; 6000 suits 4096x2048, so set it against your own resolution and uplink rather than copying the figure.</em></p>
 
