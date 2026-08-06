@@ -103,6 +103,17 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
+    # nginx-rtmp's exec child close()s every fd from 0 to sysconf(_SC_OPEN_MAX)
+    # before execvp. A host whose containerd unit sets LimitNOFILE=infinity
+    # hands the container 1073741816, turning that loop into ~19 min of
+    # close()=EBADF at 100% CPU, so ffmpeg never starts and no DASH is written.
+    # Any bounded value fixes it; 1024/524288 matches what an unaffected host
+    # already gets. Found on a Raspberry Pi 4 (arm64); not architecture-specific
+    # - it is whatever LimitNOFILE the host's containerd unit hands containers.
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 524288
     restart: unless-stopped
     logging: *bounded-logs
 
