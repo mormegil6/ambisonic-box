@@ -159,13 +159,13 @@ Everything else - bans, reporting, the privacy notice, the session log and its r
 
 **Off by default:** the stack's purpose is live streaming, VOD is opt-in. Set `VOD_ENABLED=1` to serve the on-demand page at `/vod/`; disabled, the `/vod/` and `/vod-dash/` routes return 404.
 
-Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay, so the clip checks itself) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips), and only the generators and the player wiring are tracked.
+Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay that shows where each read is supposed to come from, so a listener can hear whether the delivered audio still agrees with the picture) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips), and only the generators and the player wiring are tracked.
 
 Generation, packaging, the 360 test card and its projection check, captions, headset playback and serving VOD from object storage: [docs/VOD.md](docs/VOD.md).
 
-<div align="center"> <img src="docs/images/directions-energy-frame.png" width="88%" alt="A frame of the directions reference clip: the equirectangular 360 test card with a bright energy-visualisation glow sitting over the wall labelled RIGHT, at the moment the word right is spoken"> </div>
+<div align="center"> <img src="docs/images/directions-energy-frame.png" width="70%" alt="A frame of the directions reference clip: the equirectangular 360 test card with a bright energy-visualisation glow sitting over the wall labelled RIGHT, at the moment the word right is spoken"> </div>
 
-<p align="center"><em>One frame of the <code>directions</code> reference clip. The glow is the ambisonic energy of the 16-channel bed, drawn in the same equirectangular projection as the picture, so it sits on whichever wall the sound is actually coming from. Here the word being spoken is <em>right</em>. That makes the clip self-checking: if a glow lands away from the wall it names, the ambisonic chain is wrong.</em></p>
+<p align="center"><em>One frame of the <code>directions</code> reference clip. The glow was rendered from the ambisonic stem before encoding and is baked into the picture, so it cannot move: together with the wall label it is a fixed reference for where the sound is supposed to be. What is under test is the audio. Here the word being spoken is <em>right</em>, so it should be heard from the right; if it arrives from anywhere else, the delivery chain has scrambled the channels while the picture stayed put.</em></p>
 
 ## Configuration
 
