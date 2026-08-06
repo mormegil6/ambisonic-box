@@ -4,8 +4,10 @@
 #
 # Why this exists as its own container: the component that parses hostile
 # pre-auth internet bytes (SRT handshakes, mpegts, AAC) must not be the
-# component that holds the docker socket (telemetry) or the LIVE_APP_KEY +
-# public relay (rtmp-ingest). This process holds neither. It terminates SRT
+# component that holds the docker socket (telemetry) or the RTMP_OWNER_KEY +
+# public relay (rtmp-ingest). The guest instance holds neither; only a
+# Tailscale-only owner instance carries RTMP_OWNER_KEY (see
+# docker-compose.override.yml). This process terminates SRT
 # with GStreamer's srtsrc - the only tool in the stack that exposes the real
 # caller IP and streamid pre-accept (ffmpeg's srt_accept discards both, so
 # ban-by-IP would be impossible on an ffmpeg listener) - and republishes each
@@ -62,7 +64,7 @@ INGEST_URL    = os.environ.get("INGEST_URL",
                                "rtmp://rtmp-ingest:1935/guest" if MODE == "guest"
                                else "rtmp://rtmp-ingest:1935/live")
 GW_SECRET     = os.environ.get("GUEST_GW_SECRET", "")
-LIVE_APP_KEY    = os.environ.get("LIVE_APP_KEY", "")              # owner mode only
+RTMP_OWNER_KEY = os.environ.get("RTMP_OWNER_KEY", "")         # owner mode only
 BUFFER_MB     = int(os.environ.get("SRT_BUFFER_MB", "64"))
 SNAP_POLL_S   = 2      # snapshot refresh cadence
 SNAP_TTL_S    = 10     # older than this = arbiter unreachable = fail closed
@@ -146,7 +148,7 @@ def child_command(name, ip):
     if MODE == "guest":
         target = f"{INGEST_URL}/{name}?realip={ip}&gw={GW_SECRET}"
     else:
-        target = f"{INGEST_URL}/{name}?token={LIVE_APP_KEY}"
+        target = f"{INGEST_URL}/{name}?token={RTMP_OWNER_KEY}"
     return ["ffmpeg", "-hide_banner", "-loglevel", "warning",
             "-analyzeduration", "10M", "-probesize", "20M",
             "-f", "mpegts", "-i", "pipe:0",
@@ -358,7 +360,7 @@ class Gateway:
     def _child_log(self, s):
         for line in s["child"].stderr:
             # ffmpeg prints the full output URL on any open failure; the guest
-            # target carries ?gw=<secret> (owner: ?token=<LIVE_APP_KEY>), so
+            # target carries ?gw=<secret> (owner: ?token=<RTMP_OWNER_KEY>), so
             # scrub before it reaches docker logs - same care as access_log off
             clean = _SECRET_RE.sub(r"\1=***", line.decode(errors="replace").rstrip())
             log(f"[ffmpeg {s['name']}] {clean}")
@@ -600,12 +602,12 @@ def main():
         # extra layer, not the one holding attribution up.
         log("note: GUEST_GW_SECRET unset - caller attribution rests on the "
             "gateway's address alone; set one to add a shared-secret check")
-    if MODE == "owner" and not LIVE_APP_KEY:
-        log("FATAL: owner mode requires LIVE_APP_KEY")
+    if MODE == "owner" and not RTMP_OWNER_KEY:
+        log("FATAL: owner mode requires RTMP_OWNER_KEY")
         sys.exit(1)
     if MODE == "owner" and not PASSPHRASE:
         # owner mode does no per-caller auth (any completed handshake is
-        # republished with the real LIVE_APP_KEY), so the SRT passphrase is the
+        # republished with the real RTMP_OWNER_KEY), so the SRT passphrase is the
         # only thing standing between a public caller and an owner-broadcast
         # takeover. Required, not optional, in this mode.
         log("FATAL: owner mode requires SRT_PASSPHRASE (it is the caller gate; "

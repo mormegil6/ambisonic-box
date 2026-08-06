@@ -47,16 +47,27 @@ http {
     server {
         listen 8080;
 
-        # Accept a publish when either the stream name or a ?token= query arg
-        # matches the configured stream key:
-        #   rtmp://<host>:1935/live/${LIVE_APP_KEY}
-        #   rtmp://<host>:1935/live/<anything>?token=${LIVE_APP_KEY}
+        # Two separate secrets gate this app, because the two publishers have
+        # different threat models. RTMP_OWNER_KEY authenticates a publish that
+        # arrives over the PUBLIC :1935 port (a real OBS/SRT-relay owner push)
+        # and is checked by NAME (OBS's plain Stream Key field) or by ?token=
+        # (the srt-gateway owner relay, internal but sharing the same secret
+        # as its RTMP counterpart on purpose). LIVE_APP_KEY only ever arrives
+        # as ?token= from loop-source over the docker-internal network - it
+        # never faces the public internet, so it stays a low-stakes internal
+        # handshake rather than a second public-facing credential:
+        #   rtmp://<host>:1935/live/${RTMP_OWNER_KEY}
+        #   rtmp://<host>:1935/live/<anything>?token=${RTMP_OWNER_KEY}
+        #   rtmp://<host>:1935/live/<anything>?token=${LIVE_APP_KEY}   (loop-source only)
         location = /auth {
             # The publish credential arrives here as ?token= (or the stream
             # name); keep it out of the access log so the key is not written to
             # stdout/docker logs on every publish.
             access_log off;
-            if ($arg_name = '${LIVE_APP_KEY}') {
+            if ($arg_name = '${RTMP_OWNER_KEY}') {
+                return 418;
+            }
+            if ($arg_token = '${RTMP_OWNER_KEY}') {
                 return 418;
             }
             if ($arg_token = '${LIVE_APP_KEY}') {
