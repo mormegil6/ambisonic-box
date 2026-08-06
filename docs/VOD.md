@@ -18,11 +18,11 @@ Two are published as [release assets](https://github.com/mormegil6/hoa-360-strea
 
 <div align="center"> <img src="images/testcard-360-equirect.png" width="62%" alt="The 360 test card in equirectangular projection: six broadcast test screens arranged as the walls of a cube (FRONT, LEFT, RIGHT, BACK, UP, DOWN), each labelled with its centre bearing and carrying colour bars, a grey staircase, PLUGE, a multiburst, a checkerboard, a detail patch and a Siemens star. The cube geometry is what makes the faces bow outward in this projection and appear flat and undistorted inside a 360 viewer."> </div>
 
+<p align="center"><em>The card as stored (equirectangular). The bowing is the projection: inside a 360 viewer each face reads flat, square and undistorted.</em></p>
+
 <div align="center"> <img src="images/viewer-front-90deg.png" width="45%" alt="The FRONT wall of the 360 test card as a viewer sees it inside the sphere at a 90 degree field of view: the card is flat and undistorted, circles round and lines straight"> <img src="images/viewer-up-90deg.png" width="45%" alt="The UP wall of the same card seen by a viewer looking straight up: an ordinary ceiling card rather than the smeared blob equirectangular drawing produces at a pole"> </div>
 
 <p align="center"><em>The same card from inside, at a 90&deg; field of view: front (left) and straight up (right). This is the point of the cube arrangement. The front wall is flat and undistorted despite the bowing seen in the equirectangular image above, and the pole is an ordinary ceiling card rather than the smear that drawing directly in equirectangular produces there.</em></p>
-
-<p align="center"><em>The card as stored (equirectangular). The bowing is the projection: inside a 360 viewer each face reads flat, square and undistorted.</em></p>
 
 ```
 scripts/make-360-testcard.py -o content/vod/masters/testcard-360_8k.png
