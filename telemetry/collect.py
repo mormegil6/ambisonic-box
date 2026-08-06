@@ -939,6 +939,21 @@ def guest_public():
     # commonest failure, wrong audio layout, is also the most confusing)
     if st.get("last_end") and now - st["last_end"] < 600 and st.get("last_end_reason"):
         out["last_end_reason"] = st["last_end_reason"]
+    # guest_publish() 403s every guest for the whole owner session (the
+    # owner-live latch), but until now that never showed here: a would-be
+    # guest reading "free" had no way to know a push would be rejected.
+    # Only override when the guest slot is otherwise idle - an ACTIVE guest
+    # session already reports its own state, and ends the moment the owner
+    # takes over anyway. Not nested under _guest_lock (already released
+    # above): guest_public() is only ever called from outside both locks
+    # (see the no-cross-lock-calls invariant on guest_publish's handover
+    # section), so acquiring _owner_lock here on its own is safe.
+    if st["state"] == "free":
+        with _owner_lock:
+            owner_live = _owner["live"]
+        if owner_live:
+            out["state"] = "owner"
+            out.pop("cooldown_s", None)
     return out
 
 

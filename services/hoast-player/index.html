@@ -519,6 +519,8 @@
                 el.textContent = 'switching over...';
             } else if (ep.state === 'grace') {
                 el.textContent = 'reconnect window' + (ep.remaining_s != null ? ' (' + ep.remaining_s + ' s)' : '');
+            } else if (ep.state === 'owner') {
+                el.textContent = 'taken by owner';
             } else {
                 el.textContent = ep.state;
             }

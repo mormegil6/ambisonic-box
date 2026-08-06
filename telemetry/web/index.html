@@ -320,6 +320,7 @@ function renderReach(s){
     tc.hidden = !tn;
     if (tn) {
       tc.textContent = '';
+      tc.title = 'Cloudflare Tunnel: connections keeping the public site reachable without an open inbound port';
       const d = document.createElement('span'); d.className = 'dot';
       d.style.background = tn.connected ? col('--grn') : (tn.connected === false ? col('--red') : col('--amb'));
       tc.appendChild(d);
@@ -336,6 +337,7 @@ function renderReach(s){
     vc.hidden = !vo;
     if (vo) {
       vc.textContent = '';
+      vc.title = 'reachability probe: can this box reach the VOD origin (object storage) it serves clips from';
       const d = document.createElement('span'); d.className = 'dot';
       d.style.background = vo.ok ? col('--grn') : col('--red');
       vc.appendChild(d);
@@ -361,6 +363,7 @@ function renderReach(s){
     if (bk) {
       sec.hidden = false;
       bc.textContent = '';
+      bc.title = 'age since the last successful config/state backup pull';
       var d = document.createElement('span'); d.className = 'dot';
       d.style.background = bk.stale ? col('--red') : col('--grn');
       bc.appendChild(d);
@@ -453,6 +456,8 @@ async function tick(){
       gs.textContent = 'switching over: ' + (ep.name || '?');
     } else if (ep.state === 'grace') {
       gs.textContent = 'reconnect window' + (ep.remaining_s != null ? ' (' + ep.remaining_s + 's)' : '');
+    } else if (ep.state === 'owner') {
+      gs.textContent = 'taken by owner';
     } else {
       gs.textContent = ep.cooldown_s ? ('free (cooldown ' + ep.cooldown_s + 's)') : 'free';
     }
@@ -524,6 +529,15 @@ async function tick(){
   // service lives in this one row.
   const SVC_ORDER = {'srt-gateway':0,'srt-gateway-owner':1,'rtmp-ingest':2,'earshot':3,'hoast-player':4};
   const SVC_RESTART = {'srt-gateway':'srt-gateway','srt-gateway-owner':'srt-gateway-owner','rtmp-ingest':'rtmp-ingest','earshot':'earshot-ingest','hoast-player':'hoast-player'};
+  // what each pill IS, prefixed onto the health-state tooltip so hovering
+  // explains the service, not just whether it is currently up
+  const SVC_DESC = {
+    'srt-gateway': 'SRT contribution ingest (guest)',
+    'srt-gateway-owner': 'SRT contribution ingest (owner, Tailscale-only)',
+    'rtmp-ingest': 'RTMP contribution ingest + publish auth',
+    'earshot': 'transcode to 16-ch Opus + DASH segmentation',
+    'hoast-player': 'player + DASH delivery',
+  };
   const svcs = (s.services||[]).slice().sort((a,b)=>(SVC_ORDER[a.name]??9)-(SVC_ORDER[b.name]??9));
   $('services').innerHTML = (svcs.map(sv=>{
     // amber while a healthcheck is still 'starting': red implied broken,
@@ -539,7 +553,8 @@ async function tick(){
               : (sv.healthy ? "healthy" : (sv.state||"stopped"));
     const rk = SVC_RESTART[sv.name];
     const rb = rk ? `<button class="rsv" data-svc="${rk}" title="restart">&#x21bb;</button>` : '';
-    const t = ` title="${lbl}"`;
+    const desc = SVC_DESC[sv.name];
+    const t = ` title="${desc ? desc + '\n' : ''}${lbl}"`;
     return `<span class="chip"${t}><span class="dot" style="background:${c}"></span>${sv.name}${rb}</span>`;
   }).join("") || '<span class="chip">no services</span>')
   + `<span class="chip" title="this page"><span class="dot" style="background:${col('--grn')}"></span>telemetry<button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
