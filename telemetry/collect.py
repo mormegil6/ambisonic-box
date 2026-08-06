@@ -1767,11 +1767,14 @@ def guest_report(reporter_ip, reporter_cc):
 # relay (the standing rule, now encoded rather than remembered).
 # srt-gateway restarts alone safely: it holds no resolve-once state (its
 # per-session ffmpeg dials rtmp-ingest fresh each time), so the only cost is
-# dropping an SRT session in progress.
+# dropping an SRT session in progress. srt-gateway-owner is the same
+# gateway.py, same reasoning, just SRT_MODE=owner instead of guest - not in
+# the base compose file, only present when the private override runs it.
 RESTARTABLE = {"rtmp-ingest": ["rtmp-ingest"],
                "hoast-player": ["hoast-player"],
                "telemetry": ["telemetry"],
                "srt-gateway": ["srt-gateway"],
+               "srt-gateway-owner": ["srt-gateway-owner"],
                "earshot-ingest": ["earshot", "rtmp-ingest"]}
 
 

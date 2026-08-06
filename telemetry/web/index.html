@@ -522,26 +522,26 @@ async function tick(){
   // earshot+ingest pair (nginx-rtmp resolves its push target once at
   // startup), and telemetry (this page) is appended so every restartable
   // service lives in this one row.
-  const SVC_ORDER = {'srt-gateway':0,'rtmp-ingest':1,'earshot':2,'hoast-player':3};
-  const SVC_RESTART = {'srt-gateway':'srt-gateway','rtmp-ingest':'rtmp-ingest','earshot':'earshot-ingest','hoast-player':'hoast-player'};
+  const SVC_ORDER = {'srt-gateway':0,'srt-gateway-owner':1,'rtmp-ingest':2,'earshot':3,'hoast-player':4};
+  const SVC_RESTART = {'srt-gateway':'srt-gateway','srt-gateway-owner':'srt-gateway-owner','rtmp-ingest':'rtmp-ingest','earshot':'earshot-ingest','hoast-player':'hoast-player'};
   const svcs = (s.services||[]).slice().sort((a,b)=>(SVC_ORDER[a.name]??9)-(SVC_ORDER[b.name]??9));
   $('services').innerHTML = (svcs.map(sv=>{
     // amber while a healthcheck is still 'starting': red implied broken,
     // but a restarting service that works is the common post-deploy state
     const c = sv.healthy ? col('--grn') : (sv.health === 'starting' ? '#d29922' : col('--red'));
-    // Say nothing for a plainly-healthy service: the green dot already carries
-    // it, and a row of "running" repeated N times is the width that pushes
-    // this row onto a second line as services get added. The word appears
-    // exactly when it is worth reading - starting, unhealthy, or stopped.
+    // State goes in a hover title, not visible text: a row of "running"
+    // repeated N times (or even just the occasional "starting") is exactly
+    // the width that pushes this row onto a second line as services get
+    // added, and the dot's colour already carries healthy/not - the title
+    // is there for when you want to know why, not by default.
     const lbl = (sv.health === 'starting' || sv.health === 'unhealthy') ? sv.health
               : (sv.healthy ? "" : (sv.state||""));
     const rk = SVC_RESTART[sv.name];
     const rb = rk ? `<button class="rsv" data-svc="${rk}" title="restart">&#x21bb;</button>` : '';
-    // omit the label span entirely when empty, or its flex gap still costs width
-    const ls = lbl ? `<span style="color:${col('--dim')}">${lbl}</span>` : '';
-    return `<span class="chip"><span class="dot" style="background:${c}"></span>${sv.name}${ls}${rb}</span>`;
+    const t = lbl ? ` title="${lbl}"` : '';
+    return `<span class="chip"${t}><span class="dot" style="background:${c}"></span>${sv.name}${rb}</span>`;
   }).join("") || '<span class="chip">no services</span>')
-  + `<span class="chip"><span class="dot" style="background:${col('--grn')}"></span>telemetry<span style="color:${col('--dim')}">this page</span><button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
+  + `<span class="chip" title="this page"><span class="dot" style="background:${col('--grn')}"></span>telemetry<button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
   + `<span class="ctl-msg" id="restartMsg"></span>`;
   const rm = $('restartMsg'); if (rm && window.__RESTART_MSG__) rm.textContent = window.__RESTART_MSG__;
   reapplyRestartArm();
