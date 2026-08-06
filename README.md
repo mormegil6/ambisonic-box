@@ -57,9 +57,15 @@ docker compose config | grep FFMPEG_FLAGS
 
 ### What it looks like running
 
-<div align="center"> <img src="docs/images/telemetry-dashboard.png" height="320" alt="The telemetry dashboard: a services row showing srt-gateway, rtmp-ingest, earshot, hoast-player and telemetry all healthy; reachability chips for the tunnel, the VOD origin and the backup; stream detail (resolution, bitrate, egress, RTMP links, segment age); host load, memory, disk and uptime; and three-hour history sparklines for viewers, CPU temperature and stream liveness."> &nbsp;&nbsp;<img src="docs/images/earshot-webtools.png" height="320" alt="Earshot's own built-in debug monitor at :8081/webtools, showing the live 360 video preview of the demo concert recording, server and video representation info (4096x2048, avc1 H.264 passthrough), the DASH stream info panel, and all 16 ambisonic audio channels metering individually"> </div>
+Two operator-facing views of the same running stream:
 
-<p align="center"><em>Two operator-facing views of the same running stream: the custom telemetry dashboard on :8090 (left, details in <a href="telemetry/README.md">telemetry/README.md</a>) and Earshot's own built-in monitor on :8081 (right), which is where the 16 individual audio channels and the live DASH representation details are actually visible.</em></p>
+<div align="center"> <img src="docs/images/telemetry-dashboard.png" width="85%" alt="The telemetry dashboard: a services row showing srt-gateway, rtmp-ingest, earshot, hoast-player and telemetry all healthy; reachability chips for the tunnel, the VOD origin and the backup; stream detail (resolution, bitrate, egress, RTMP links, segment age); host load, memory, disk and uptime; and three-hour history sparklines for viewers, CPU temperature and stream liveness."> </div>
+
+<p align="center"><em>The custom telemetry dashboard on :8090: service health, reachability, stream detail, host load and three-hour history. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
+
+<div align="center"> <img src="docs/images/earshot-webtools.png" width="85%" alt="Earshot's own built-in debug monitor at :8081/webtools, showing the live 360 video preview of the demo concert recording, server and video representation info (4096x2048, avc1 H.264 passthrough), the DASH stream info panel, and all 16 ambisonic audio channels metering individually"> </div>
+
+<p align="center"><em>Earshot's own built-in monitor on :8081, which is where the 16 individual audio channels and the live DASH representation details are actually visible.</em></p>
 
 <div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
 
@@ -237,6 +243,9 @@ Two gitignored directories at the repo root, with opposite guarantees.
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
+- [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
+- [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
+- [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it
 - [.env.example](.env.example): configuration reference, including how to prepare `content/demo.mp4`
 
 ## License
