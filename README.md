@@ -250,12 +250,13 @@ Two gitignored directories at the repo root, with opposite guarantees.
 
 ## License
 
-Compose files, service configs and scripts in this repository: **Apache 2.0**. Bundled and built components keep their own licenses:
+Compose files, service configs and scripts in this repository: **Apache 2.0**. The published media is licensed separately, and everything bundled or built keeps its own license:
 
 | Component | License |
 |---|---|
+| **Reference clips and media** shipped as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips): the `directions` and `colortones` clips, the 8K 360 test card, and the caption sidecars | **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** - reuse, remix and redistribute freely, including commercially, with attribution (one disclosed exception in [docs/VOD.md](docs/VOD.md#licence)) |
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
-| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, three documented patches) | GPL |
+| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, four documented local patches) | GPL |
 | Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |

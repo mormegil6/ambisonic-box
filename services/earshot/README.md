@@ -18,13 +18,14 @@ The ffmpeg, nginx and nginx-rtmp versions are unchanged from the previous pin (`
 
 ## Local modifications
 
-Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept documented for provenance rather than as deviations, since the pin above already carries them upstream. Sections 3, 5 and 8, plus the `.gitkeep` refinement noted in 2, are what is still genuinely ours, and all three sections were offered upstream on 2026-08-06 as separate pull requests (one fix each, so each can be judged on its own):
+Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept documented for provenance rather than as deviations, since the pin above already carries them upstream. Sections 3, 5, 8 and 9, plus the `.gitkeep` refinement noted in 2, are what is still genuinely ours, and all four were offered upstream on 2026-08-06 as separate pull requests (one fix each, so each can be judged on its own):
 
 | section | change | upstream |
 |---|---|---|
 | 3 | `suggestedPresentationDelay` floor | **open**, [#58](https://github.com/EnvelopSound/Earshot/pull/58) |
 | 5 | `DASH_NAME` decoupled from the stream key | **open**, [#59](https://github.com/EnvelopSound/Earshot/pull/59) |
 | 8 | `max_message 10M` | **open**, [#60](https://github.com/EnvelopSound/Earshot/pull/60) |
+| 9 | `yarn --network-timeout` for slow build hosts | **open**, [#61](https://github.com/EnvelopSound/Earshot/pull/61) |
 
 If those merge, they move into the table above and this section shrinks to the `.gitkeep` refinement plus one line: #58 and #60 are byte-identical to what is vendored here (bar comment wording), but #59 defaults `DASH_NAME` to the generic `stream` upstream against `hoast_demo` here, so that default stays a local deviation either way.
 
@@ -78,7 +79,7 @@ nginx-rtmp's default `max_message` (1 MB) is sized for typical broadcast keyfram
 
 ### 9. `src/Dockerfile`: `--network-timeout` on the webtools `yarn` install
 
-yarn 1.x defaults `--network-timeout` to 30 s, and that ceiling covers the CPU time yarn spends alongside each request, not just transfer. On a slow enough build host it expires mid-install and yarn reports it as "There appears to be trouble with your network connection", which reads like a network fault and sends you chasing DNS, MTU and registry mirrors. It is not one. Measured on a Raspberry Pi 4 (arm64, native, not emulated) while the image would not build: the install needs 145 s with yarn CPU-bound at 100-148 % throughout, the package it died on (`@material-ui/icons`) fetches in 0.23 s from inside this same image, RAM never went near the limit and no OOM killer fired. Raised to 600 s, which costs nothing on a fast host because the install finishes long before the ceiling matters. amd64 hosts never hit this, which is why it took an arm64 deployment to surface it. Not yet proposed upstream.
+yarn 1.x defaults `--network-timeout` to 30 s, and that ceiling covers the CPU time yarn spends alongside each request, not just transfer. On a slow enough build host it expires mid-install and yarn reports it as "There appears to be trouble with your network connection", which reads like a network fault and sends you chasing DNS, MTU and registry mirrors. It is not one. Measured on a Raspberry Pi 4 (arm64, native, not emulated) while the image would not build: the install needs 145 s with yarn CPU-bound at 100-148 % throughout, the package it died on (`@material-ui/icons`) fetches in 0.23 s from inside this same image, RAM never went near the limit and no OOM killer fired. Raised to 600 s, which costs nothing on a fast host because the install finishes long before the ceiling matters. amd64 hosts never hit this, which is why it took an arm64 deployment to surface it. Offered upstream as [#61](https://github.com/EnvelopSound/Earshot/pull/61).
 
 ## What this service does in the stack
 
