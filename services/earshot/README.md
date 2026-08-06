@@ -18,7 +18,15 @@ The ffmpeg, nginx and nginx-rtmp versions are unchanged from the previous pin (`
 
 ## Local modifications
 
-Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept documented for provenance rather than as deviations, since the pin above already carries them upstream. Sections 3, 5 and 8, plus the `.gitkeep` refinement noted in 2, are what is still genuinely ours.
+Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept documented for provenance rather than as deviations, since the pin above already carries them upstream. Sections 3, 5 and 8, plus the `.gitkeep` refinement noted in 2, are what is still genuinely ours, and all three sections were offered upstream on 2026-08-06 as separate pull requests (one fix each, so each can be judged on its own):
+
+| section | change | upstream |
+|---|---|---|
+| 3 | `suggestedPresentationDelay` floor | **open**, [#58](https://github.com/EnvelopSound/Earshot/pull/58) |
+| 5 | `DASH_NAME` decoupled from the stream key | **open**, [#59](https://github.com/EnvelopSound/Earshot/pull/59) |
+| 8 | `max_message 10M` | **open**, [#60](https://github.com/EnvelopSound/Earshot/pull/60) |
+
+If those merge, they move into the table above and this section shrinks to the `.gitkeep` refinement plus one line: #58 and #60 are byte-identical to what is vendored here (bar comment wording), but #59 defaults `DASH_NAME` to the generic `stream` upstream against `hoast_demo` here, so that default stays a local deviation either way.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -40,6 +48,8 @@ Upstream wipes `/opt/data` at startup, which fails on a busy mountpoint when a D
 
 A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's `suggestedPresentationDelay` at `DASH_SPD_FLOOR` seconds (build arg, default 30). No ffmpeg flag can set SPD for WebM DASH (`-target_latency` is force-zeroed outside LL-DASH mode) and upstream hardcodes it to the last segment duration, which makes players join right at the live edge and gap-jump.
 
+The guard is anchored to the `suggestedPresentationDelay=` line at both ends, so an upstream restructuring of that line fails the build rather than silently producing an image without the floor (the unanchored post-check this replaced could match an unrelated `FFMAX()` elsewhere in the file and pass). Offered upstream as [#58](https://github.com/EnvelopSound/Earshot/pull/58).
+
 ### 4. `src/nginx-transcoder/nginx*.conf`: `wait_key` / `wait_video` on the relay
 
 The transcoder is an nginx-rtmp `exec` ffmpeg that *subscribes* to the internal relay, and a subscriber joining a live stream gets audio immediately but no decodable video until the next keyframe - up to a full GOP later. The DASH muxer records that skew as a leading empty edit (`elst media_time = -1`) on the video track, which Firefox honours and Chromium's MSE does not, so Chromium paints video early by the same amount. These two directives start the relayed video at a keyframe and hold audio until video flows, so the tracks start together and no edit box is written at all. Measured in the restart-loop run: empty edits on 10/10 joins without them, `elst [(0,0)]` and tracks aligned within 3 ms on 20/20 encoder restarts with them. That run is the source of both counts, and `src/nginx-transcoder/nginx-no-ssl.conf:30-34` quotes the same two figures beside the directives; see the measurement notes being written up for publication (top-level README, Documentation) for the run itself.
@@ -52,6 +62,8 @@ Upstream names the DASH manifest after the RTMP stream key (`$name.mpd`), which 
 
 Both nginx confs also carry `rewrite ^/dash/[^/]+\.mpd$ /dash/${DASH_NAME}.mpd break;`: upstream's webtools preview requests `/dash/<streamname>.mpd`, which would 404 once the manifest is no longer named after the stream key. The rewrite maps any such request to the real manifest; segments are referenced relatively, so they resolve unchanged.
 
+Offered upstream as [#59](https://github.com/EnvelopSound/Earshot/pull/59), where the default is the generic `stream` rather than this stack's `hoast_demo` - so even if it merges, that one default stays a local deviation.
+
 ### 6. `src/nginx-transcoder/nginx*.conf`: `absolute_redirect off` on the HTTP server
 
 nginx builds directory redirects (e.g. `/webtools` -> `/webtools/`) as absolute URLs from its internal listen port, which drops the external mapped port behind a Docker or Tailscale bind: `http://host:8081/webtools` 301s to `http://host/webtools/` (port 80), the wrong service. `absolute_redirect off` at the HTTP server level makes the redirect relative, so the browser resolves it against the request URL and keeps the port. Contributed upstream as [#56](https://github.com/EnvelopSound/Earshot/pull/56) and merged on 2026-07-24 (`ac1dda7`); applied here ahead of that merge.
@@ -62,7 +74,7 @@ ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this build
 
 ### 8. `src/nginx-transcoder/nginx*.conf`: `max_message 10M` on the RTMP server
 
-nginx-rtmp's default `max_message` (1 MB) is sized for typical broadcast keyframes, not this stack's 4K H.264 GOPs, whose keyframes exceed it - the symptom is the relay dropping the publish with "too big message" before ffmpeg ever sees a frame. Raised to 10 MB, comfortably above a 4K keyframe at the bitrates this stack runs. Found undocumented during the 2026-08-06 re-vendor audit; not yet proposed upstream.
+nginx-rtmp's default `max_message` (1 MB) is sized for typical broadcast keyframes, not this stack's 4K H.264 GOPs, whose keyframes exceed it - the symptom is the relay dropping the publish with "too big message" before ffmpeg ever sees a frame. Raised to 10 MB, comfortably above a 4K keyframe at the bitrates this stack runs. Found undocumented during the 2026-08-06 re-vendor audit and offered upstream the same day as [#60](https://github.com/EnvelopSound/Earshot/pull/60).
 
 ## What this service does in the stack
 
