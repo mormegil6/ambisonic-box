@@ -1,26 +1,24 @@
 # earshot - vendored Envelop Earshot
 
-`src/` is a vendored subset of [EnvelopSound/Earshot](https://github.com/EnvelopSound/Earshot) at commit `a9b351facfd3097bd4cd1c260ed5fe05a7babd7a` (master, 2022-08-25), GPL licensed (see `src/LICENSE`). Only what the Docker image needs is vendored: `Dockerfile`, `nginx-transcoder/`, `webtools/` - the upstream `tester/`, CloudFormation templates and Git-LFS binaries are not required for the image and are omitted.
+`src/` is a vendored subset of [EnvelopSound/Earshot](https://github.com/EnvelopSound/Earshot) at commit `e765fdbc321f911608f998cdaf45979c2d725c55` (master, 2026-07-27), GPL licensed (see `src/LICENSE`). Only what the Docker image needs is vendored: `Dockerfile`, `nginx-transcoder/`, `webtools/` - the upstream `tester/`, CloudFormation templates and Git-LFS binaries are not required for the image and are omitted.
 
 ## Relationship to upstream
 
-The pinned commit above is a 2022 snapshot, but this tree is **not** four years behind. Upstream has made commits since (five merged pull requests), all of which touch what we vendor - and all five are changes contributed *from here* and merged in July 2026:
+The pin above is upstream's own current tip (re-vendored 2026-08-06 from the previous `a9b351f` / 2022-08-25 snapshot). Getting there took five pull requests, all merged in July 2026, all changes contributed *from here*:
 
 | change | upstream |
 |---|---|
-| `wait_key` / `wait_video` at the relay | **merged**, [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`) |
-| `--enable-libvpx` | **merged**, [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
-| volume-safe entrypoint | **merged**, [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
-| relative redirects (`absolute_redirect off`) | **merged**, [#56](https://github.com/EnvelopSound/Earshot/pull/56) (`ac1dda7`) |
-| `ENABLE_NONFREE` build ARG (section 7 below) | **merged**, [#57](https://github.com/EnvelopSound/Earshot/pull/57) (`e765fdb`) |
+| `wait_key` / `wait_video` at the relay | [#53](https://github.com/EnvelopSound/Earshot/pull/53) (`d8039a2`) |
+| `--enable-libvpx` | [#54](https://github.com/EnvelopSound/Earshot/pull/54) (`b03d8bc`) |
+| volume-safe entrypoint | [#55](https://github.com/EnvelopSound/Earshot/pull/55) (`389da2d`) |
+| relative redirects (`absolute_redirect off`) | [#56](https://github.com/EnvelopSound/Earshot/pull/56) (`ac1dda7`) |
+| `ENABLE_NONFREE` build ARG (section 7 below) | [#57](https://github.com/EnvelopSound/Earshot/pull/57) (`e765fdb`) |
 
-So `src/` is content-equivalent to upstream master `e765fdb` plus the local extras below - that is upstream's current tip, entirely made of changes contributed from here. Verified by diff against master: **nothing upstream carries is missing here**, and the ffmpeg, nginx and nginx-rtmp versions are byte-identical (`earshot-v0.1` / `1.15.1` / `1.2.1` - upstream never moved them).
-
-Re-vendoring would therefore be pure bookkeeping: it gains no code, because the reason upstream changed is that upstream adopted these changes. The only thing it would buy is a less misleading pin. Worth doing when convenient, not urgent, and the local extras below would all have to be re-applied afterwards anyway.
+The ffmpeg, nginx and nginx-rtmp versions are unchanged from the previous pin (`earshot-v0.1` / `1.15.1` / `1.2.1`); upstream never moved them, so this re-vendor is a pin move and a documentation refresh, not a rebuild of anything downstream.
 
 ## Local modifications
 
-Sections 1, 2, 4, 6 and 7 below are the changes now merged upstream - kept documented because they are still deviations from the *pinned* commit, and because sections 2 and 5 build on them. Sections 3 and 5, plus the refinement noted in 2, are the only things still genuinely ours.
+Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept documented for provenance rather than as deviations, since the pin above already carries them upstream. Sections 3, 5 and 8, plus the `.gitkeep` refinement noted in 2, are what is still genuinely ours.
 
 ### 1. `src/Dockerfile`: `--enable-libvpx` added to the ffmpeg configure
 
@@ -52,6 +50,8 @@ Upstream names the DASH manifest after the RTMP stream key (`$name.mpd`), which 
 
 `DASH_NAME` is defaulted and validated in `entrypoint.sh` before nginx starts and before either `envsubst` call, and it is exported - the `envsubst` whitelist is derived from `env`, so an unexported value would leave a literal `${DASH_NAME}` in the rendered config and ffmpeg would write a file the player never fetches. It is read only from the container environment, never from the network, and rejecting `.` and `/` makes `..` and absolute paths unrepresentable.
 
+Both nginx confs also carry `rewrite ^/dash/[^/]+\.mpd$ /dash/${DASH_NAME}.mpd break;`: upstream's webtools preview requests `/dash/<streamname>.mpd`, which would 404 once the manifest is no longer named after the stream key. The rewrite maps any such request to the real manifest; segments are referenced relatively, so they resolve unchanged.
+
 ### 6. `src/nginx-transcoder/nginx*.conf`: `absolute_redirect off` on the HTTP server
 
 nginx builds directory redirects (e.g. `/webtools` -> `/webtools/`) as absolute URLs from its internal listen port, which drops the external mapped port behind a Docker or Tailscale bind: `http://host:8081/webtools` 301s to `http://host/webtools/` (port 80), the wrong service. `absolute_redirect off` at the HTTP server level makes the redirect relative, so the browser resolves it against the request URL and keeps the port. Contributed upstream as [#56](https://github.com/EnvelopSound/Earshot/pull/56) and merged on 2026-07-24 (`ac1dda7`); applied here ahead of that merge.
@@ -59,6 +59,10 @@ nginx builds directory redirects (e.g. `/webtools` -> `/webtools/`) as absolute 
 ### 7. `src/Dockerfile`: `ENABLE_NONFREE` build ARG
 
 ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this build links no nonfree library (only libx264/libopus/libvpx), so the flag is a no-op licence stamp that blocks publishing a pre-built image. The ARG defaults to 1 in the Dockerfile (stock build unchanged), but the stack's docker-compose.yml passes 0 by default so its images are redistributable; export ENABLE_NONFREE=1 to restore the stock build. Verified equivalent end to end (16-ch Opus hexadecagonal + VP9, full pipeline test). Contributed upstream as [#57](https://github.com/EnvelopSound/Earshot/pull/57) and merged on 2026-07-27 (`e765fdb`); applied here ahead of that merge.
+
+### 8. `src/nginx-transcoder/nginx*.conf`: `max_message 10M` on the RTMP server
+
+nginx-rtmp's default `max_message` (1 MB) is sized for typical broadcast keyframes, not this stack's 4K H.264 GOPs, whose keyframes exceed it - the symptom is the relay dropping the publish with "too big message" before ffmpeg ever sees a frame. Raised to 10 MB, comfortably above a 4K keyframe at the bitrates this stack runs. Found undocumented during the 2026-08-06 re-vendor audit; not yet proposed upstream.
 
 ## What this service does in the stack
 

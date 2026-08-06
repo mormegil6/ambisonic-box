@@ -2,7 +2,7 @@
 
 The pitch, the connection settings and the four rules that matter in practice are in the [main README](../README.md#guest-test-endpoint-the-guest-application). This page is the complete session behaviour, plus the separate owner SRT route that shares the same gateway code.
 
-Anyone with an ambisonic microphone rig and OBS (stock over SRT, or Music Edition over RTMP) can test their stream against this stack without standing up their own server: a keyless application that borrows the whole pipeline for the duration of a session.
+Anyone with an ambisonic microphone rig and OBS ([stock](https://obsproject.com/) over SRT, or [Music Edition](https://github.com/pkviet/obs-studio/releases/) over RTMP) can test their stream against this stack without standing up their own server: a keyless application that borrows the whole pipeline for the duration of a session.
 
 **Disabled by default.** Most deployments are a single private publisher and should never expose a keyless application; set `GUEST_ENABLED=1` to opt in. Off, the `guest` application does not exist in the ingest config and the status pages carry no trace of it. `SRT_ENABLED=1` (the default) binds UDP 8890 but admits nobody on its own: the arbiter still refuses every caller until `GUEST_ENABLED=1`.
 

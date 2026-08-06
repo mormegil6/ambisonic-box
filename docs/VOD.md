@@ -61,6 +61,6 @@ That same session is where the `?dbg` capability probe was captured: the headset
 
 ## Optional: serving VOD from object storage
 
-By default the stack serves the on-demand clips itself (`/vod-dash/` out of `content/vod/dash`). If you front the player with a CDN, check its terms before leaving large video on that path: Cloudflare, for example, restricts serving large non-Cloudflare-hosted video through their proxy, offloading VOD to an object-storage origin (Cloudflare R2, for example) avoids this.
+By default the stack serves the on-demand clips itself (`/vod-dash/` out of `content/vod/dash`). If you front the player with a CDN, check its terms before leaving large video on that path: [Cloudflare's terms](https://blog.cloudflare.com/updated-tos), for example, restrict serving large non-Cloudflare-hosted video through their proxy, while content hosted by a Cloudflare service such as R2 is explicitly exempt - offloading VOD to an object-storage origin (Cloudflare R2, for example) avoids the restriction.
 
 To do the same: upload `content/vod/dash/` to a bucket under a `vod-dash/` prefix, attach a custom domain, allow CORS from your player origin including the `range` request header (DASH SegmentBase addresses by byte range), and set `vodBase` in `brand.json` to that domain. Removing the key falls back to box-served VOD instantly; the local copy and route stay in place either way.
