@@ -30,7 +30,7 @@ The pipeline is order-flexible where the tools allow it. Earshot's transcode car
 
 The `?dbg` capability probe on the VOD page (see the URL-flags note in [docs/ENDPOINTS.md](ENDPOINTS.md)) reports what a browser actually managed. On a Meta Quest 3 (2026-07-27):
 
-<div align="center"> <img src="images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
+The photograph of that probe running on the headset is in the main [README](../README.md#what-it-looks-like-running), where it doubles as evidence that the stack works on its target device.
 
 ```
 Stereo Opus control (WebM):    DECODED (2 ch, 48000 Hz, 1 s)

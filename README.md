@@ -61,6 +61,10 @@ docker compose config | grep FFMPEG_FLAGS
 
 <p align="center"><em>The private telemetry dashboard on :8090 - service health, reachability, stream detail and host state. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
 
+<div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
+
+<p align="center"><em>The stack on the device it is for: a Meta Quest 3 browser playing the stream at stream.bmroz.eu, with the <code>?dbg</code> capability probe reporting that 2-, 16- and 25-channel Opus all decoded on the headset itself. What that probe implies about ambisonic order is in <a href="docs/AMBISONIC-ORDER.md">docs/AMBISONIC-ORDER.md</a>.</em></p>
+
 ## Stream your own content
 
 Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows, all 16 channels live.
