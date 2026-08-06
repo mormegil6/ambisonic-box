@@ -17,7 +17,16 @@ COPY ./webtools/ /app
 ENV PATH /app/node_modules/.bin:$PATH
 
 # install and cache dependencies
-RUN yarn
+# HOAST360 patch: yarn 1.x defaults --network-timeout to 30 s, which is a
+# ceiling on each request INCLUDING the CPU time yarn spends alongside it. On a
+# slower build host that expires mid-install and yarn reports it as
+# "There appears to be trouble with your network connection", which reads like a
+# network fault and is not one. Measured on a Raspberry Pi 4 (arm64, native, not
+# emulated): this install needs 145 s and yarn stays CPU-bound at 100-148 % the
+# whole time, while the package it died on fetches in 0.23 s from inside this
+# same image. The raised ceiling costs nothing on a fast host, where the install
+# finishes long before any timeout is in reach.
+RUN yarn --network-timeout 600000
 #build the project for production
 RUN yarn build
 

@@ -76,6 +76,10 @@ ffmpeg's `--enable-nonfree` marks the binary non-redistributable, but this build
 
 nginx-rtmp's default `max_message` (1 MB) is sized for typical broadcast keyframes, not this stack's 4K H.264 GOPs, whose keyframes exceed it - the symptom is the relay dropping the publish with "too big message" before ffmpeg ever sees a frame. Raised to 10 MB, comfortably above a 4K keyframe at the bitrates this stack runs. Found undocumented during the 2026-08-06 re-vendor audit and offered upstream the same day as [#60](https://github.com/EnvelopSound/Earshot/pull/60).
 
+### 9. `src/Dockerfile`: `--network-timeout` on the webtools `yarn` install
+
+yarn 1.x defaults `--network-timeout` to 30 s, and that ceiling covers the CPU time yarn spends alongside each request, not just transfer. On a slow enough build host it expires mid-install and yarn reports it as "There appears to be trouble with your network connection", which reads like a network fault and sends you chasing DNS, MTU and registry mirrors. It is not one. Measured on a Raspberry Pi 4 (arm64, native, not emulated) while the image would not build: the install needs 145 s with yarn CPU-bound at 100-148 % throughout, the package it died on (`@material-ui/icons`) fetches in 0.23 s from inside this same image, RAM never went near the limit and no OOM killer fired. Raised to 600 s, which costs nothing on a fast host because the install finishes long before the ceiling matters. amd64 hosts never hit this, which is why it took an arm64 deployment to surface it. Not yet proposed upstream.
+
 ## What this service does in the stack
 
 nginx-rtmp accepts the relayed stream from `rtmp-ingest` on :1935 (internal only) and `exec`s Envelop's PCE-aware ffmpeg fork per published stream:
