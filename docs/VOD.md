@@ -20,7 +20,7 @@ Two are published as [release assets](https://github.com/mormegil6/hoa-360-strea
 
 <p align="center"><em>The card as stored (equirectangular). The bowing is the projection: inside a 360 viewer each face reads flat, square and undistorted.</em></p>
 
-<div align="center"> <img src="images/viewer-front-90deg.png" width="45%" alt="The FRONT wall of the 360 test card as a viewer sees it inside the sphere at a 90 degree field of view: the card is flat and undistorted, circles round and lines straight"> <img src="images/viewer-up-90deg.png" width="45%" alt="The UP wall of the same card seen by a viewer looking straight up: an ordinary ceiling card rather than the smeared blob equirectangular drawing produces at a pole"> </div>
+<div align="center"> <img src="images/viewer-front-90deg.png" width="22%" alt="The FRONT wall of the 360 test card as a viewer sees it inside the sphere at a 90 degree field of view: the card is flat and undistorted, circles round and lines straight"> <img src="images/viewer-up-90deg.png" width="22%" alt="The UP wall of the same card seen by a viewer looking straight up: an ordinary ceiling card rather than the smeared blob equirectangular drawing produces at a pole"> </div>
 
 <p align="center"><em>The same card from inside, at a 90&deg; field of view: front (left) and straight up (right). This is the point of the cube arrangement. The front wall is flat and undistorted despite the bowing seen in the equirectangular image above, and the pole is an ordinary ceiling card rather than the smear that drawing directly in equirectangular produces there.</em></p>
 
