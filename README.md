@@ -2,7 +2,7 @@
 
 # hoa-360-stream: live 360 video and third-order Ambisonics over MPEG-DASH
 
-Containerised toolchain for live streaming 360 video with Higher-Order Ambisonics audio, 1st to 3rd order (3OA, 16ch is the canonical configuration): RTMP in, MPEG-DASH (multichannel Opus, WebM) out, rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player that picks the ambisonic order up from the stream.
+Containerised toolchain for live streaming 360 video with Higher-Order Ambisonics audio, 1st to 3rd order (3OA, 16ch is the canonical configuration): RTMP in, MPEG-DASH (multichannel Opus, WebM) out, rendered binaurally in the browser by a [patched HOAST360](https://github.com/mormegil6/hoast360) player that picks the ambisonic order up from the stream.
 
 **Live demo:** <https://stream.bmroz.eu/> · **Project page:** <https://bmroz.eu/projects/360-livestream/>
 
@@ -23,7 +23,7 @@ Without `content/demo.mp4` the stack still demos itself: on first start loop-sou
 
 - Docker Engine with the compose plugin (`docker compose`), buildx for multi-arch builds
 - ~2 GB of image builds on first `compose build` (earshot compiles its nginx-rtmp and ffmpeg fork from source)
-- Only for the test and measurement scripts: host `ffmpeg`/`ffprobe`; Node.js (`npm ci`, then `npx playwright install chromium` for the two headless-browser scripts); `python3` + matplotlib for the trade-off plot
+- *Only for the test and measurement scripts:* host `ffmpeg`/`ffprobe`; Node.js (`npm ci`, then `npx playwright install chromium` for the two headless-browser scripts); `python3` + matplotlib for the trade-off plot
 
 ## Architecture
 
@@ -35,15 +35,15 @@ Without `content/demo.mp4` the stack still demos itself: on first start loop-sou
 
 **Contribution is H.264 + 16-channel AAC on both routes.** Over RTMP that is protocol necessity, since legacy RTMP/FLV cannot carry VP9 or Opus. Over SRT the sender is free of it (OBS sends four separate 4-channel AAC tracks in MPEG-TS), but the gateway rejoins those tracks and republishes them as one 16-channel AAC stream over RTMP into the same ingest, deliberately, so that every piece of guest arbitration applies to SRT unchanged. From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
-**Why 16 and not 25, and what would lift it.** ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) pass while 9 and 25 are refused outright. That is a limit on the AAC hop, not on delivery or rendering: the on-demand path never touches AAC and is **4th-order verified end to end** (a 25-channel clip auto-detected as order 4, rendered through the full order-4 impulse-response set). Live 4th order is therefore **theoretically reachable but untested, and nothing here claims it**. Reaching it needs two independent things: a wider sender layout, which multitrack SRT already makes possible (25 channels would fit as six 5-channel tracks, each individually a layout AAC accepts), and a gateway that stops funnelling through 16-channel AAC over RTMP, which is architectural rather than configuration. The full argument, the two candidate routes past the ceiling, and the sender-side arithmetic beyond 3rd order are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
+**Why 16 and not 25, and what would lift it.** ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) pass while 9 and 25 are refused outright. That is a limit on the AAC hop, not on delivery or rendering: the on-demand path never touches AAC and is **4th-order verified end to end** (a 25-channel clip auto-detected as order 4, rendered through the full order-4 impulse-response set). Live 4th order is therefore **theoretically reachable but untested**. Reaching it needs two independent things: a wider sender layout, which multitrack SRT already makes possible (25 channels would fit as six 5-channel tracks, each individually a layout AAC accepts), and a gateway that stops funnelling through 16-channel AAC over RTMP, which is architectural rather than configuration. The full argument, the two candidate routes past the ceiling, and the sender-side arithmetic beyond 3rd order are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
 
-**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default: on the 2012 Mac Mini (quad-core i7) deployment host VP9 has been measured twice, scaled down and at the unscaled 4K this line would actually run, and the unscaled encode fell below realtime - so passthrough is the default. To check what a given host will actually do rather than trusting this paragraph:
+**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`, not the running default: it fell below realtime at 4K on the reference deployment host, so passthrough is what actually ships. Check what your own host will do rather than trusting this paragraph:
 
 ```bash
 docker compose config | grep FFMPEG_FLAGS
 ```
 
-`dash-output` in the diagram is a Docker volume - the shared filesystem earshot segments into and nginx serves from, nothing to do with level.
+`dash-output` in the diagram is a Docker volume: the shared filesystem earshot segments into and nginx serves from.
 
 | Service | Role | Host port |
 |---|---|---|
@@ -97,9 +97,14 @@ These settings are the same on macOS and Windows - only the audio routing differ
 
 Custom Output (FFmpeg) is a **Recording**-tab output in OBS, even though it is streaming to a URL, so **Start Recording** is the button that pushes. Nothing appears under Start Streaming.
 
+**Per-OS routing, step by step:** creating the four 4-channel sources above is the one OS-specific step, so this is where the shared setup ends and your platform's guide takes over.
+
+- **[docs/obs-macos.md](docs/obs-macos.md)** - a multichannel Core Audio device ([BlackHole](https://github.com/ExistentialAudio/BlackHole))
+- **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via REAPER's ReaRoute and the atkAudio plugin
+
 Feed those four tracks from four 4-channel sources - device channels 1-4, 5-8, 9-12, 13-16, downmixing off - assigned one per track in Advanced Audio Properties. The join is strictly positional (track 1 becomes channels 1-4, and so on, never a downmix), so AmbiX order survives end to end.
 
-**Channel counts, sender side:** 4 channels (1st order) and 16 (3rd order) pass through as they are, but a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders), and a plain stereo or mono push produces no output at all - on the guest endpoint it is auto-ended with that reason. Six tracks would fit 4th order on the sender side, but the gateway still rejoins to 16-channel AAC over RTMP, so the live ceiling does not move: [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
+**Channel counts, sender side:** 4 channels (1st order) and 16 (3rd order) pass through as they are; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders), and a plain stereo or mono push produces no output at all - on the guest endpoint it is auto-ended with that reason. 4th order is a sender-side possibility too (see Architecture above), but nothing downstream accepts it yet, so 4 and 16 are what actually work today.
 
 Four of those values are exact rather than indicative. Each was established by pushing a per-channel tone ladder through real hardware and reading back what arrived, because each obvious-looking alternative fails **without any error**:
 
@@ -111,11 +116,6 @@ Four of those values are exact rather than indicative. Each was established by p
 #### Bitrate
 
 Audio is paid once on the uplink, so the contribution rule is generous: 96 kbit/s per channel, which is where the 384 kbit/s for four tracks in the recipes above comes from. Video is the opposite trade, paid per viewer, and this deployment's 6.5 Mbit/s at 4096x2048 is a deliberate egress choice rather than a quality recommendation. The published anchors behind both, and the honest caveat that no transparency measurement exists for AAC-coded ambisonics, are in [docs/BITRATE.md](docs/BITRATE.md).
-
-**Per-OS routing, step by step:**
-
-- **[docs/obs-macos.md](docs/obs-macos.md)** - a multichannel Core Audio device ([BlackHole](https://github.com/ExistentialAudio/BlackHole))
-- **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via REAPER's ReaRoute and the atkAudio plugin
 
 ### Legacy: RTMP
 
