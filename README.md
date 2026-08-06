@@ -4,7 +4,7 @@
 
 Containerised toolchain for live streaming 360 video with Higher-Order Ambisonics audio, 1st to 3rd order (3OA, 16ch is the canonical configuration): RTMP in, MPEG-DASH (multichannel Opus, WebM) out, rendered binaurally in the browser by a patched [HOAST360](https://github.com/mormegil6/hoast360) player that picks the ambisonic order up from the stream.
 
-**Live demo:** <https://stream.bmroz.eu/> (guest ingest is not yet open on this instance, inbound port pending; unaffected on your own host) · **Project page:** <https://bmroz.eu/projects/360-livestream/>
+**Live demo:** <https://stream.bmroz.eu/> · **Project page:** <https://bmroz.eu/projects/360-livestream/>
 
 ## Quick start
 
@@ -132,6 +132,8 @@ The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_
 ## Guest test endpoint (the `guest` application)
 
 Anyone with an ambisonic microphone rig and OBS can test their stream against this stack without standing up their own server: a keyless application that borrows the whole pipeline for the duration of a session.
+
+> **UNDER CONSTRUCTION on the public demo at stream.bmroz.eu.** The endpoint is fully implemented and works today over a LAN or a VPN, but it is **not yet reachable from the public internet on the reference deployment**: guests are the only thing that needs an inbound port opened, and that request is still with university IT administration. Nothing else is affected, because the player egresses through an outbound tunnel and the operator's own contribution path rides the VPN. If you are running your own instance this does not apply to you: open the port on your own host and the endpoint is reachable immediately.
 
 **Disabled by default.** Most deployments are a single private publisher and should never expose a keyless application; set `GUEST_ENABLED=1` to opt in. Off, the `guest` application does not exist in the ingest config and the status pages carry no trace of it.
 
