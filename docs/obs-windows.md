@@ -128,9 +128,9 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
 | Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
-<div align="center"><img src="images/obs-windows/13_OBS-recording-settings.png" width="57%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with an srt URL carrying latency, mpegts, 6000 Kbps, keyframe interval 60, libx264, 384 Kbps audio, tracks 1 to 4, aac."></div>
+<div align="center"><img src="images/obs-windows/13_OBS-recording-settings.png" width="57%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, mpegts, 6000 Kbps, keyframe interval 60, libx264, 384 Kbps audio, tracks 1 to 4, aac."></div>
 
-<p align="center"><em>Captured against a local test listener; point the host and port at your own box. The URL form is what matters - note <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else. The capture also predates the packet-size finding, so its URL has no <code>&amp;pkt_size=1128</code>; the table above does, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>.</em></p>
+<p align="center"><em>The URL carries both parameters that matter: <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else, and <code>&amp;pkt_size=1128</code>, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>. Substitute your own host and stream name for the two placeholders.</em></p>
 
 The screenshot shows **`libx264`**, the software encoder, which is present on every machine. With an NVIDIA card, `h264_nvenc` moves the work onto the GPU and is worth picking if you have one. AMD and Intel have equivalents in the same dropdown (`h264_amf`, `h264_qsv`) when the hardware and drivers are there, though neither was tested here. Whichever you choose, keep the keyframe interval at 60 frames - 2 s at 30 fps - because that is what the segment duration downstream is aligned to.
 
