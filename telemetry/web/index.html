@@ -529,16 +529,17 @@ async function tick(){
     // amber while a healthcheck is still 'starting': red implied broken,
     // but a restarting service that works is the common post-deploy state
     const c = sv.healthy ? col('--grn') : (sv.health === 'starting' ? '#d29922' : col('--red'));
-    // State goes in a hover title, not visible text: a row of "running"
-    // repeated N times (or even just the occasional "starting") is exactly
-    // the width that pushes this row onto a second line as services get
-    // added, and the dot's colour already carries healthy/not - the title
-    // is there for when you want to know why, not by default.
+    // State goes in a hover title on every pill, not visible text: a row of
+    // "running" repeated N times (or even just the occasional "starting") is
+    // exactly the width that pushes this row onto a second line as services
+    // get added. A tooltip costs nothing until hovered, so there is no
+    // reason for the healthy pills to be the only ones without one - a pill
+    // that is sometimes hoverable and sometimes not reads as broken.
     const lbl = (sv.health === 'starting' || sv.health === 'unhealthy') ? sv.health
-              : (sv.healthy ? "" : (sv.state||""));
+              : (sv.healthy ? "healthy" : (sv.state||"stopped"));
     const rk = SVC_RESTART[sv.name];
     const rb = rk ? `<button class="rsv" data-svc="${rk}" title="restart">&#x21bb;</button>` : '';
-    const t = lbl ? ` title="${lbl}"` : '';
+    const t = ` title="${lbl}"`;
     return `<span class="chip"${t}><span class="dot" style="background:${c}"></span>${sv.name}${rb}</span>`;
   }).join("") || '<span class="chip">no services</span>')
   + `<span class="chip" title="this page"><span class="dot" style="background:${col('--grn')}"></span>telemetry<button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
