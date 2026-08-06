@@ -133,7 +133,7 @@ The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_
 
 Anyone with an ambisonic microphone rig and OBS can test their stream against this stack without standing up their own server: a keyless application that borrows the whole pipeline for the duration of a session.
 
-> **UNDER CONSTRUCTION on the public demo at stream.bmroz.eu.** The endpoint is fully implemented and works today over a LAN or a VPN, but it is **not yet reachable from the public internet on the reference deployment**: guests are the only thing that needs an inbound port opened, and that request is still with university IT administration. Nothing else is affected, because the player egresses through an outbound tunnel and the operator's own contribution path rides the VPN. If you are running your own instance this does not apply to you: open the port on your own host and the endpoint is reachable immediately.
+> **UNDER CONSTRUCTION on the public demo at [stream.bmroz.eu](https://stream.bmroz.eu/).** The endpoint is fully implemented and works today over a LAN or a VPN, but it is **not yet reachable from the public internet on the reference deployment**: guests are the only thing that needs an inbound port opened, and that request is still with university IT administration. Nothing else is affected, because the player egresses through an outbound tunnel and the operator's own contribution path rides the VPN. If you are running your own instance this does not apply to you: open the port on your own host and the endpoint is reachable immediately.
 
 **Disabled by default.** Most deployments are a single private publisher and should never expose a keyless application; set `GUEST_ENABLED=1` to opt in. Off, the `guest` application does not exist in the ingest config and the status pages carry no trace of it.
 
@@ -162,6 +162,10 @@ Everything else - bans, reporting, the privacy notice, the session log and its r
 Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay, so the clip checks itself) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/hoa-360-stream/releases/tag/vod-clips), and only the generators and the player wiring are tracked.
 
 Generation, packaging, the 360 test card and its projection check, captions, headset playback and serving VOD from object storage: [docs/VOD.md](docs/VOD.md).
+
+<div align="center"> <img src="docs/images/directions-energy-frame.png" width="88%" alt="A frame of the directions reference clip: the equirectangular 360 test card with a bright energy-visualisation glow sitting over the wall labelled RIGHT, at the moment the word right is spoken"> </div>
+
+<p align="center"><em>One frame of the <code>directions</code> reference clip. The glow is the ambisonic energy of the 16-channel bed, drawn in the same equirectangular projection as the picture, so it sits on whichever wall the sound is actually coming from. Here the word being spoken is <em>right</em>. That makes the clip self-checking: if a glow lands away from the wall it names, the ambisonic chain is wrong.</em></p>
 
 ## Configuration
 
