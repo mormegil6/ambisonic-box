@@ -33,9 +33,9 @@ Without `content/demo.mp4` the stack still demos itself: on first start loop-sou
 
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
-The RTMP contribution leg is H.264 + 16-channel AAC by protocol necessity (legacy RTMP/FLV cannot carry VP9/Opus). From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
+**Contribution is H.264 + 16-channel AAC on both routes.** Over RTMP that is protocol necessity, since legacy RTMP/FLV cannot carry VP9 or Opus. Over SRT the sender is free of it (OBS sends four separate 4-channel AAC tracks in MPEG-TS), but the gateway rejoins those tracks and republishes them as one 16-channel AAC stream over RTMP into the same ingest, deliberately, so that every piece of guest arbitration applies to SRT unchanged. From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
-**Why 16 and not 25:** the ceiling sits on the AAC contribution leg, not on delivery or rendering, because ffmpeg's AAC encoder accepts only *named* channel layouts (4 and 16 work, 9 and 25 are refused). The on-demand path never touches AAC and is 4th-order verified end to end. The full argument, including the two candidate routes past the ceiling and the sender-side arithmetic beyond 3rd order, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
+**Why 16 and not 25, and what would lift it.** ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) pass while 9 and 25 are refused outright. That is a limit on the AAC hop, not on delivery or rendering: the on-demand path never touches AAC and is **4th-order verified end to end** (a 25-channel clip auto-detected as order 4, rendered through the full order-4 impulse-response set). Live 4th order is therefore **theoretically reachable but untested, and nothing here claims it**. Reaching it needs two independent things: a wider sender layout, which multitrack SRT already makes possible (25 channels would fit as six 5-channel tracks, each individually a layout AAC accepts), and a gateway that stops funnelling through 16-channel AAC over RTMP, which is architectural rather than configuration. The full argument, the two candidate routes past the ceiling, and the sender-side arithmetic beyond 3rd order are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
 
 **Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`; it is not the running default: on the 2012 Mac Mini (quad-core i7) deployment host VP9 has been measured twice, scaled down and at the unscaled 4K this line would actually run, and the unscaled encode fell below realtime - so passthrough is the default. To check what a given host will actually do rather than trusting this paragraph:
 
@@ -63,7 +63,7 @@ docker compose config | grep FFMPEG_FLAGS
 
 <div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
 
-<p align="center"><em>The stack on the device it is for: a Meta Quest 3 browser playing the stream at stream.bmroz.eu, with the <code>?dbg</code> capability probe reporting that 2-, 16- and 25-channel Opus all decoded on the headset itself. What that probe implies about ambisonic order is in <a href="docs/AMBISONIC-ORDER.md">docs/AMBISONIC-ORDER.md</a>.</em></p>
+<p align="center"><em>A Meta Quest 3 browser playing the stream at stream.bmroz.eu, with the <code>?dbg</code> capability probe reporting that 2-, 16- and 25-channel Opus all decoded on the headset itself. What that probe implies about ambisonic order is in <a href="docs/AMBISONIC-ORDER.md">docs/AMBISONIC-ORDER.md</a>.</em></p>
 
 ## Stream your own content
 
@@ -110,7 +110,7 @@ Four of those values are exact rather than indicative. Each was established by p
 
 #### Bitrate
 
-Moved to [docs/BITRATE.md](docs/BITRATE.md): the 96 kbit/s-per-channel contribution rule and its published anchors, and why video is the opposite trade (paid per viewer, and this deployment's 6.5 Mbit/s at 4096x2048 is a deliberate egress choice rather than a quality recommendation).
+Audio is paid once on the uplink, so the contribution rule is generous: 96 kbit/s per channel, which is where the 384 kbit/s for four tracks in the recipes above comes from. Video is the opposite trade, paid per viewer, and this deployment's 6.5 Mbit/s at 4096x2048 is a deliberate egress choice rather than a quality recommendation. The published anchors behind both, and the honest caveat that no transparency measurement exists for AAC-coded ambisonics, are in [docs/BITRATE.md](docs/BITRATE.md).
 
 **Per-OS routing, step by step:**
 
