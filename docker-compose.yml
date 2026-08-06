@@ -46,11 +46,11 @@ services:
       - RTMP_AUTH_TOKEN=
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
       # Public DASH manifest filename. Fixed on purpose and decoupled from
-      # STREAM_KEY: the publish name used to name this file, and any client on
+      # LIVE_APP_KEY: the publish name used to name this file, and any client on
       # the public :1935 port chooses the publish name, so an interpolated name
       # was an arbitrary-path write inside earshot. Defaulted to the literal the
       # player is hardcoded to (services/hoast-player/index.html), NOT to
-      # ${STREAM_KEY}, so the key becomes a rotatable secret without moving the
+      # ${LIVE_APP_KEY}, so the key becomes a rotatable secret without moving the
       # manifest URL. Validated against [A-Za-z0-9_-]+ in the earshot entrypoint.
       - DASH_NAME=${DASH_NAME:-hoast_demo}
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
@@ -124,7 +124,7 @@ services:
     build:
       context: ./services/rtmp-ingest
     environment:
-      - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+      - LIVE_APP_KEY=${LIVE_APP_KEY:-hoast_demo}
       # keyless guest test endpoint (rtmp://<host>:1935/guest); OFF by default,
       # see the README's guest section before enabling
       - GUEST_ENABLED=${GUEST_ENABLED:-0}
@@ -150,7 +150,7 @@ services:
     image: hoa360-earshot:local
     entrypoint: ["/bin/sh", "/opt/loop-source/entrypoint.sh"]
     environment:
-      - STREAM_KEY=${STREAM_KEY:-hoast_demo}
+      - LIVE_APP_KEY=${LIVE_APP_KEY:-hoast_demo}
       # the loop's publish NAME (the entrypoint reads it and defaulted to
       # hoast_demo all along; passing it keeps a custom DASH_NAME in step
       # with telemetry's copy, whose loop/owner discrimination keys on it)
@@ -308,7 +308,7 @@ services:
   # grace, bans, kill, stall, demo-loop interlock) from the existing
   # nginx-rtmp callbacks. Privilege-separated on purpose: this container
   # parses hostile pre-auth internet bytes, so it holds NO docker socket, NO
-  # volumes, NO STREAM_KEY, no capabilities, read-only rootfs. ON by default:
+  # volumes, NO LIVE_APP_KEY, no capabilities, read-only rootfs. ON by default:
   # this is the recommended contribution path (stock OBS, one recipe on macOS
   # and Windows). It still admits nobody unless GUEST_ENABLED=1 - the arbiter
   # refuses every caller - so the port alone opens nothing. SRT_ENABLED=0

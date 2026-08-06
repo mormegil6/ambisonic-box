@@ -49,17 +49,17 @@ http {
 
         # Accept a publish when either the stream name or a ?token= query arg
         # matches the configured stream key:
-        #   rtmp://<host>:1935/live/${STREAM_KEY}
-        #   rtmp://<host>:1935/live/<anything>?token=${STREAM_KEY}
+        #   rtmp://<host>:1935/live/${LIVE_APP_KEY}
+        #   rtmp://<host>:1935/live/<anything>?token=${LIVE_APP_KEY}
         location = /auth {
             # The publish credential arrives here as ?token= (or the stream
             # name); keep it out of the access log so the key is not written to
             # stdout/docker logs on every publish.
             access_log off;
-            if ($arg_name = '${STREAM_KEY}') {
+            if ($arg_name = '${LIVE_APP_KEY}') {
                 return 418;
             }
-            if ($arg_token = '${STREAM_KEY}') {
+            if ($arg_token = '${LIVE_APP_KEY}') {
                 return 418;
             }
             return 401;

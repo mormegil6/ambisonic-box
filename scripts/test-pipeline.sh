@@ -16,7 +16,7 @@
 # earshot transcode (always 16-ch Opus; video per FFMPEG_FLAGS) is what this
 # test verifies.
 #
-# The test publishes as "pipeline-test?token=$STREAM_KEY" (exercising the
+# The test publishes as "pipeline-test?token=$LIVE_APP_KEY" (exercising the
 # token-auth path). earshot writes every stream's chunks into the same
 # directory with identical default names, so the test refuses to run while
 # another publisher is active; if that publisher is loop-source, it is
@@ -45,16 +45,16 @@ STOP_PUBLISH_DEADLINE=20
 MIN_CHUNKS=5             # >=10 s of content at 2 s segments
 OUTPUT_DIR=./output
 
-# Read STREAM_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
+# Read LIVE_APP_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
 # first, then .env. Never shell-source .env - the compose dialect allows
 # unquoted values with spaces (see FFMPEG_FLAGS in .env.example).
 env_get() {
     sed -n "s/^$1=//p" .env | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
-if [ -z "${STREAM_KEY:-}" ] && [ -f .env ]; then STREAM_KEY=$(env_get STREAM_KEY); fi
+if [ -z "${LIVE_APP_KEY:-}" ] && [ -f .env ]; then LIVE_APP_KEY=$(env_get LIVE_APP_KEY); fi
 if [ -z "${FFMPEG_FLAGS:-}" ] && [ -f .env ]; then FFMPEG_FLAGS=$(env_get FFMPEG_FLAGS); fi
-STREAM_KEY="${STREAM_KEY:-hoast_demo}"
+LIVE_APP_KEY="${LIVE_APP_KEY:-hoast_demo}"
 FFMPEG_FLAGS="${FFMPEG_FLAGS:-}"
 if [ -z "${DASH_NAME:-}" ] && [ -f .env ]; then DASH_NAME=$(env_get DASH_NAME); fi
 DASH_NAME="${DASH_NAME:-hoast_demo}"
@@ -247,7 +247,7 @@ docker compose run --rm --no-deps -T --name "$PUSH_CONTAINER" \
     -b:v 4M -g 60 -keyint_min 60 \
     -c:a aac -b:a 512k -ar 48000 \
     -t "$PUSH_SECONDS" \
-    -f flv "rtmp://rtmp-ingest:1935/live/${TEST_STREAM}?token=${STREAM_KEY}" &
+    -f flv "rtmp://rtmp-ingest:1935/live/${TEST_STREAM}?token=${LIVE_APP_KEY}" &
 push_pid=$!
 
 # ------------------------------------------- first-segment deadline ---------

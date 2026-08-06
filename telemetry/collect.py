@@ -650,7 +650,7 @@ _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint up
 # guest-end resume may put the demo loop back beside the owner.
 # The discriminator is the loop's PUBLISH NAME, which is DASH_NAME - the
 # loop publishes /live/${DASH_NAME:-hoast_demo}?token=<key>, so its name is
-# never the key (comparing against STREAM_KEY was the review's blocker: on
+# never the key (comparing against LIVE_APP_KEY was the review's blocker: on
 # any box where the key is a real secret, the loop's own publish would read
 # as an owner and stop itself in a start/stop flap). This also means the
 # key itself never needs to reach this container. An owner must simply not
@@ -2343,7 +2343,7 @@ def serve():
                     if call and call != "update_publish":
                         return self._json(200, {})
                     return self._json(guest_update(name), {})
-            # A /live publish just passed the STREAM_KEY check at rtmp-ingest
+            # A /live publish just passed the LIVE_APP_KEY check at rtmp-ingest
             # (the demo loop or an external owner - owner_notify tells them
             # apart by the forwarded name). nginx already fails these open,
             # so the responses here don't gate anything.

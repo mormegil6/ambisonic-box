@@ -83,7 +83,7 @@ env_get() {
     sed -n "s/^$1=//p" .env 2>/dev/null | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
-STREAM_KEY="${STREAM_KEY:-$(env_get STREAM_KEY)}"; STREAM_KEY="${STREAM_KEY:-hoast_demo}"
+LIVE_APP_KEY="${LIVE_APP_KEY:-$(env_get LIVE_APP_KEY)}"; LIVE_APP_KEY="${LIVE_APP_KEY:-hoast_demo}"
 DASH_NAME="${DASH_NAME:-$(env_get DASH_NAME)}";   DASH_NAME="${DASH_NAME:-hoast_demo}"
 
 LOOP_WAS_RUNNING=0
@@ -101,7 +101,7 @@ restore() {
 trap restore EXIT
 
 ./scripts/merge-obs-tracks.sh "$WORK/obs-shaped.mov" \
-    --push "rtmp://localhost:1935/live/obs-merge-test?token=${STREAM_KEY}" \
+    --push "rtmp://localhost:1935/live/obs-merge-test?token=${LIVE_APP_KEY}" \
     --channels 16 >/dev/null 2>&1 \
     || fail "push through the ingest failed"
 
