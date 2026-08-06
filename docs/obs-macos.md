@@ -18,7 +18,7 @@ The steps run in the same order as [the Windows guide](obs-windows.md). Only ste
 
 Set REAPER's audio device to the multichannel device, at 48 kHz.
 
-<div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="41%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
+<div align="center"><img src="images/obs-macos/01_Reaper-device.png" width="72%" alt="REAPER Preferences, Audio Device page, with Audio Device set to BlackHole 16ch and the sample rate set to 48000."></div>
 
 To test the chain rather than your own content, open [`docs/fixtures/AmbiX16ch_StreamTest-Mac.RPP`](fixtures/): sixteen mono tracks, `ACN-00` to `ACN-15`, each carrying one tone of a 100-1600 Hz ladder at its own level, already routed. One tone per channel is what makes channel order and channel loss *visible* rather than a matter of opinion, and it needs only a stock REAPER JS plugin.
 
@@ -30,7 +30,7 @@ Sixteen individual hardware outputs would work too. The bus is worth the extra t
 
 Those outputs are numbered rather than named because on macOS the *device* is chosen back in Preferences > Audio > Device, so `Output 1..16` here means channels 1-16 of BlackHole. On Windows the same list shows ReaRoute by name instead.
 
-<div align="center"><img src="images/obs-macos/03_Reaper-3OA-routing.png" width="52%" alt="REAPER Routing dialog for track 1, the 16-channel folder track 3OA, on macOS: Track channels is 16, the Master send checkbox is unticked, one Audio Hardware Output maps 1-16 to Output 1..Output 16 [16 chan], and the Receives column lists mono receives from ACN-00, ACN-01, ACN-02 onward, each landing on its own destination channel 1, 2, 3 and so on."></div>
+<div align="center"><img src="images/obs-macos/03_Reaper-3OA-routing.png" width="62%" alt="REAPER Routing dialog for track 1, the 16-channel folder track 3OA, on macOS: Track channels is 16, the Master send checkbox is unticked, one Audio Hardware Output maps 1-16 to Output 1..Output 16 [16 chan], and the Receives column lists mono receives from ACN-00, ACN-01, ACN-02 onward, each landing on its own destination channel 1, 2, 3 and so on."></div>
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 
@@ -44,7 +44,7 @@ Not 7.1. This governs the channel *width* of every track in the output regardles
 
 **Channels is the only field on that page that matters.** Every global audio device dropdown can stay **Disabled** - your 16 channels arrive as *sources*, not as global devices.
 
-<div align="center"><img src="images/obs-macos/04_OBS-channels-setting.png" width="57%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
+<div align="center"><img src="images/obs-macos/04_OBS-channels-setting.png" width="82%" alt="OBS Settings, Audio page, showing Sample Rate 48 kHz and Channels set to 4.0, with every global audio device disabled."></div>
 
 OBS then warns that surround sound is enabled and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
 
@@ -67,7 +67,7 @@ Add four **Audio Input Capture** sources on your multichannel device, one per gr
 
 Turn **downmixing off** on each.
 
-<div align="center"><img src="images/obs-macos/05_OBS-adding-4ch-audio-device.png" width="41%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
+<div align="center"><img src="images/obs-macos/05_OBS-adding-4ch-audio-device.png" width="78%" alt="Properties for the source named BlackHole16ch 13-16: Device is BlackHole 16ch, Enable Downmixing is unchecked, and Channels 1 to 4 are mapped to Device Channels 13, 14, 15 and 16."></div>
 
 Four sources now appear in the OBS **Sources** panel. Rename each one to carry its channel range - the four in the fixture preset are `BlackHole16ch 01-04`, `05-08`, `09-12` and `13-16`. Nothing downstream reads the names, but the next step asks you to match each source to a track number, and generic names make that easy to get wrong. With the tone ladder playing, all four should show signal:
 
@@ -77,7 +77,7 @@ Four sources now appear in the OBS **Sources** panel. Rename each one to carry i
 
 **Advanced Audio Properties** (right-click any source in the Audio Mixer): assign `BlackHole16ch 01-04` to Track 1, `05-08` to Track 2, `09-12` to Track 3, `13-16` to Track 4. Tick exactly one track per source and untick the rest.
 
-<div align="center"><img src="images/obs-macos/07_OBS-tracks-routing.png" width="66%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
+<div align="center"><img src="images/obs-macos/07_OBS-tracks-routing.png" width="88%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
 
@@ -96,7 +96,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
 | Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
-<div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="57%" alt="OBS Settings, Output, Recording tab on macOS: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
+<div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="75%" alt="OBS Settings, Output, Recording tab on macOS: Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Tracks 1 to 4 ticked, Audio Encoder aac."></div>
 
 <p align="center"><em>The URL carries both parameters that matter: <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else, and <code>&amp;pkt_size=1128</code>, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>. Substitute your own host and stream name for the two placeholders. The 20000 Kbps here is for 8K; 6000 suits 4096x2048, so set it against your own resolution and uplink rather than copying the figure.</em></p>
 

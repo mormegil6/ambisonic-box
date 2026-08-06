@@ -26,7 +26,7 @@ To test the chain rather than your own content, open [`docs/fixtures/AmbiX16ch_S
 
 Sixteen individual hardware outputs would work too. The bus is worth the extra track because it puts the entire channel mapping in one dialog you can read at a glance - and it is where an ambisonic encoder would sit if you were producing content rather than testing.
 
-<div align="center"><img src="images/obs-windows/02_Reaper-3OA-routing.png" width="45%" alt="REAPER Routing dialog for track 1, the 16-channel folder track 3OA: Track channels is 16, the Master send checkbox is unticked, one Audio Hardware Output maps 1-16 to ReaRoute 1..ReaRoute 16 [16 chan], and the Receives column lists mono receives from ACN-00, ACN-01, ACN-02 onward, each landing on its own destination channel 1, 2, 3 and so on."></div>
+<div align="center"><img src="images/obs-windows/02_Reaper-3OA-routing.png" width="62%" alt="REAPER Routing dialog for track 1, the 16-channel folder track 3OA: Track channels is 16, the Master send checkbox is unticked, one Audio Hardware Output maps 1-16 to ReaRoute 1..ReaRoute 16 [16 chan], and the Receives column lists mono receives from ACN-00, ACN-01, ACN-02 onward, each landing on its own destination channel 1, 2, 3 and so on."></div>
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 
@@ -40,7 +40,7 @@ Not 7.1. This governs the channel *width* of every track in the output regardles
 
 **Channels is the only field on that page that matters.** Every global audio device dropdown can stay **Disabled** - your 16 channels arrive as *sources*, not as global devices.
 
-<div align="center"><img src="images/obs-windows/03_OBS-channels-setting.png" width="57%" alt="OBS Settings, Audio page on Windows: Sample Rate 48 kHz, Channels 4.0, and every entry under Global Audio Devices set to Disabled."></div>
+<div align="center"><img src="images/obs-windows/03_OBS-channels-setting.png" width="82%" alt="OBS Settings, Audio page on Windows: Sample Rate 48 kHz, Channels 4.0, and every entry under Global Audio Devices set to Disabled."></div>
 
 OBS then warns that surround sound is enabled and lists which streaming services cope with it. That warning is aimed at people sending 5.1 to a video platform; here the four channels never reach a service that has an opinion about them, so it can be ignored.
 
@@ -62,19 +62,19 @@ Steps 3d and 3e below are the fiddly ones, and they can be skipped: once the Plu
 
 **Add Source > atkAudio Source Mixer.** Here it exists only to host a filter, so leave its properties as they come. In particular do **not** reach for its combine-sources feature to merge channels: it is capped at stereo and it sums rather than preserving channels, which would destroy the ambisonic field.
 
-<div align="center"><img src="images/obs-windows/04_OBS-add-source.png" width="57%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
+<div align="center"><img src="images/obs-windows/04_OBS-add-source.png" width="78%" alt="The OBS Add Source dialog with atkAudio Source Mixer selected."></div>
 
 ### 3b. Open PluginHost2, the real interface
 
 Right-click that source > **Filters > + > atkAudio Plugin Host2**. A separate floating **atkAudio PluginHost2** window opens. That is the real interface.
 
-<div align="center"><img src="images/obs-windows/05_OBS-add-pluginhost2-filter.png" width="50%" alt="The Filters dialog for the atkAudio Source Mixer source, with the add-filter list open and atkAudio PluginHost2 highlighted."></div>
+<div align="center"><img src="images/obs-windows/05_OBS-add-pluginhost2-filter.png" width="72%" alt="The Filters dialog for the atkAudio Source Mixer source, with the add-filter list open and atkAudio PluginHost2 highlighted."></div>
 
 ### 3c. Point PluginHost2 at ReaRoute ASIO
 
 In that window: **Options > Change Device Settings**. Set Device to **ReaRoute ASIO**, sample rate to match your REAPER project (48000 Hz), and make sure all 16 channels are ticked under **Active INPUT channels** ("ReaRoute REAPER=>CLIENT" - audio coming *from* REAPER). They are generally all ticked already, but check them through anyway: a single missing one costs you an ambisonic channel and nothing later will say so. The Active OUTPUT list can be left alone; that direction sends OBS audio back to REAPER and is not used here.
 
-<div align="center"><img src="images/obs-windows/06_PluginHost2-device-settings.png" width="66%" alt="The PluginHost2 Audio Settings panel: Device is ReaRoute ASIO (x64), the Active input channels list shows ReaRoute REAPER to CLIENT entries ticked, and the sample rate is 48000 Hz."></div>
+<div align="center"><img src="images/obs-windows/06_PluginHost2-device-settings.png" width="72%" alt="The PluginHost2 Audio Settings panel: Device is ReaRoute ASIO (x64), the Active input channels list shows ReaRoute REAPER to CLIENT entries ticked, and the sample rate is 48000 Hz."></div>
 
 ### 3d. Create four OBS Output nodes
 
@@ -82,7 +82,7 @@ In that window: **Options > Change Device Settings**. Set Device to **ReaRoute A
 
 New plug-ins land at a **random spot on the canvas**, and sometimes that spot is unreachable - the node exists but you cannot scroll to it or drag it back into view. There is no way to recover a single stranded node: **Plugins > Delete all Plug-ins** and build the graph again. That clears every node, Audio Input included, and none of them return on their own. Recreate Audio Input from the same Plugins > Create Plug-in menu; Audio Output and the MIDI nodes can be put back the same way if you want them, though nothing in this recipe uses them.
 
-<div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="57%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
+<div align="center"><img src="images/obs-windows/07_PluginHost2-create-obs-output.png" width="72%" alt="The PluginHost2 Plugins menu open on Create Plug-in, with OBS Output highlighted among the available nodes."></div>
 
 ### 3e. Set each node to Discrete #4
 
@@ -93,13 +93,13 @@ Use "Discrete" rather than one of the named layouts alongside it. That was a pre
 This step is undocumented upstream: a search of the plugin's forum thread, its whole changelog, its reviews and every GitHub issue turned up no mention of it. Skip it and every node stays stereo, which cannot reach 16 - OBS offers six audio tracks, so 2-channel nodes top out at 12 channels no matter how many you create. The plug-in itself does not appear to cap how many OBS Output nodes you can add; the ceiling is OBS's track count times the per-track width, which is why the width is the thing to fix.
 
 <div align="center">
-  <img src="images/obs-windows/08_PluginHost2-configure-audio-io.png" width="45%" alt="Right-clicking an OBS Output node in the PluginHost2 graph opens a context menu with Configure Audio I/O highlighted, alongside Save and Load plugin state.">
+  <img src="images/obs-windows/08_PluginHost2-configure-audio-io.png" width="72%" alt="Right-clicking an OBS Output node in the PluginHost2 graph opens a context menu with Configure Audio I/O highlighted, alongside Save and Load plugin state.">
   <img src="images/obs-windows/09_PluginHost2-discrete-4.png" width="33%" alt="The OBS Output node Configure Audio I/O panel with the Channel Layout dropdown open, Stereo currently ticked and Discrete #4 highlighted.">
 </div>
 
 The finished graph looks like this - one Audio Input node fanning out to four OBS Output nodes, four connections each:
 
-<div align="center"><img src="images/obs-windows/10_PluginHost2-wired-graph.png" width="66%" alt="The finished PluginHost2 graph: one Audio Input node fanning out to four OBS Output nodes, four connections each."></div>
+<div align="center"><img src="images/obs-windows/10_PluginHost2-wired-graph.png" width="78%" alt="The finished PluginHost2 graph: one Audio Input node fanning out to four OBS Output nodes, four connections each."></div>
 
 Four sources now appear in the OBS **Sources** panel, with real level meters. They have no Properties dialog of their own, which is expected - everything about them lives in the graph. Rename each one to carry its channel range - `Ph2Out 01-04`, `Ph2Out 05-08`, `Ph2Out 09-12`, `Ph2Out 13-16`. Nothing downstream reads the names, but the next step asks you to match each source to a track number, and generic names make that easy to get wrong.
 
@@ -109,7 +109,7 @@ Four sources now appear in the OBS **Sources** panel, with real level meters. Th
 
 **Advanced Audio Properties** (right-click any source in the Audio Mixer): assign `Ph2Out 01-04` to Track 1, `05-08` to Track 2, `09-12` to Track 3, `13-16` to Track 4. Tick exactly one track per source and untick the rest.
 
-<div align="center"><img src="images/obs-windows/12_OBS-tracks-routing.png" width="66%" alt="OBS Advanced Audio Properties on Windows: the four Ph2Out sources each have exactly one of tracks 1 to 4 ticked."></div>
+<div align="center"><img src="images/obs-windows/12_OBS-tracks-routing.png" width="88%" alt="OBS Advanced Audio Properties on Windows: the four Ph2Out sources each have exactly one of tracks 1 to 4 ticked."></div>
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
 
@@ -128,7 +128,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
 | Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
 
-<div align="center"><img src="images/obs-windows/13_OBS-recording-settings.png" width="57%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, mpegts, 6000 Kbps, keyframe interval 60, libx264, 384 Kbps audio, tracks 1 to 4, aac."></div>
+<div align="center"><img src="images/obs-windows/13_OBS-recording-settings.png" width="75%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with the URL srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128, mpegts, 6000 Kbps, keyframe interval 60, libx264, 384 Kbps audio, tracks 1 to 4, aac."></div>
 
 <p align="center"><em>The URL carries both parameters that matter: <code>&amp;latency=2000000</code>, since SRT's default of about 120 ms survives loopback and little else, and <code>&amp;pkt_size=1128</code>, for the reason in <a href="#5-point-obs-at-the-box">the tunnel trap below</a>. Substitute your own host and stream name for the two placeholders.</em></p>
 
