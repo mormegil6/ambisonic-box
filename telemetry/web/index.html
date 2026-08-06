@@ -557,7 +557,8 @@ async function tick(){
     const t = ` title="${desc ? desc + '\n' : ''}${lbl}"`;
     return `<span class="chip"${t}><span class="dot" style="background:${c}"></span>${sv.name}${rb}</span>`;
   }).join("") || '<span class="chip">no services</span>')
-  + `<span class="chip" title="this page"><span class="dot" style="background:${col('--grn')}"></span>telemetry<button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
+  + `<span class="chip" title="this page
+healthy"><span class="dot" style="background:${col('--grn')}"></span>telemetry<button class="rsv" data-svc="telemetry" title="restart">&#x21bb;</button></span>`
   + `<span class="ctl-msg" id="restartMsg"></span>`;
   const rm = $('restartMsg'); if (rm && window.__RESTART_MSG__) rm.textContent = window.__RESTART_MSG__;
   reapplyRestartArm();
