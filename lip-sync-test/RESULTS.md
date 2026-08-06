@@ -32,9 +32,9 @@
 | 2 s | 87 MB | ~7.5 Mbps | 1 | 9-12 s |
 | 4 s | 69 MB | ~5.8 Mbps | 1 | 15-20 s |
 
-![Segment-duration trade-off: bitrate and buffer depth vs segment duration](segment-tradeoff.png)
+![Segment-duration trade-off: bitrate and buffer depth vs segment duration](segment-tradeoff-2026-06.png)
 
-*Bitrate and buffer depth vs segment duration (`scripts/plot-segment-tradeoff.py`; PNG + SVG). Buffer is a min-max band, not error bars; A/V offset is a structural 0 ms at every duration, so it is noted rather than plotted.*
+*Bitrate and buffer depth vs segment duration (`scripts/plot-segment-tradeoff.py 2026-06`; PNG + SVG). Buffer is a min-max band, not error bars; A/V offset is a structural 0 ms at every duration, so it is noted rather than plotted. The filename carries the measurement month: a re-measurement is written beside this one rather than over it, so the figure a caption refers to never changes under it.*
 
 - **0.5 s is not viable at 4K**: a keyframe every 15 frames forces libvpx far past the 4 Mbps target (~11x the target, ~6x the 2 s variant's bitrate, at its quality floor), and the playback buffer hovers under 1 s - it was the only variant with repeated stalls.
 - 1 s / 2 s / 4 s are equivalent on sync; they differ only in bitrate overhead and buffer depth. Startup latency was ~0.4-0.6 s for all variants.

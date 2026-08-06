@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """Segment-duration trade-off figure for the lip-sync measurement (lip-sync-test/RESULTS.md).
 
-Regenerates lip-sync-test/segment-tradeoff.png from the RESULTS.md numbers.
+Regenerates lip-sync-test/segment-tradeoff-<date>.{png,svg} from the RESULTS.md
+numbers, where <date> is the YYYY-MM the measurement was taken (not the day the
+plot was drawn). Pass it explicitly:
+
+    python3 scripts/plot-segment-tradeoff.py 2026-06
+
+The date is part of the filename so a re-measurement lands beside its
+predecessor instead of overwriting it: the figures are cited from RESULTS.md and
+from the project page at https://bmroz.eu/projects/360-livestream/, and a
+silently-replaced figure would leave those captions describing data that is no
+longer in the image.
 
 The A/V offset is a flat 0 ms across all durations (combined-MPD single
 media-element clock), so it is stated as a note rather than plotted. What varies
@@ -9,6 +19,34 @@ is bitrate and buffer depth. Buffer depth is a fluctuating level, drawn as a
 min-max band rather than error bars: with n=3 runs and a structurally-zero sync
 result, confidence intervals would imply noise that is not there.
 """
+import re
+import sys
+
+# Argument check before the matplotlib import, so a usage mistake reports itself
+# even on a host that has not installed the plotting dependency.
+if len(sys.argv) != 2 or not re.fullmatch(r"\d{4}-\d{2}", sys.argv[1]):
+    sys.exit(
+        "usage: plot-segment-tradeoff.py YYYY-MM\n"
+        "\n"
+        "  YYYY-MM is the month the MEASUREMENT was taken, per the Date line in\n"
+        "  lip-sync-test/RESULTS.md. The figures currently in the tree are 2026-06.\n"
+        "\n"
+        "  It is required rather than defaulted to the current month on purpose.\n"
+        "  This script does not measure anything: it plots numbers transcribed\n"
+        "  into the arrays below from RESULTS.md. Re-running it to adjust styling\n"
+        "  would then stamp a fresh month onto old data and write a file whose\n"
+        "  name asserts a measurement that never happened. Passing the month\n"
+        "  explicitly also keeps the script idempotent: the same data always\n"
+        "  produces the same filename, whenever it is run.\n"
+        "\n"
+        "  The date is in the filename so a re-measurement lands beside its\n"
+        "  predecessor rather than overwriting it. These figures are cited from\n"
+        "  RESULTS.md and from https://bmroz.eu/projects/360-livestream/, and a\n"
+        "  silently-replaced figure would leave both captions describing data\n"
+        "  that is no longer in the image."
+    )
+MEASURED = sys.argv[1]
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -55,6 +93,6 @@ fig.text(0.5, 0.005,
 fig.tight_layout(rect=(0, 0.03, 1, 1))
 # PNG for inline markdown / quick view; SVG (vector) for web pages and print.
 for ext, kw in (("png", {"dpi": 160}), ("svg", {})):
-    out = f"lip-sync-test/segment-tradeoff.{ext}"
+    out = f"lip-sync-test/segment-tradeoff-{MEASURED}.{ext}"
     fig.savefig(out, **kw)
     print("wrote", out)
