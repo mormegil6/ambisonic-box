@@ -37,12 +37,15 @@ are what the figure shows. Generate one first:
 The committed figure, docs/images/sphere-tessellation-before-after.png, is:
 
   scripts/render-sphere-distortion.py /tmp/testcard-8k.png \
-      --az 0 --el -88 --fov 30 --size 520 --out-dir docs/images
+      --az 0 --el -88 --fov 60 --size 520 --out-dir docs/images
 
 It looks near the nadir on purpose. The angular error there is only about 1.3x
 the equator's, but the quads degenerate to slivers and every meridian
 converges, so the same magnitude reads far louder: it is the honest worst case,
-not the typical one, and the caption on any page using it should say so.
+not the typical one, and the caption on any page using it should say so. FOV is
+wide enough to keep the surrounding test-card panel in frame rather than
+filling the crop with an isolated crosshair; the bowing is still visible in the
+full-resolution PNG at native size, in the spokes nearest the crosshair.
 
 Usage:
   scripts/render-sphere-distortion.py SOURCE.png --out-dir docs/images
