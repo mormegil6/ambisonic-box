@@ -387,6 +387,11 @@
         // at t+6 s, but playable only from ~t+43 s. So we gate on /api/live's
         // `ready`, which also covers a visitor arriving while the stream is down.
         var gateStarted = false, gateTimer = null, probeOk = false;
+        // Set when the gate is brought back after the source stopped under an
+        // already-running session (on-demand idling makes that routine, not
+        // exotic). Recovery then goes through a reload rather than straight
+        // back into beginPlayback: hoast360.initialize() is not re-entrant.
+        var gateRearmed = false;
         // Consecutive /api/live failures tolerated before the page acts on them.
         // A rolling restart of telemetry produces a 502 window of a few seconds.
         var probeFails = 0, PROBE_FALLBACK = 3;
@@ -567,6 +572,13 @@
 
         function beginPlayback() {
             if (gateStarted) return;
+            // Belt and braces for the re-armed case. Clearing gateStarted to
+            // bring the gate back also re-opens every route into here - the
+            // stream coming back by itself would auto-play through the
+            // p.ready branch - and a second initialize() on a live instance
+            // rebuilds the XR plugin and the audio graph underneath itself.
+            // One reload is the only safe way back in.
+            if (gateRearmed) { location.reload(); return; }
             gateStarted = true;
             stopWaiting();
             schedule(10000);        // keep probing, slower: the badge must stay honest
@@ -584,6 +596,25 @@
                 .then(function (r) { return r.json(); })
                 .then(function (p) {
                     setBadge(p);
+                    // The source can stop under a session that already started:
+                    // on-demand idling does exactly that once nobody has been
+                    // fetching segments for TEL_IDLE_STOP_MIN. Without this the
+                    // visitor is left with a dead player and no control at all,
+                    // because gateStarted latches true in beginPlayback() and
+                    // gateIdle - the only thing that can bring the stream back
+                    // up - is then unreachable for precisely the people who
+                    // need it. The same hazard the telemetry-down branch below
+                    // already guards against, on the path that is now common.
+                    if (gateStarted && p.on_demand && !p.live
+                            && !p.source_running && !p.starting) {
+                        gateRearmed = true;
+                        gateStarted = false;
+                        var g0 = document.getElementById('gate');
+                        if (g0) g0.hidden = false;
+                        show('gateIdle');
+                        schedule(3000);
+                        return;
+                    }
                     if (gateStarted) return;
                     if (p.ready) {
                         stopWaiting();
@@ -641,7 +672,16 @@
             startWaiting();
             fetch('/api/start', { method: 'POST' })
                 .then(function (r) { return r.json(); })
-                .then(function (r) { if (!r.ok) show('gateErr'); })
+                .then(function (r) {
+                    if (!r.ok) { show('gateErr'); return; }
+                    // Recovering from an idle-out: reload instead of falling
+                    // back into beginPlayback, which would call
+                    // hoast360.initialize() a second time on an instance that
+                    // already has an XR plugin and an audio graph. The fresh
+                    // load takes the ordinary cold-start path (gateWait, then
+                    // auto-play once ready), which is the tested one.
+                    if (gateRearmed) location.reload();
+                })
                 .catch(function () { show('gateErr'); })
                 .then(function () { if (btn) btn.disabled = false; });
         }

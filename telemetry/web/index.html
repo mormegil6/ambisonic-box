@@ -142,6 +142,14 @@
     <!-- Cloudflare Web Analytics for the VOD page: ARRIVALS (page loads),
          deliberately not playback or watch time. Hidden without the token. -->
     <div class="tile" id="vodTile" hidden><div class="k">VOD page loads <span class="hint">(24 h, arrivals not playback)</span></div><div class="v" id="vodViews">—</div><div class="s" id="vodViewsSub">&nbsp;</div></div>
+    <!-- Clients whose binaural renderer actually initialised: they fetched the
+         HOA impulse responses, which nothing else on the site requests. A
+         different question from Viewers now, and the stronger one - it counts
+         people for whom the ambisonic path really ran, not people connected.
+         Says "live + VOD" because it genuinely cannot tell them apart: the
+         live player and the VOD clips both call hoast360.initialize(.., "/irs/")
+         and the access log records no referer, so the two are one number. -->
+    <div class="tile" id="rndTile" hidden><div class="k">3D audio starts <span class="hint">(24 h, live + VOD)</span></div><div class="v" id="rndStarts">—</div><div class="s" id="rndStartsSub">&nbsp;</div></div>
   </div>
 
   <section>
@@ -468,6 +476,19 @@ async function tick(){
   renderBans(s);
 
   renderReach(s);
+
+  // 3D-audio starts: rolling 24 h gauge, so it is deliberately NOT plotted in
+  // the history sparklines beside the instantaneous viewer count.
+  const rd = s.renderer, rt = $('rndTile');
+  if (rt) {
+    rt.hidden = !rd;
+    if (rd) {
+      $('rndStarts').textContent = rd.starts_24h;
+      $('rndStartsSub').textContent = rd.starts_24h === 0
+        ? 'nobody heard it in 3D yet'
+        : 'binaural decode ran';
+    }
+  }
 
   // VOD arrivals tile (Cloudflare Web Analytics, token-gated server-side)
   const va = s.vod_analytics, vt = $('vodTile');

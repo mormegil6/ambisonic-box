@@ -13,7 +13,7 @@
 # A tiny threaded HTTP server serves the dashboard on TEL_PORT. stdlib only + the
 # docker CLI (installed in the image; the socket is mounted read-write, because
 # on-demand idling starts and stops the loop-source container).
-import hmac, json, os, re, socket, subprocess, time, ipaddress, threading
+import hashlib, hmac, json, os, re, socket, subprocess, time, ipaddress, threading
 import http.server, socketserver, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -63,6 +63,8 @@ PUBDIR = Path(os.environ.get("TEL_PUB", "/pub"))   # shared with hoast-player (p
 STATS = DATA/"stats.json"; PUB = PUBDIR/"status.json"
 CSV   = DATA/"viewers.csv"; STATE = DATA/"alert_state.json"
 VODCSV = DATA/"vod_analytics.csv"   # 24h-window gauge rows, one per fresh poll
+IRSTATE = DATA/"renderer_state.json"   # rolling 24h renderer-start dedup, hashed
+IR_WINDOW_S = 86400                 # 24 h, a gauge like the VOD arrivals tile
 
 
 def run(cmd, t=12):
@@ -251,12 +253,46 @@ def encoder(ps, publishing):
     return {"speed": sp, "speed_now": rate,
             "behind": rate is not None and rate < ENCODER_MIN}
 
+# A viewer is somebody FETCHING SEGMENTS, not somebody holding a connection.
+# dash.js re-reads the manifest on a timer whether or not anything is playing,
+# so matching any /dash/ path counted an abandoned browser tab as an audience
+# forever. Measured 2026-08-07: one VPS-hosted client played 15 s, then polled
+# hoast_demo.mpd 2748 times over the next 5.5 h and was counted as a viewer
+# throughout. That was not merely a wrong number on a panel - auto_idle reads
+# this, so the box kept transcoding 4K for nobody. `chunk-stream` is the same
+# marker the segment-freshness probe already keys on, and the VOD packager
+# names its files v_<res>.mp4 / audio_16ch.webm, so this cannot pick up /vod/.
+SEGMENT_MARK = "chunk-stream"
+# The binaural impulse responses, requested by the HOAST360 renderer when it
+# initialises its convolvers and by nothing else on the site. o1..o4, so the
+# match stays order-agnostic. This answers a different question from "viewers":
+# not who is connected, but for whom the ambisonic path actually ran. Repeat
+# listeners are visible too - the files carry ETag/Last-Modified but no
+# Cache-Control, so a returning browser revalidates and still hits the log
+# (measured over 7 days: 28 x 200 alongside 27 x 304).
+IR_MARK = "/irs/hoast_o"
+
+
 def viewers(ps):
     c = container_named(ps, "hoast-player")
-    out = sh(f"docker logs {c} --since {VIEWER_WINDOW}s 2>&1") if c else ""
-    ips, any_ips, countries = set(), set(), {}
+    # A FAILED probe is not an audience of zero, and the difference matters:
+    # auto_idle has a deliberate `watchers is None` branch ("uncertainty must
+    # never stop the stream") that could never fire while this returned 0 for
+    # both cases. sh() is the wrong helper here - its own docstring says it is
+    # "for probes where empty and failed mean the same thing" - so use run()
+    # and keep the ok flag.
+    ok, out = run(f"docker logs {c} --since {VIEWER_WINDOW}s 2>&1") if c else (False, "")
+    if not ok:
+        return {"now": None, "any": None, "waiting": None,
+                "window_s": VIEWER_WINDOW, "countries": {}, "ir_ips": []}
+    ips, any_ips, countries, ir_ips, waiting_ips = set(), set(), {}, set(), set()
     for line in out.splitlines():
-        if "/dash/" not in line or "[error]" in line or "[warn]" in line:
+        if "[error]" in line or "[warn]" in line:
+            continue
+        dash = "/dash/" in line
+        seg = dash and SEGMENT_MARK in line
+        ir = IR_MARK in line
+        if not dash and not ir:
             continue
         parts = line.split(" ", 2)
         if len(parts) < 2:
@@ -266,8 +302,23 @@ def viewers(ps):
             addr = ipaddress.ip_address(ip)
         except ValueError:
             continue
+        # Status is the last field of the access-log line. A 404 is not
+        # playback and not a renderer start, so it must not feed either. It is
+        # deliberately NOT applied to "waiting" below: when the loop is down
+        # the manifest can legitimately 404, and a client retrying a dead
+        # manifest is the strongest evidence there is that somebody is sitting
+        # on the page waiting for it to come back.
+        served = line.rsplit(" ", 1)[-1].strip() in ("200", "206", "304")
+        internal = (addr.is_private or addr.is_loopback
+                    or addr.is_link_local or addr in CGNAT)
+        if dash:
+            waiting_ips.add(ip)     # loose: manifest polls count, see "waiting"
+        if ir and served and not internal:
+            ir_ips.add(ip)
+        if not seg or not served:
+            continue
         any_ips.add(ip)     # counted before the public filter: see "any" below
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr in CGNAT:
+        if internal:
             continue
         if ip not in ips:
             ips.add(ip)
@@ -278,8 +329,75 @@ def viewers(ps):
     # "any" additionally counts LAN and VPN clients and is what the idle timer
     # reads: someone watching over Tailscale is still watching, and stopping the
     # stream under them because their address is private would be wrong.
-    return {"now": len(ips), "any": len(any_ips),
-            "window_s": VIEWER_WINDOW, "countries": top}
+    # "waiting" is the OLD loose rule (any /dash/ hit, manifest polls included)
+    # and exists for exactly one caller: _resume_after_guest. "Is anyone
+    # watching" and "is anyone waiting for this to come back" are different
+    # questions, and only the first one can be answered by segment fetches.
+    # When the loop is DOWN there are no segments to fetch, so a strict count
+    # is structurally incapable of finding an audience there - it would report
+    # zero however many people were sitting on the page. Worse, GUEST_GRACE_S
+    # (120) exceeds VIEWER_WINDOW (90), so on the grace-expiry path even the
+    # departing guest's viewers have aged out of the window before the check
+    # runs: the loop would never resume, _resume_flag is cleared so nothing
+    # retries, loop-source is filtered out of services() so no alert fires,
+    # and an already-playing tab cannot re-show the start button. A manifest
+    # poll against a dead stream is positive evidence of a client waiting, and
+    # a false positive here is self-correcting: auto_idle uses the STRICT
+    # count, so it takes the loop back down within IDLE_STOP_MIN.
+    # "ir_ips" is raw and short-lived: the caller hashes it before anything is
+    # persisted, so no viewer address is ever written to disk.
+    return {"now": len(ips), "any": len(any_ips), "waiting": len(waiting_ips),
+            "window_s": VIEWER_WINDOW, "countries": top,
+            "ir_ips": sorted(ir_ips)}
+
+def renderer_sessions(ir_ips):
+    """Rolling 24 h count of clients whose binaural renderer actually started.
+
+    Deliberately NOT the same thing as the viewer count. A viewer is anyone
+    pulling segments, including someone who never unmutes; this counts the
+    listeners for whom the ambisonic decode chain genuinely initialised, which
+    is the number that answers "did anyone actually hear it in 3D".
+
+    Persisted for the same reason idle_state is: a telemetry restart must not
+    silently reset it. The salt is READ BACK from the same file and generated
+    only when absent, so it is stable across restarts and a listener who
+    returns after a reboot still dedups. That stability is exactly what gives
+    the digests whatever retention exposure they have, so be precise about it:
+
+    this is OBFUSCATION, NOT ANONYMISATION. The salt sits beside the digests,
+    and IPv4 is 2^32, so anyone holding this file can recover the addresses by
+    brute force in seconds. What it buys is that the file is not a greppable
+    list of viewer IPs and does not become one when copied into a backup.
+
+    The reason that is nevertheless proportionate: it discloses nothing the
+    box is not already keeping in the clear. hoast-player's access log carries
+    every viewer address verbatim, and the reference deployment routes
+    container output to journald with 30-day retention precisely so the guest
+    disclaimer's promise can be honoured. So these digests expire 29 days
+    BEFORE the plaintext they were derived from. Anyone able to read this file
+    can already read that log. If a deployment ever tightens journald
+    retention below 24 h, this becomes the weakest link and the salt has to
+    move somewhere this file is not.
+    """
+    try:
+        st = json.loads(IRSTATE.read_text())
+    except Exception:
+        st = {}
+    salt = st.get("_salt")
+    if not salt:
+        salt = os.urandom(16).hex()
+        st = {"_salt": salt}
+    now = time.time()
+    for ip in ir_ips:
+        st[hashlib.sha256((salt + ip).encode()).hexdigest()[:16]] = now
+    st = {k: v for k, v in st.items()
+          if k == "_salt" or (isinstance(v, (int, float)) and now - v < IR_WINDOW_S)}
+    try:
+        IRSTATE.write_text(json.dumps(st))
+    except Exception:
+        pass          # a gauge is not worth failing a collect cycle over
+    return len(st) - 1        # minus the salt entry
+
 
 _start_lock = threading.Lock()
 _last_start = [0.0]      # epoch of the last start we issued, for the idle grace period
@@ -1042,7 +1160,15 @@ def _resume_after_guest():
         r = source_start()
     else:
         vw = viewers(docker_ps())
-        if (vw.get("any") or 0) > 0:
+        # "waiting", NOT "any": nothing is publishing at this point, so no
+        # client can be fetching segments and the strict count is always 0
+        # here by construction. See the note on viewers()'s return value.
+        # None means the probe failed: start rather than leave the demo dark
+        # on a guess, matching auto_idle's rule that uncertainty must never be
+        # what takes the stream down. An unnecessary start costs one idle
+        # cycle; a wrong stop costs every waiting visitor a cold start.
+        w = vw.get("waiting")
+        if w is None or w > 0:
             r = source_start()
         else:
             idle_state(idle_accum=0.0)
@@ -2184,10 +2310,70 @@ def evaluate_alerts(s):
         telegram(f"🎛️ {HOST}: {m}")
     return active
 
+CSV_METHOD_MARK = "methodology-change-2026-08-07-viewers-require-segments"
+
+
+def csv_provenance_marker():
+    """Write a one-off marker row where the meaning of column 2 changed.
+
+    viewers.csv is kept indefinitely as anonymised statistics and may end up
+    cited, so a silent redefinition of a column is the dangerous kind of
+    change: rows either side look identical and average together happily.
+    This is the same trap as the Phase 5 segment-duration table measured
+    through a player that no longer exists - the numbers are not wrong, they
+    just answer a question nobody can reconstruct later.
+
+    Idempotent: keyed on the marker string, so restarts do not stack copies.
+    """
+    try:
+        if not CSV.exists():
+            return
+        body = CSV.read_text()
+        if CSV_METHOD_MARK in body:
+            return
+        # Only a file that actually CONTAINS pre-change rows may be stamped.
+        # Without this test a fresh deployment gets marked on its SECOND boot:
+        # first boot has no file so nothing is written, by the second the file
+        # exists full of new-format rows, and the marker would then assert a
+        # methodology change that never happened to them. A provenance line
+        # that can be wrong is worse than none, because it is trusted.
+        # Old rows are the 5-field ones; the new writer emits 6.
+        old = any(len(l.split(",")) == 5
+                  for l in body.splitlines()
+                  if l and not l.lstrip().startswith("#"))
+        if not old:
+            return
+        with open(CSV, "a") as f:
+            f.write(
+                f"# {CSV_METHOD_MARK}\n"
+                "# ABOVE this line column 2 counted any client requesting any\n"
+                "# /dash/ path, manifest polls included. An idle browser tab or a\n"
+                "# headless client therefore counted as audience for as long as it\n"
+                "# stayed open (measured 2026-08-07: one VPS client held a viewer\n"
+                "# slot for 5.5 h on 15 s of actual playback).\n"
+                "# BELOW this line column 2 counts only clients fetching\n"
+                "# chunk-stream media segments, i.e. actually playing.\n"
+                "# The two populations are NOT comparable. Do not average across\n"
+                "# this line without saying which side a figure came from.\n"
+                "# Column 6 also starts below: renderer starts, a rolling 24 h\n"
+                "# gauge of clients whose binaural decode chain initialised. It is\n"
+                "# a gauge, not an instantaneous count - do not plot it beside\n"
+                "# column 2 on one axis.\n")
+    except Exception:
+        pass          # provenance is important, but not worth refusing to boot
+
+
 def history():
     out = []
     try:
         for l in CSV.read_text().splitlines()[-180:]:
+            # '#' rows are provenance markers (methodology changes), not data.
+            # Skipping them explicitly matters more than it looks: the parse
+            # below is wrapped in ONE try, so a single row that raises drops
+            # the whole history rather than itself, and a marker containing
+            # commas would do exactly that.
+            if not l or l.lstrip().startswith("#"):
+                continue
             p = l.split(",")
             if len(p) >= 3:
                 out.append({"t": p[0],
@@ -2212,14 +2398,21 @@ def collect_once():
     fmt = stream_format()
     per_viewer = (fmt["video_bitrate"] or 0) + (fmt["audio_bitrate"] or 0)   # what ONE client pulls
     vw = viewers(ps)
+    # hashed and folded into the rolling gauge immediately; the raw addresses
+    # go no further than this line
+    rnd = {"starts_24h": renderer_sessions(vw.pop("ir_ips", [])),
+           "window_s": IR_WINDOW_S}
     s = {
         "ts": now_iso(), "host": HOST, "services": svcs,
         "all_healthy": all(x["healthy"] for x in svcs) if svcs else False,
         "stream": strm, "encoder": encoder(ps, strm["publishing"]),
-        "viewers": vw, "bitrate": mbps(per_viewer or None), **fmt,
+        "viewers": vw, "renderer": rnd, "bitrate": mbps(per_viewer or None), **fmt,
         # per-viewer x clients = server load. Zero viewers on a live stream is a
         # real zero; no stream at all is unknown.
-        "egress": mbps(per_viewer * vw["now"] if per_viewer else None),
+        # vw["now"] is None when the viewer probe failed, and None would raise
+        # here rather than degrade, taking the whole collect cycle with it
+        "egress": mbps(per_viewer * vw["now"]
+                       if (per_viewer and vw["now"] is not None) else None),
         "system": {"temp_c": temp_c(), "load1": load1(), "mem_used_pct": mem_pct(),
                    "disk_used_pct": disk_pct(), "uptime_s": uptime_s(),
                    "cores": os.cpu_count()},
@@ -2282,7 +2475,11 @@ def collect_once():
                             if IDLE_STOP_MIN > 0 and strm["publishing"] else None)
     cc = ";".join(f"{k}:{v}" for k, v in s["viewers"].get("countries", {}).items())
     with open(CSV, "a") as f:
-        f.write(f"{s['ts']},{s['viewers']['now']},{s['system']['temp_c']},{1 if strm['live'] else 0},{cc}\n")
+        # column 6 appended rather than inserted: history() reads p[0..3] only,
+        # so old rows and new rows both parse, and the marker row says when the
+        # column starts. cc is ";"-joined, so it can never eat the new field.
+        f.write(f"{s['ts']},{s['viewers']['now']},{s['system']['temp_c']},"
+                f"{1 if strm['live'] else 0},{cc},{s['renderer']['starts_24h']}\n")
     s["history"] = history()
     tmp = STATS.with_suffix(".json.tmp"); tmp.write_text(json.dumps(s, indent=1)); tmp.replace(STATS)
     # Deliberately no egress here: aggregate server load is an operator metric, and
@@ -2417,6 +2614,7 @@ def serve():
 
 def main():
     DATA.mkdir(parents=True, exist_ok=True)
+    csv_provenance_marker()     # one-off; stamps where the viewer definition changed
     # dashboard.html is baked into the image at /app/web/index.html; expose it in DATA
     src = Path("/app/web/index.html")
     if src.exists():
