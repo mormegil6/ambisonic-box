@@ -139,9 +139,6 @@
     <div class="tile"><div class="k">Viewers now</div><div class="v" id="viewers">—</div><div class="s" id="viewersSub">&nbsp;</div></div>
     <div class="tile"><div class="k">CPU temp</div><div class="v" id="temp">—</div><div class="s" id="tempSub">&nbsp;</div></div>
     <div class="tile"><div class="k">Encoder</div><div class="v" id="encoder">—</div><div class="s" id="encoderSub">&nbsp;</div></div>
-    <!-- Cloudflare Web Analytics for the VOD page: ARRIVALS (page loads),
-         deliberately not playback or watch time. Hidden without the token. -->
-    <div class="tile" id="vodTile" hidden><div class="k">VOD page loads <span class="hint">(24 h, arrivals not playback)</span></div><div class="v" id="vodViews">—</div><div class="s" id="vodViewsSub">&nbsp;</div></div>
     <!-- Clients whose binaural renderer actually initialised: they fetched the
          HOA impulse responses, which nothing else on the site requests. A
          different question from Viewers now, and the stronger one - it counts
@@ -150,6 +147,9 @@
          live player and the VOD clips both call hoast360.initialize(.., "/irs/")
          and the access log records no referer, so the two are one number. -->
     <div class="tile" id="rndTile" hidden><div class="k">3D audio starts <span class="hint">(24 h, live + VOD)</span></div><div class="v" id="rndStarts">—</div><div class="s" id="rndStartsSub">&nbsp;</div></div>
+    <!-- Cloudflare Web Analytics for the VOD page: ARRIVALS (page loads),
+         deliberately not playback or watch time. Hidden without the token. -->
+    <div class="tile" id="vodTile" hidden><div class="k">VOD page loads <span class="hint">(24 h, arrivals not playback)</span></div><div class="v" id="vodViews">—</div><div class="s" id="vodViewsSub">&nbsp;</div></div>
   </div>
 
   <section>
