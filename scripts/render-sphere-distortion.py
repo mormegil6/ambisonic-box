@@ -37,19 +37,34 @@ are what the figure shows. Generate one first:
 The committed figure, docs/images/sphere-tessellation-before-after.png, is:
 
   scripts/render-sphere-distortion.py /tmp/testcard-8k.png \
-      --az 90 --el -88 --fov 60 --size 520 --out-dir docs/images
+      --az 0 --el -90 --fov 64 --size 520 --out-dir docs/images
 
-It looks near the nadir on purpose. The angular error there is only about 1.3x
-the equator's, but the quads degenerate to slivers and every meridian
-converges, so the same magnitude reads far louder: it is the honest worst case,
-not the typical one, and the caption on any page using it should say so. FOV is
-wide enough to keep the surrounding test-card panel in frame rather than
-filling the crop with an isolated crosshair; the bowing is still visible in the
-full-resolution PNG at native size, in the spokes nearest the crosshair.
---az 90 rather than 0: purely which edge label (DOWN) lands fully in frame and
-right-way-up versus clipped by the crop at this FOV, not a property of the
-distortion being shown - any azimuth is an equally valid worst-case example at
-a fixed near-polar elevation.
+It looks straight down the nadir on purpose. The angular error there is only
+about 1.3x the equator's, but the quads degenerate to slivers and every
+meridian converges, so the same magnitude reads far louder: it is the honest
+worst case, not the typical one, and the caption on any page using it should
+say so. The bowing is still visible in the full-resolution PNG at native size,
+in the spokes nearest the crosshair.
+
+All three camera parameters are load-bearing, and two of them look arbitrary
+until you know why, so:
+
+  --el -90  the exact nadir, not a couple of degrees short of it. Only safe
+            because camera_rays builds its basis in closed form: the previous
+            cross-product-with-a-near-pole-fallback version jumped by exactly
+            90 deg just short of the pole and was degenerate at it.
+  --az 0    at the exact nadir, azimuth IS roll - there is nothing else left for
+            it to mean. 0 is the value that puts the DOWN face's own top edge
+            (which points FRONT, see make-360-testcard.py's geometry note) at
+            screen top, so the card renders upright and unmirrored with its
+            name at bottom centre. Any other azimuth rolls the same picture.
+  --fov 64  the DOWN wordmark is drawn at face-local t = 0.566, and a cube face
+            spans 90 deg, so it sits atan(0.566) = 29.5 deg off-axis with its
+            glyphs reaching 31.2 deg. A 60 deg FOV puts the frame edge at
+            exactly 30.0 deg and slices the bottom third off the word; 64
+            clears it. Still wide enough to keep the surrounding test-card
+            panel in frame rather than filling the crop with an isolated
+            crosshair, which is why it was never narrow to begin with.
 
 Usage:
   scripts/render-sphere-distortion.py SOURCE.png --out-dir docs/images
