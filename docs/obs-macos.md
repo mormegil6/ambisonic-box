@@ -83,15 +83,17 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 ## 5. Point OBS at the box
 
-**First, on the box: the SRT endpoint must be switched on, or every push below is refused.** This page pushes to the guest endpoint, which ships OFF because it takes no key. In the stack folder set `GUEST_ENABLED=1` in `.env` (copy `.env.example` to `.env` if you have not yet) and run `docker compose up -d` - no need to stop anything first, only the two affected containers restart. The dashboard on `:8090` then shows a **GUEST ENDPOINT** row reading `free`; if that row is missing, the setting has not taken and OBS will fail with a bare `Couldn't open ... I/O error` that looks like a network problem and is not one.
+**First, on the box: the owner route has to exist before you can push to it.** In the stack folder run `./scripts/setup.sh` once, then `docker compose up -d`. That generates your own publish key and passphrase, enables the authenticated SRT route on `127.0.0.1:8891`, and prints the exact URL to paste below. It is safe to re-run and will not overwrite an existing `.env`.
 
-**Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
+This is the route you want for your own broadcasts: it authenticates you, and it opens nothing to anyone else. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you are after.
+
+**Then, in OBS: Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
 | Setting | Value |
 |---|---|
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000&pkt_size=1128` |
+| File path or URL | `srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` |
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
@@ -113,6 +115,24 @@ Four traps in that table, all silent:
 
 Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver.
 
+### Pushing from another machine
+
+`127.0.0.1` above is the box talking to itself, which is right when OBS runs on the box. To push from a laptop, change two things and nothing else:
+
+- On the box, edit `docker-compose.override.yml` and replace `127.0.0.1` in the `srt-gateway-owner` ports line with the box's **private VPN address** (Tailscale, WireGuard), then `docker compose up -d`. Do not use `0.0.0.0`: this instance carries the owner key and bypasses the guest arbiter, so the bind is what keeps it off the public internet, not the passphrase.
+- In OBS, point the URL at that same address.
+
+### Variant: the keyless guest endpoint
+
+Everything above sends **your** stream, authenticated. The guest endpoint answers a different question: letting somebody else push to your box without giving them a key. Two differences in the OBS settings, and only two:
+
+| | Owner (above) | Guest |
+|---|---|---|
+| URL | `srt://<box>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&...` | `srt://<box>:8890?streamid=<any-name>&...` |
+| Reachable from | a private/VPN address only | wherever the guest is, so a LAN or public address |
+
+Turn it on with `GUEST_ENABLED=1` in `.env` and `docker compose up -d`. The dashboard on `:8090` then shows a **GUEST ENDPOINT** row reading `free`; while it is off that row reads `disabled` and every push is refused with a bare `Couldn't open ... I/O error` that looks like a network fault and is not one. Sessions are capped, rate-limited and logged - the rules are in [docs/GUEST-ENDPOINT.md](GUEST-ENDPOINT.md). Read that before exposing it, because it genuinely takes no password from anyone.
+
 ## 6. Push it
 
 Press **Start Recording**.
@@ -121,7 +141,7 @@ That is not a typo. Custom Output (FFmpeg) is a *recording* output in OBS even w
 
 The stream appears on the player page within a few seconds of the first keyframe.
 
-Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you have to press Start again; the guest endpoint holds your slot for a grace window (default 120 s) so a prompt reconnect continues the same session.
+Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you have to press Start again. On the owner route that simply resumes; on the guest endpoint your slot is held for a grace window (default 120 s), so a prompt reconnect continues the same session rather than starting a new one.
 
 ## If it does not work
 

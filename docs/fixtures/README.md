@@ -31,7 +31,7 @@ The trailing `100 100` are this project's base frequency and step. `check-tones.
 
 Import the profile with **Profile > Import** and the scene collection with **Scene Collection > Import**, then change two things:
 
-- the **URL** - it ships as `srt://<host>:8890?streamid=<your-name>&latency=2000000&pkt_size=1128` and will not connect until you put your own host and name in it;
+- the **URL** - it ships pointed at the OWNER route as `srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128`, which is the authenticated one for your own broadcasts. Run `./scripts/setup.sh` on the box and it prints this line with your real passphrase already in it. Keep `127.0.0.1` if OBS runs on the box itself; otherwise use the box's private VPN address. For the keyless guest endpoint instead, the URL becomes `srt://<box>:8890?streamid=<any-name>&latency=2000000&pkt_size=1128` and needs `GUEST_ENABLED=1`;
 - the **video bitrate** if you are not sending roughly 4K equirect. 6000 kbit/s suits 4096x2048; lower resolutions need less.
 
 The audio bitrate is deliberate: 384 kbit/s per 4-channel track is this project's contribution rule of 96 kbit/s per channel, the same rate the gateway and the test harness use. Everything downstream of the sender is either a copy or a higher-rate re-encode, so this is the one place quality is lost for good.

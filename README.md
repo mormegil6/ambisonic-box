@@ -90,13 +90,15 @@ Both carry H.264 video with a keyframe interval that divides the segment duratio
 
 These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
 
+The URL below is the **owner** route: authenticated with your own key, bound to loopback, and it opens nothing to anybody else. `./scripts/setup.sh` creates it and prints the line with your real passphrase in it. Use the box's private VPN address instead of `127.0.0.1` to push from another machine, and see the [guest test endpoint](#guest-test-endpoint-the-guest-application) if what you want is to let *other* people push to your box.
+
 | Setting | Value |
 |---|---|
 | Settings > Audio > Channels | **`4.0`** |
 | Settings > Output > Output Mode | **Advanced**, then the **Recording** tab |
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://<host>:8890?streamid=<your-name>&latency=2000000&pkt_size=1128` |
+| File path or URL | `srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` |
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if hidden |
 | Audio Track | tick **1, 2, 3, 4** |
