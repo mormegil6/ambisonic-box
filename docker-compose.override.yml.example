@@ -44,14 +44,25 @@ services:
   # srt-gateway parses hostile pre-auth bytes off the internet and deliberately
   # holds NO credentials. This instance holds RTMP_OWNER_KEY and publishes
   # straight into the token-authed `live` application, bypassing the guest
-  # arbiter (no slot, no session cap, and it preempts a live guest). That power
-  # is safe only because it is never reachable from the internet, which is what
-  # the private bind below is for. Same image, same code, different mode.
+  # arbiter (no slot, no session cap, and it preempts a live guest). Keeping it
+  # a separate service means the internet-facing guest gateway still holds no
+  # credentials at all. Same image, same code, different mode.
   #
-  # THE BIND IS THE SECURITY BOUNDARY. Bind it to a VPN/private interface only
-  # (a Tailscale/WireGuard address, or 127.0.0.1 for a purely local test),
-  # NEVER 0.0.0.0. `gateway.py` refuses to start in owner mode without a
-  # passphrase, but a passphrase on a public port is a password, not a boundary.
+  # CHOOSING THE BIND. 127.0.0.1 for a local test; a VPN/private address
+  # (Tailscale, WireGuard) whenever you have one, since a port that is not
+  # routable is the strongest position and costs nothing.
+  #
+  # 0.0.0.0 with the port forwarded IS supported, for the real case a VPN
+  # cannot serve: pushing from a venue back to a server at your institution.
+  # It is defensible because SRT's passphrase is the connection's AES key, not
+  # a password checked after parsing - libsrt refuses the handshake before a
+  # byte of payload is demuxed, so an unauthenticated caller never reaches the
+  # parser. It is also strictly less exposure than the guest endpoint on 8890,
+  # which takes no passphrase at all. What it costs: the port is scannable, so
+  # libsrt's handshake becomes your pre-auth surface; GUEST_MAX_TEMP_C and
+  # GUEST_MAX_MBPS do not apply to owner sessions; and whoever holds the
+  # passphrase can broadcast on your box. Use a generated one, not an invented
+  # one, and rotate it if a venue machine has ever held it.
   #
   # Prerequisites in .env: RTMP_OWNER_KEY (your own, `openssl rand -hex 24`)
   # and SRT_OWNER_PASSPHRASE (likewise). GUEST_ENABLED can stay 0 throughout.
@@ -78,8 +89,8 @@ services:
   #     - GST_REGISTRY=/tmp/gst-registry.bin
   #   ports:
   #     # Host port 8891 so it can coexist with the guest instance on 8890;
-  #     # the container side stays 8890. Replace 100.64.0.1 with THIS host's
-  #     # private/VPN address. Do not use 0.0.0.0 (see above).
+  #     # the container side stays 8890. Replace 100.64.0.1 with the address
+  #     # you will reach it on - see CHOOSING THE BIND above.
   #     - "100.64.0.1:8891:8890/udp"
   #   read_only: true
   #   tmpfs:

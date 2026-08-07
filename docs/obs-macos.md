@@ -119,8 +119,16 @@ Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver
 
 `127.0.0.1` above is the box talking to itself, which is right when OBS runs on the box. To push from a laptop, change two things and nothing else:
 
-- On the box, edit `docker-compose.override.yml` and replace `127.0.0.1` in the `srt-gateway-owner` ports line with the box's **private VPN address** (Tailscale, WireGuard), then `docker compose up -d`. Do not use `0.0.0.0`: this instance carries the owner key and bypasses the guest arbiter, so the bind is what keeps it off the public internet, not the passphrase.
+- On the box, edit `docker-compose.override.yml` and replace `127.0.0.1` in the `srt-gateway-owner` ports line with the address you want to reach it on, then `docker compose up -d`.
 - In OBS, point the URL at that same address.
+
+Which address depends on how you get there, and both answers are legitimate:
+
+**A private VPN address (Tailscale, WireGuard) is the first choice** when you have one. The port then does not exist as far as the internet is concerned, which is the strongest position and costs you nothing extra.
+
+**`0.0.0.0` with the port forwarded is a supported deployment**, for the case a VPN cannot reach: streaming from a venue back to a server at your institution. It is defensible here specifically because SRT's passphrase is not a password check bolted onto an already-parsed request - it is the AES key for the connection, so libsrt refuses the handshake before a single byte of your stream is demuxed. A caller without it never reaches the parser at all. Note also that it is *less* exposure than the guest endpoint this project already expects you to publish on 8890, which takes no passphrase whatsoever.
+
+What you give up by publishing it, stated plainly: the port becomes scannable, so libsrt's handshake is now your pre-auth attack surface (a much smaller one than the demuxer, but not nothing); the owner route bypasses the guest arbiter, so `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` do not apply and nothing but you throttles a misconfigured encoder; and anyone who obtains the passphrase can broadcast on your box, preempting a live guest. Use the generated 192-bit passphrase rather than one you invented, treat it like the credential it is, and rotate it if a venue laptop ever holds it.
 
 ### Variant: the keyless guest endpoint
 
@@ -129,7 +137,7 @@ Everything above sends **your** stream, authenticated. The guest endpoint answer
 | | Owner (above) | Guest |
 |---|---|---|
 | URL | `srt://<box>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&...` | `srt://<box>:8890?streamid=<any-name>&...` |
-| Reachable from | a private/VPN address only | wherever the guest is, so a LAN or public address |
+| Reachable from | loopback, a VPN address, or a forwarded public port | wherever the guest is, so a LAN or public address |
 
 Turn it on with `GUEST_ENABLED=1` in `.env` and `docker compose up -d`. The dashboard on `:8090` then shows a **GUEST ENDPOINT** row reading `free`; while it is off that row reads `disabled` and every push is refused with a bare `Couldn't open ... I/O error` that looks like a network fault and is not one. Sessions are capped, rate-limited and logged - the rules are in [docs/GUEST-ENDPOINT.md](GUEST-ENDPOINT.md). Read that before exposing it, because it genuinely takes no password from anyone.
 

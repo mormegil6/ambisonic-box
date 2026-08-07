@@ -133,11 +133,15 @@ services:
       - XDG_CACHE_HOME=/tmp
       - GST_REGISTRY=/tmp/gst-registry.bin
     ports:
-      # LOOPBACK ONLY: reachable from OBS on THIS machine and nowhere else.
-      # To push from another device, change 127.0.0.1 to this host's private
-      # VPN address (Tailscale/WireGuard). Never 0.0.0.0 - this instance holds
-      # the owner key and bypasses the guest arbiter, so the bind, not the
-      # passphrase, is what keeps it off the public internet.
+      # LOOPBACK: reachable from OBS on THIS machine and nowhere else, which
+      # is the right default and wrong the moment you push from elsewhere.
+      # To push from another device, put the address you will reach it on
+      # here. A private VPN address (Tailscale/WireGuard) is the first choice.
+      # 0.0.0.0 with the port forwarded is also supported - for streaming from
+      # a venue back to a server a VPN cannot reach - and is safe here only
+      # because the SRT passphrase is the connection's AES key, so libsrt
+      # refuses the handshake before anything is parsed. See the "Pushing from
+      # another machine" section of either OBS guide for what that costs.
       - "127.0.0.1:8891:8890/udp"
     read_only: true
     tmpfs:
