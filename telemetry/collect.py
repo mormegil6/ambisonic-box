@@ -2132,10 +2132,22 @@ def telegram(msg):
     if tail and "8090" not in msg:
         msg = f"{msg}\n{tail}"
     data = urllib.parse.urlencode({"chat_id": CHAT, "text": msg}).encode()
-    try:
-        urllib.request.urlopen(f"https://api.telegram.org/bot{BOT}/sendMessage", data=data, timeout=10)
-    except Exception:
-        pass
+    # One retry, then a log line. A swallowed failure here used to be
+    # invisible, which on the alerting path is the worst possible place for
+    # silence: the operator reads "no message" as "all healthy". A print is
+    # enough - it lands in `docker logs`, which the dead-man's journal and a
+    # human debugging "why no Telegram" both reach. Deliberately no queue or
+    # long backoff: alerts are only useful fresh, and the next collect tick
+    # re-alerts anyway if the condition persists.
+    for attempt in (1, 2):
+        try:
+            urllib.request.urlopen(f"https://api.telegram.org/bot{BOT}/sendMessage", data=data, timeout=10)
+            return
+        except Exception as e:
+            if attempt == 2:
+                print(f"telegram send FAILED twice ({e.__class__.__name__}: {e}); alert not delivered: {msg[:80]!r}", flush=True)
+            else:
+                time.sleep(2)
 
 def dur_short(sec):
     """Compact episode length: 45s, 4m, 1h12m."""

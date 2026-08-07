@@ -99,7 +99,14 @@ services:
       # cannot remove a base mapping (removal needs `!override`/`!reset`).
       - "127.0.0.1:8081:80"   # dev only: webtools UI, /stat, /dash debug
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
+      # /stat, not /: both answer 200 when the transcoder config is loaded, but
+      # only /stat is defined BY that config. If the entrypoint ever fails to
+      # render it and nginx falls back to the image's stock config, / still
+      # serves a welcome page and reports healthy while nothing is transcoding.
+      # /stat 404s in that state, so this turns a silent dead stream into a
+      # failed healthcheck. (Measured: 200 against the real config, 404 against
+      # a bare nginx:alpine.)
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/stat"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -115,6 +122,40 @@ services:
       nofile:
         soft: 1024
         hard: 524288
+    # Hardening, matching srt-gateway's block below where the service allows it.
+    # NOT a clean cap_drop: [ALL] here: the vendored nginx-no-ssl.conf carries
+    # `user nginx`, so the master starts as root and drops privileges (SETUID,
+    # SETGID), the entrypoint chowns the DASH directory (CHOWN), and HTTP_PORT
+    # is 80 (NET_BIND_SERVICE). Everything else goes.
+    #
+    # FOWNER is not optional, and dropping it fails in the worst possible way.
+    # The vendored entrypoint runs `chown nginx /opt/data/dash && chmod 777
+    # /opt/data/dash && ... && envsubst > /etc/nginx/nginx.conf` as ONE && chain
+    # with no `set -e`. chmod on an inode the euid does not own needs FOWNER,
+    # and the chown immediately before guarantees it is not owned. Without
+    # FOWNER that chmod returns EPERM on any real Linux filesystem, the chain
+    # aborts BEFORE the config is rendered, and the script falls through to a
+    # bare `nginx` that loads the image's stock config: no rtmp block, no ffmpeg
+    # exec, no DASH, while the container still answers :80 and reports healthy.
+    # Verified directly on the deployment host (ext4): without FOWNER `chmod:
+    # Operation not permitted`, with it the chain completes. It does NOT
+    # reproduce on Docker Desktop, whose bind mounts fake ownership and permit
+    # the chmod, so local testing cannot catch this one.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, SETUID, SETGID, NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    # No read_only: the VENDORED entrypoint renders /etc/nginx/nginx.conf and
+    # mkdirs /www at start (services/earshot/src/nginx-transcoder/entrypoint.sh).
+    # Redirecting those into /run the way rtmp-ingest does would be a local
+    # divergence to re-apply on every re-vendor, for a container that is not
+    # itself internet-facing - rtmp-ingest is the one that meets the public.
+    #
+    # pids_limit bounds a fork bomb. No mem_limit deliberately: this container
+    # runs the transcode on a 3 GB host, its working set is workload-dependent
+    # (resolution, codec, viewer count), and an OOM-killed encoder is a worse
+    # failure than the memory DoS a limit would bound.
+    pids_limit: 512
     restart: unless-stopped
     logging: *bounded-logs
 
@@ -147,6 +188,23 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    # Hardening. This is the container that meets the public internet on 1935,
+    # so it gets the full treatment including a read-only rootfs. Both its
+    # ports are above 1024, so unlike earshot it needs no NET_BIND_SERVICE;
+    # the three that remain are nginx's master-to-worker privilege drop.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    # The single writable path. entrypoint.sh renders nginx.conf and the guest
+    # snippets into /run/nginx (the templates stay read-only in the image), and
+    # nginx.conf.template points every *_temp_path there too, because nginx's
+    # defaults live under /var/lib/nginx and that is not writable now.
+    tmpfs:
+      - /run
+    pids_limit: 256
+    mem_limit: 256m
     restart: unless-stopped
     logging: *bounded-logs
 
@@ -219,6 +277,18 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    # Hardening. Port 80 (NET_BIND_SERVICE) plus the stock nginx image's
+    # privilege drop and cache-dir chown at startup.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    # No read_only: the stock nginx entrypoint templates into /etc/nginx/conf.d
+    # and 15-vod-enabled.sh writes vod-locations.conf and seds the served
+    # index.html when VOD is off. Both write inside the image, so a read-only
+    # rootfs needs that whole feature-gate reworked, not just a tmpfs.
+    pids_limit: 256
+    mem_limit: 256m
     restart: unless-stopped
     logging: *bounded-logs
 
@@ -307,6 +377,30 @@ services:
       - "127.0.0.1:8090:8090"
     depends_on:
       - hoast-player
+    # Hardening. Pure python on a high port, so unlike the three nginx
+    # services it needs no capabilities at all.
+    #
+    # HONEST SCOPE: none of this contains the docker socket above, and that
+    # is the real privilege here - socket access is the daemon's authority,
+    # not a kernel capability, so cap_drop and read_only cannot touch it.
+    # A `:ro` mount would not help either (the client needs write to talk at
+    # all), and docker-socket-proxy does not either: giving telemetry the
+    # CONTAINERS+POST it needs for start/stop also permits
+    # POST /containers/create, which takes an arbitrary bind mount. What
+    # actually bounds this is keeping :8090 off every network but the
+    # tailnet, which the deployment override and the tailnet ACL do.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 256
+    # 512m, not tighter: measured 207 MiB at idle (it buffers `docker logs`
+    # windows), so a 384m ceiling sat at 54 % before any load. This container
+    # IS the alerting path, and an OOM kill here is the one failure nothing
+    # would report - the bound exists to catch a runaway, not to be approached.
+    mem_limit: 512m
     restart: unless-stopped
     logging: *bounded-logs
 

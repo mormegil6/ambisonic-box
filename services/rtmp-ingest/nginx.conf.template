@@ -13,6 +13,16 @@ events {
 }
 
 rtmp {
+    # nginx-rtmp keeps its OWN access log, separate from the http block's, and
+    # it defaults to a file under nginx's prefix - which a read-only rootfs
+    # makes unopenable, killing startup outright. Off rather than redirected to
+    # stdout: the rtmp `combined` format logs $args, and $args is where the
+    # publish token rides, so stdout would write the credential into docker logs
+    # on every publish - the same leak the `error_log notice` line above avoids.
+    # Nothing consumes it either way; telemetry reads /stat and the HTTP
+    # callbacks, never this container's log stream.
+    access_log off;
+
     server {
         listen 1935;
         chunk_size 4000;
@@ -37,12 +47,27 @@ rtmp {
         # Guest test endpoint (see guest-rtmp.conf). The entrypoint writes the
         # real application here when GUEST_ENABLED=1 and an empty file
         # otherwise, so a default deployment carries no keyless application.
-        include /etc/nginx/guest-rtmp.conf;
+        include /run/nginx/guest-rtmp.conf;
     }
 }
 
 http {
     access_log /dev/stdout;
+
+    # Temp paths must be stated, not defaulted: the container runs a read-only
+    # rootfs, so nginx's compile-time default under /var/lib/nginx is not
+    # writable and startup dies with `mkdir() ".../client_body" failed
+    # (13: Permission denied)`. /run/nginx is the entrypoint's tmpfs. Everything
+    # under it stays ROOT-owned on purpose: the master creates these directories
+    # itself and chowns them to the worker user (CAP_CHOWN is granted for
+    # exactly that), whereas pre-chowning them to `nginx` would lock the master
+    # out, since CAP_DAC_OVERRIDE is dropped and root then loses its usual right
+    # to write into directories it does not own.
+    client_body_temp_path /run/nginx/tmp/client_body;
+    proxy_temp_path       /run/nginx/tmp/proxy;
+    fastcgi_temp_path     /run/nginx/tmp/fastcgi;
+    uwsgi_temp_path       /run/nginx/tmp/uwsgi;
+    scgi_temp_path        /run/nginx/tmp/scgi;
 
     server {
         listen 8080;
@@ -122,6 +147,6 @@ http {
 
         # Guest arbiter proxy locations (see guest-http.conf); empty include
         # unless GUEST_ENABLED=1, matching the rtmp half above.
-        include /etc/nginx/guest-http.conf;
+        include /run/nginx/guest-http.conf;
     }
 }
