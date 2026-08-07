@@ -150,7 +150,7 @@ Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver
 
 `127.0.0.1` above means OBS is running on the box itself. Streaming from a laptop, or from a venue on the other side of the country, is two changes made once:
 
-1. **On the box**, change `127.0.0.1` to `0.0.0.0` in the `srt-gateway-owner` ports line of `docker-compose.override.yml`, then `docker compose up -d`. If the box sits behind a router, forward UDP 8891 to it.
+1. **On your router**, forward UDP 8891 to the box. The owner route already listens on all interfaces, so there is nothing to change on the box itself.
 2. **In OBS**, put the address you reach the box on into the same URL:
 
 `srt://<address-you-reach-the-box-on>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128`
@@ -161,7 +161,7 @@ That is the whole thing: an address, a port, your key, and the stream goes. The 
 
 **What it costs, plainly.** The port becomes scannable, so libsrt's handshake is your pre-auth surface. `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` belong to the guest arbiter and do not apply to owner sessions, so nothing but you throttles a misconfigured encoder. And anyone who obtains the passphrase can broadcast on your box. Use the generated one rather than one you invented, and rotate it if a venue machine has ever held it.
 
-**If you want less exposure**, two options. A VPN address (Tailscale, WireGuard) in place of `0.0.0.0` keeps the port off the internet entirely. And if the box holds a routable address of its own - a VPS rather than something behind NAT - you can bind that exact IP, which opens one interface instead of all of them.
+**If you want less exposure**, narrow the bind in the `srt-gateway-owner` ports line of `docker-compose.override.yml`: `127.0.0.1` for this machine only, or a VPN address (Tailscale, WireGuard) to keep the port off the internet entirely. On a host that holds a routable address of its own - a VPS rather than something behind NAT - binding that exact IP opens one interface instead of all of them.
 
 > **Do not bind a public IP the box does not actually hold.** Behind NAT that address belongs to your router, not the box, and binding it *looks* like it worked: the container reports healthy and `ss` lists the socket, but no packet ever arrives. Normally this errors; it does not here, because the stack ships `net.ipv4.ip_nonlocal_bind=1` to fix a boot race. `ip -4 addr show scope global` shows what the box really holds. When in doubt, `0.0.0.0` is always correct.
 

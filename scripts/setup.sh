@@ -133,24 +133,29 @@ services:
       - XDG_CACHE_HOME=/tmp
       - GST_REGISTRY=/tmp/gst-registry.bin
     ports:
-      # LOOPBACK: OBS on THIS machine only.
+      # All interfaces, matching the stack's other two contribution ports
+      # (RTMP 1935 and guest SRT 8890 both bind 0.0.0.0 in docker-compose.yml).
+      # A streaming server that can only be reached from itself is the rare
+      # case, not the common one, so this is not loopback.
       #
-      # To stream from anywhere else (a laptop, a venue), change this to
-      # 0.0.0.0 and forward UDP 8891 to this host on your router. Then point
-      # OBS at srt://<that-public-address>:8891 with the same streamid and
-      # passphrase. That is all it takes; the key is what authenticates you,
-      # and SRT uses it as the connection's AES key, so an unauthenticated
-      # caller is refused at the handshake before anything is parsed.
+      # What actually gates this port is the passphrase, and it is a real gate:
+      # SRT uses it as the connection's AES key, so libsrt refuses the
+      # handshake before a byte is parsed. setup.sh generated a 192-bit one.
+      # Of the three contribution ports this is the best protected - 8890
+      # admits guests with no key at all once GUEST_ENABLED=1.
       #
-      # A VPN address (Tailscale/WireGuard) instead of 0.0.0.0 keeps the port
-      # off the internet entirely, if you have one.
+      # To stream in from outside, forward UDP 8891 to this host on your
+      # router, then point OBS at srt://<your-public-address>:8891 with the
+      # same streamid and passphrase.
       #
-      # Do NOT write a public IP this machine does not itself hold: behind NAT
-      # it belongs to your router, and the bind will appear to succeed while
+      # Narrow it if you want less exposure: 127.0.0.1 for this machine only,
+      # or a VPN address (Tailscale/WireGuard) to keep it off the internet.
+      # Do NOT write a public IP this host does not itself hold - behind NAT
+      # that is your router's address, and the bind will look healthy while
       # receiving nothing (this stack sets net.ipv4.ip_nonlocal_bind=1, so it
       # does not even error). `ip -4 addr show scope global` lists what is
-      # really here. When in doubt, 0.0.0.0.
-      - "127.0.0.1:8891:8890/udp"
+      # really here.
+      - "0.0.0.0:8891:8890/udp"
     read_only: true
     tmpfs:
       - /tmp
@@ -184,18 +189,19 @@ say "  docker compose up -d --build"
 say ""
 say "Then point OBS at (see docs/obs-windows.md or docs/obs-macos.md for the rest):"
 if [ -n "${pass_now:-}" ]; then
-    say "  srt://127.0.0.1:$OWNER_PORT?streamid=owner&passphrase=$pass_now&latency=2000000&pkt_size=1128"
+    say "  srt://<address-you-reach-this-box-on>:$OWNER_PORT?streamid=owner&passphrase=$pass_now&latency=2000000&pkt_size=1128"
 else
-    say "  srt://127.0.0.1:$OWNER_PORT?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128"
+    say "  srt://<address-you-reach-this-box-on>:$OWNER_PORT?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128"
 fi
 say ""
-say "That passphrase is in $ENV_FILE, which is gitignored. It is not a secret from"
-say "you, only from the network, so pasting it into your own OBS is the point."
+say "The owner route listens on all interfaces, like the stack's other two"
+say "contribution ports. Testing on this machine: use 127.0.0.1. Streaming in"
+say "from outside: forward UDP $OWNER_PORT to this host and use your public"
+say "address. Either way the URL is otherwise identical."
 say ""
-say "Pushing from ANOTHER machine (a laptop, or OBS at a venue)? 127.0.0.1 above"
-say "means this machine only. Change it in the ports line of $OVR_FILE: a private"
-say "VPN address if you have one, or 0.0.0.0 with UDP $OWNER_PORT forwarded if you do"
-say "not. Both are supported; that line's own comment explains what each costs."
+say "That passphrase is in $ENV_FILE, which is gitignored. It is what gates the"
+say "port - SRT uses it as the connection's AES key, so a caller without it is"
+say "refused at the handshake. To narrow the bind instead, see $OVR_FILE."
 say ""
 say "Letting OTHER people push to this box is a separate, keyless route that is"
 say "off by default: set GUEST_ENABLED=1 in $ENV_FILE. Read the trade-offs first"
