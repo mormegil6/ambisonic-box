@@ -90,7 +90,7 @@ Both carry H.264 video with a keyframe interval that divides the segment duratio
 
 These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
 
-The URL below is the **owner** route: authenticated with your own key, bound to loopback, and it opens nothing to anybody else. `./scripts/setup.sh` creates it and prints the line with your real passphrase in it. Use the box's private VPN address instead of `127.0.0.1` to push from another machine, and see the [guest test endpoint](#guest-test-endpoint-the-guest-application) if what you want is to let *other* people push to your box.
+The URL below is the **owner** route: authenticated with your own key, bound to loopback, and it opens nothing to anybody else. `./scripts/setup.sh` creates it and prints the line with your real passphrase in it. To push from another machine, put the address you will reach it on in the `srt-gateway-owner` ports line of `docker-compose.override.yml`: a private VPN address (Tailscale, WireGuard) when you have one, or `0.0.0.0` with the UDP port forwarded when you do not - streaming from a venue back to your own server is a supported case, and the passphrase is a real gate there because SRT uses it as the connection's AES key, refusing the handshake before anything is parsed. The trade-offs are spelled out in that file's own comment and in either OBS guide. See the [guest test endpoint](#guest-test-endpoint-the-guest-application) if what you want instead is to let *other* people push to your box.
 
 | Setting | Value |
 |---|---|
