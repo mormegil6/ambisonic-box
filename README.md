@@ -90,7 +90,7 @@ Both carry H.264 video with a keyframe interval that divides the segment duratio
 
 These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
 
-The URL below is the **owner** route: authenticated with your own generated key, and it opens nothing to anybody who does not have it. `./scripts/setup.sh` creates it and prints the line with your real passphrase in it. To stream from anywhere else - a laptop, or a venue on the other side of the country - forward UDP 8891 to the box on your router and point OBS at `srt://<your-public-address>:8891` with the same streamid and passphrase. The route already listens on all interfaces, like the stack's other two contribution ports, and the generated passphrase is what gates it. An address, a port and your key, and the stream goes; a VPN address works in place of `0.0.0.0` if you have one and want the port off the internet. Either OBS guide covers the trade-offs. See the [guest test endpoint](#guest-test-endpoint-the-guest-application) if what you want instead is to let *other* people push to your box.
+The URL below is the **owner** route, authenticated by a key `./scripts/setup.sh` generates for you and prints ready to paste. It listens on all interfaces, like the stack's other two contribution ports, so streaming in from elsewhere needs only a UDP 8891 forward on your router and your public address in the URL. Either OBS guide covers narrowing the bind and what publishing it costs. To let *other* people push to your box instead, see the [guest test endpoint](#guest-test-endpoint-the-guest-application).
 
 | Setting | Value |
 |---|---|
@@ -98,7 +98,7 @@ The URL below is the **owner** route: authenticated with your own generated key,
 | Settings > Output > Output Mode | **Advanced**, then the **Recording** tab |
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` |
+| File path or URL | `srt://<box-address>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` - `127.0.0.1` if OBS runs on the box |
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if hidden |
 | Audio Track | tick **1, 2, 3, 4** |
@@ -233,13 +233,15 @@ Two gitignored directories at the repo root, with opposite guarantees.
 
 ## Deployment
 
-**Local / lab (AMD64):** the quick start above. Validated on WSL2 Ubuntu and Ubuntu Server 22.04.
+| Host | Status |
+|---|---|
+| Local / lab (AMD64) | the [quick start](#quick-start) above; validated on WSL2 Ubuntu and Ubuntu Server 22.04 |
+| Raspberry Pi 4 (ARM64) | **validated end to end** on the device: real 16-channel Opus DASH from a real publish, and 20 minutes of sustained transcoding at 32-34 % CPU and 54.5-65.7 C with no throttling |
+| Azure | planned, not yet validated; raw TCP ingress for 1935 is the constraint |
 
-**Raspberry Pi 4 (ARM64): validated end to end.** `docker buildx build --platform linux/arm64` compiles, `docker compose up` brings up all six services, and the stack serves a real 16-channel Opus DASH manifest from a live RTMP publish - the manifest, the live-edge behaviour and the channel count all confirmed on the device rather than assumed from the build succeeding. Sustained over 20 continuous minutes of real transcoding load (H.264 passthrough plus the 16-channel Opus encode): earshot's own CPU held steady at 32-34 %, temperature ran 54.5-65.7 C, the official case fan cycled at a 70 % duty and held that ceiling, and `vcgencmd get_throttled` reported clean throughout. Docker's UDP source-address preservation, which the SRT guest attribution depends on, was confirmed separately on the same board (2026-08-03). Two arm64-specific build issues surfaced along the way and are fixed in this repo rather than worked around locally, so a fresh clone hits neither: yarn's default network timeout is too short for this host's install speed ([services/earshot/README.md](services/earshot/README.md) section 9), and nginx-rtmp's exec path can inherit an unbounded file-descriptor limit from some hosts' containerd config, which silently stalls the transcoder for minutes before it ever starts (`docker-compose.yml`'s `ulimits` on the `earshot` service). Also confirmed under close inspection: the demo loop's auto-idle, which stops the encode after `TEL_IDLE_STOP_MIN` minutes with nobody watching and resumes the moment a real viewer connects, held up exactly as designed - worth knowing on a board this size, where an always-encoding demo loop is a real cost rather than a rounding error.
+Per-host settings (a private bind for the dashboard, host metric mounts, Telegram tokens, branding) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example); the base stack runs without it.
 
-**Planned, not yet validated end to end:** Azure, for one-off events; raw TCP ingress for 1935 is the constraint to solve there. Treat it as a direction, not a documented path; this section will grow real instructions when a real deployment produces them.
-
-**Per-host overrides:** deployment-specific settings (bind the dashboard (:8090) to a private/Tailscale IP, mount host CPU-temp/disk for the telemetry service, Telegram tokens, a branded landing page) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and adjust. The base stack runs without it.
+Measurements, the two arm64 build traps this repo already fixes, and what belongs in an override: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Documentation
 
@@ -250,6 +252,7 @@ Two gitignored directories at the repo root, with opposite guarantees.
 - [docs/VOD.md](docs/VOD.md): on-demand clips, the 360 test card, captions, headset playback, object-storage delivery
 - [docs/obs-macos.md](docs/obs-macos.md) / [docs/obs-windows.md](docs/obs-windows.md): the per-OS sender recipes, step by step
 - [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): where the stack has run, what was measured on each host, and what belongs in a per-host override
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default

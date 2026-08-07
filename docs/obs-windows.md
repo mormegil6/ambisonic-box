@@ -125,7 +125,7 @@ This is the route you want for your own broadcasts: it authenticates you, and it
 |---|---|
 | Type | **Custom Output (FFmpeg)** |
 | FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` |
+| File path or URL | `srt://<box-address>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` - `127.0.0.1` if OBS runs on the box, otherwise the address you reach it on |
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
@@ -148,7 +148,7 @@ Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver
 
 ### Pushing from another machine
 
-`127.0.0.1` above means OBS is running on the box itself. Streaming from a laptop, or from a venue on the other side of the country, is two changes made once:
+The URL above uses whatever address reaches your box. To stream from a different machine than the box, two things:
 
 1. **On your router**, forward UDP 8891 to the box. The owner route already listens on all interfaces, so there is nothing to change on the box itself.
 2. **In OBS**, put the address you reach the box on into the same URL:
