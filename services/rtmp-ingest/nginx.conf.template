@@ -107,9 +107,10 @@ http {
         # nesting proxy_pass inside the `if` blocks above.
         error_page 418 = @owner_authed;
         location @owner_authed {
-            # Best-effort only: telemetry is optional (profiles: ["tools"]),
-            # and the owner's publish must succeed whether or not it is
-            # running, so any failure here is masked back to success.
+            # Best-effort only: the owner's publish must succeed whether or
+            # not telemetry is running (it can be stopped, restarting, or
+            # simply absent in a cut-down deployment), so any failure here is
+            # masked back to success.
             access_log off;
             resolver 127.0.0.11 valid=5s;
             set $arbiter http://telemetry:8090;

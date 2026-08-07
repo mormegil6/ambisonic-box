@@ -3,9 +3,9 @@
 #
 # WHY OWNER IS THE DEFAULT. If you are setting this box up, you are its owner,
 # and the stream you want to push is your own. The owner route is built for
-# exactly that: it authenticates you with a key, it never opens a keyless
-# endpoint, and it binds to loopback here so nothing outside this machine can
-# reach it. The guest endpoint answers a different question - "let SOMEBODY ELSE
+# exactly that: it authenticates you with a key, and that key is a real gate
+# (SRT uses it as the connection's AES key, so a caller without it is refused
+# at the handshake). The guest endpoint answers a different question - "let SOMEBODY ELSE
 # push to my box" - and because it takes no key at all it stays off until you
 # deliberately turn it on. Setting up your own box should not require opening an
 # endpoint for strangers, which is what pointing the OBS guides at the guest
@@ -112,7 +112,7 @@ else
     # Deliberately NOT a copy of docker-compose.override.yml.example: that file
     # also mounts ./custom/brand.json and binds a Tailscale address, neither of
     # which exists on a fresh clone, so copying it wholesale breaks the stack.
-    # This writes only the owner service, bound to loopback.
+    # This writes only the owner service.
     cat > "$OVR_FILE" <<'YAML'
 # Written by scripts/setup.sh. Yours to edit; it is gitignored.
 #
@@ -152,8 +152,9 @@ services:
       # or a VPN address (Tailscale/WireGuard) to keep it off the internet.
       # Do NOT write a public IP this host does not itself hold - behind NAT
       # that is your router's address, and the bind will look healthy while
-      # receiving nothing (this stack sets net.ipv4.ip_nonlocal_bind=1, so it
-      # does not even error). `ip -4 addr show scope global` lists what is
+      # receiving nothing. On a host with net.ipv4.ip_nonlocal_bind=1 (which
+      # docs/ENDPOINTS.md recommends, for an unrelated boot race) that bind
+      # does not even error. `ip -4 addr show scope global` lists what is
       # really here.
       - "0.0.0.0:8891:8890/udp"
     read_only: true

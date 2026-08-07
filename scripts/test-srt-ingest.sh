@@ -41,7 +41,7 @@ GWSTATUS=$(docker compose exec -T srt-gateway python3 -c \
     "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8091/status', timeout=3).read().decode())")
 echo "  gateway: $GWSTATUS"
 echo "$GWSTATUS" | grep -q '"enabled": true' \
-    || { echo "gateway idle - set SRT_ENABLED=1 and GUEST_GW_SECRET, recreate" >&2; exit 2; }
+    || { echo "gateway idle - set SRT_ENABLED=1 and recreate (GUEST_GW_SECRET is optional)" >&2; exit 2; }
 curl -sf --max-time 3 "$TEL/api/live" >/dev/null \
     || { echo "telemetry not reachable on $TEL" >&2; exit 2; }
 

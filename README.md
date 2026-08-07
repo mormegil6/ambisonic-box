@@ -82,7 +82,7 @@ Two ways in, differing in transport. **SRT (Secure Reliable Transport) is the re
 |---|---|---|
 | Sender | stock OBS, macOS or Windows | OBS Studio Music Edition, Windows only |
 | Audio | 4 tracks x 4 channels, joined to 16 by `srt-gateway` | one 16-channel AAC track |
-| Enabled | on by default (`SRT_ENABLED=0` unbinds the port), but the gateway republishes into the guest application, so it admits nobody until `GUEST_ENABLED=1` | always |
+| Enabled | on by default (`SRT_ENABLED=0` unbinds the port). The **guest** gateway on 8890 admits nobody until `GUEST_ENABLED=1`; the **owner** route on 8891 is separate, needs no such flag, and is what `scripts/setup.sh` sets up | always |
 
 Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place and obey the same guest session rules.
 
@@ -184,7 +184,7 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RTMP_OWNER_KEY` | `hoast_demo_owner` | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Rotate this before any deployment reachable from the internet; also gates the Tailscale-only SRT owner route's relay into `live` |
+| `RTMP_OWNER_KEY` | `hoast_demo_owner` | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Rotate this before any deployment reachable from the internet; also gates the SRT owner route's relay into `live` |
 | `LIVE_APP_KEY` | `hoast_demo` | Publish auth for loop-source only. Checked the same way as `RTMP_OWNER_KEY` but never crosses the public internet (loop-source publishes over the docker-internal network); safe to leave at the default |
 | `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `RTMP_OWNER_KEY`/`LIVE_APP_KEY` so either key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
 | `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |
@@ -192,11 +192,11 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 | `VOD_ENABLED` | `0` | On-demand VOD page + packaged clips, off by default: the stack's purpose is live streaming, VOD is opt-in. `0` serves no VOD route and suppresses the reference-master fetch even with `DEMO_CONTENT=1`; the packaging scripts stay in the repo, inert until run |
 | `SRT_ENABLED` | `1` | SRT contribution ingest (`srt-gateway`), the recommended path. On by default; it still admits nobody unless `GUEST_ENABLED=1`. `0` leaves UDP 8890 unbound |
 | `GUEST_ENABLED` | `0` | Keyless guest test endpoint, off by default; see the Guest test endpoint section. Timing knobs (`GUEST_GRACE_S`, `GUEST_MAX_S`, `GUEST_COOLDOWN_S`, `GUEST_RETENTION_DAYS`, `GUEST_BAN_DAYS`) and the resource guard (`GUEST_MAX_TEMP_C`, `GUEST_MAX_MBPS`, `GUEST_LIMIT_STRIKES`) are documented in `.env.example` |
-| `SRT_MODE` | `guest` | What `srt-gateway` does with a caller: `guest` republishes into the arbitrated `guest` application; `owner` republishes into the token-authed `live` application with `RTMP_OWNER_KEY` and bypasses the arbiter entirely. Not set by the shipped compose file, but a ready-to-uncomment `srt-gateway-owner` stanza ships in `docker-compose.override.yml.example`; `owner` is for a private/VPN-only bind and refuses to start without `SRT_PASSPHRASE` and `RTMP_OWNER_KEY`. This is how you push your own 16 channels from stock OBS with `GUEST_ENABLED=0`. See [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md#the-owner-srt-route-srt_modeowner) |
+| `SRT_MODE` | `guest` | What `srt-gateway` does with a caller: `guest` republishes into the arbitrated `guest` application; `owner` republishes into the token-authed `live` application with `RTMP_OWNER_KEY` and bypasses the arbiter entirely. Not set by the shipped compose file; `scripts/setup.sh` writes an `srt-gateway-owner` service into `docker-compose.override.yml` that sets it, and the same block ships commented in `docker-compose.override.yml.example`. Owner mode refuses to start without `SRT_PASSPHRASE` and `RTMP_OWNER_KEY`. This is how you push your own 16 channels from stock OBS with `GUEST_ENABLED=0`. See [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md#the-owner-srt-route-srt_modeowner) |
 | `SRT_OWNER_MAX_S` | `86400` | Owner-mode session ceiling (24 h), ending a session on purpose before the MPEG-TS 33-bit timestamp wrap at ~26.5 h, whose behaviour through this chain is unverified. Reconnect continues. `0` disables; guest mode never reads it |
 | `ENABLE_NONFREE` | `0` | earshot ffmpeg licence stamp: the stack builds WITHOUT `--enable-nonfree` so images are redistributable; `1` restores the stock upstream configure line (`services/earshot/README.md` section 7) |
 
-Copy `.env.example` to `.env` to override either.
+`scripts/setup.sh` creates `.env` from `.env.example`; edit it to change any of these.
 
 Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, hardcoded upstream in Earshot) and the live-edge distance. The earshot image build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at 30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge by design. That is the price of gap-free playback of a 16-channel live stream.
 
@@ -239,7 +239,7 @@ Two gitignored directories at the repo root, with opposite guarantees.
 | Raspberry Pi 4 (ARM64) | **validated end to end** on Raspberry Pi OS 13 (trixie), 64-bit: real 16-channel Opus DASH from a real publish, and 20 minutes of sustained transcoding at 32-34 % CPU and 54.5-65.7 C with no throttling |
 | Azure | planned, not yet validated; the constraint is raw L4 ingress for the contribution leg (UDP 8890/8891 for SRT, TCP 1935 for RTMP), which HTTP-only front ends cannot carry |
 
-Per-host settings (a private bind for the dashboard, host metric mounts, Telegram tokens, branding) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example); the base stack runs without it.
+Per-host settings (a private bind for the dashboard, host metric mounts, Telegram tokens, branding) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. `scripts/setup.sh` writes one containing the owner SRT route; [docker-compose.override.yml.example](docker-compose.override.yml.example) documents the rest, block by block, to copy from as needed. The base stack runs without any of it.
 
 Measurements, the two arm64 build traps this repo already fixes, and what belongs in an override: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

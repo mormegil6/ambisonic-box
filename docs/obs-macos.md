@@ -83,9 +83,9 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 ## 5. Point OBS at the box
 
-**First, on the box: the owner route has to exist before you can push to it.** In the stack folder run `./scripts/setup.sh` once, then `docker compose up -d`. That generates your own publish key and passphrase, enables the authenticated SRT route on `127.0.0.1:8891`, and prints the exact URL to paste below. It is safe to re-run and will not overwrite an existing `.env`.
+**First, on the box: the owner route has to exist before you can push to it.** In the stack folder run `./scripts/setup.sh` once, then `docker compose up -d`. That generates your own publish key and passphrase, enables the authenticated SRT route on UDP 8891, and prints the exact URL to paste below. It is safe to re-run and will not overwrite an existing `.env`.
 
-This is the route you want for your own broadcasts: it authenticates you, and it opens nothing to anyone else. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you are after.
+This is the route you want for your own broadcasts: every caller is authenticated by your key, which SRT uses as the connection's AES key, so anyone without it is refused at the handshake. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you are after.
 
 **Then, in OBS: Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
@@ -132,7 +132,7 @@ That is the whole thing: an address, a port, your key, and the stream goes. The 
 
 **If you want less exposure**, narrow the bind in the `srt-gateway-owner` ports line of `docker-compose.override.yml`: `127.0.0.1` for this machine only, or a VPN address (Tailscale, WireGuard) to keep the port off the internet entirely. On a host that holds a routable address of its own - a VPS rather than something behind NAT - binding that exact IP opens one interface instead of all of them.
 
-> **Do not bind a public IP the box does not actually hold.** Behind NAT that address belongs to your router, not the box, and binding it *looks* like it worked: the container reports healthy and `ss` lists the socket, but no packet ever arrives. Normally this errors; it does not here, because the stack ships `net.ipv4.ip_nonlocal_bind=1` to fix a boot race. `ip -4 addr show scope global` shows what the box really holds. When in doubt, `0.0.0.0` is always correct.
+> **Do not bind a public IP the box does not actually hold.** Behind NAT that address belongs to your router, not the box, and binding it *looks* like it worked: the container reports healthy and `ss` lists the socket, but no packet ever arrives. Normally this errors. On a host with `net.ipv4.ip_nonlocal_bind=1` set (which [docs/ENDPOINTS.md](ENDPOINTS.md) recommends, for an unrelated boot race) it does not even do that. `ip -4 addr show scope global` shows what the box really holds. When in doubt, `0.0.0.0` is always correct.
 
 ### Variant: the keyless guest endpoint
 

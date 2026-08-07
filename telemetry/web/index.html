@@ -572,7 +572,7 @@ async function tick(){
   // explains the service, not just whether it is currently up
   const SVC_DESC = {
     'srt-gateway': 'SRT contribution ingest (guest)',
-    'srt-gateway-owner': 'SRT contribution ingest (owner, Tailscale-only)',
+    'srt-gateway-owner': 'SRT contribution ingest (owner, authenticated by passphrase)',
     'rtmp-ingest': 'RTMP contribution ingest + publish auth',
     'earshot': 'transcode to 16-ch Opus + DASH segmentation',
     'hoast-player': 'player + DASH delivery',

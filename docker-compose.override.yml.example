@@ -65,8 +65,9 @@ services:
   #
   # Do NOT write a public IP this host does not itself hold: behind NAT that
   # address is your router's, and the bind appears to succeed while receiving
-  # nothing, because this project ships net.ipv4.ip_nonlocal_bind=1 and it
-  # therefore does not error. `ip -4 addr show scope global` lists what is
+  # nothing. On a host with net.ipv4.ip_nonlocal_bind=1 (which
+  # docs/ENDPOINTS.md recommends, for an unrelated boot race) it does not even
+  # error. `ip -4 addr show scope global` lists what is
   # really here. When in doubt, 0.0.0.0.
   #
   # Prerequisites in .env: RTMP_OWNER_KEY (your own, `openssl rand -hex 24`)

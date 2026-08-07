@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # srt-gateway: privilege-separated SRT terminator for the guest contribution
-# leg (and, in a Tailscale-only deployment override, the owner leg).
+# leg, and - as a second instance from a deployment override - the owner leg.
 #
 # Why this exists as its own container: the component that parses hostile
 # pre-auth internet bytes (SRT handshakes, mpegts, AAC) must not be the
 # component that holds the docker socket (telemetry) or the RTMP_OWNER_KEY +
-# public relay (rtmp-ingest). The guest instance holds neither; only a
-# Tailscale-only owner instance carries RTMP_OWNER_KEY (see
-# docker-compose.override.yml). This process terminates SRT
+# public relay (rtmp-ingest). The guest instance holds neither; only the
+# separate owner instance carries RTMP_OWNER_KEY (see
+# docker-compose.override.yml), which is precisely why it is a second service
+# rather than a flag on this one. This process terminates SRT
 # with GStreamer's srtsrc - the only tool in the stack that exposes the real
 # caller IP and streamid pre-accept (ffmpeg's srt_accept discards both, so
 # ban-by-IP would be impossible on an ffmpeg listener) - and republishes each

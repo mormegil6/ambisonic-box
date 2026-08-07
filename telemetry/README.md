@@ -57,7 +57,7 @@ The image needs only the docker **CLI** (talks to the socket) - no docker engine
 
 ## Guest session log: retention and geolocation
 
-`guest_sessions.csv` rows are kept indefinitely as anonymised statistics (timestamp, sanitised stream name, country, duration, end reason), the same shape as the viewer stats (counts and countries, never identifiers) (counts and countries, never identifiers). The IP column is truncated to its network prefix (a.b.c.x for v4, /48 for v6) after `GUEST_RETENTION_DAYS` (default 30), keeping repeat-network patterns visible without keeping the address, which is what the guest-endpoint notice on the player page refers to with its retention line (the `{RETENTION_DAYS}` placeholder).
+`guest_sessions.csv` rows are kept indefinitely as anonymised statistics (timestamp, sanitised stream name, country, duration, end reason), the same shape as the viewer stats (counts and countries, never identifiers). The IP column is truncated to its network prefix (a.b.c.x for v4, /48 for v6) after `GUEST_RETENTION_DAYS` (default 30), keeping repeat-network patterns visible without keeping the address, which is what the guest-endpoint notice on the player page refers to with its retention line (the `{RETENTION_DAYS}` placeholder).
 
 Country is resolved locally at session end from the DB-IP country-lite database (fetched once into the data volume at start, fail-soft to `--` offline; refresh by deleting `dbip-country-lite.csv.gz` from the volume). Guest IPs are never sent to any online lookup service.
 

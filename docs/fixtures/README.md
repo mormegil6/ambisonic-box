@@ -40,6 +40,6 @@ Two settings in the profile are correctness requirements rather than preferences
 
 ## The atkAudio graph
 
-Load it from the PluginHost2 window rather than wiring the nodes by hand; it skips steps 2.4 and 2.5 of the Windows guide, including the per-node **Configure Audio I/O → Discrete #4** setting that is the easiest thing to miss.
+Load it from the PluginHost2 window rather than wiring the nodes by hand; it skips the node wiring in section 3 of the Windows guide, including the per-node **Configure Audio I/O > Discrete #4** setting that is the easiest thing to miss.
 
 Check the device afterwards (**Options > Change Device Settings**): the graph stores the routing, but the device and sample rate should be confirmed against your own machine.
