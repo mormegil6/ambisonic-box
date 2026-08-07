@@ -13,7 +13,7 @@ Containerised toolchain for live streaming 360 video with Higher-Order Ambisonic
 ```bash
 git clone https://github.com/mormegil6/ambisonic-box.git && cd ambisonic-box
 git submodule update --init
-cp .env.example .env                    # your config; every setting is documented in it
+./scripts/setup.sh                      # writes .env + generates YOUR OWN publish key
 cp /path/to/demo.mp4 content/demo.mp4   # H.264 + 16-ch AAC; see .env.example
 docker compose up -d --build
 # then open http://localhost:8080 in your browser
