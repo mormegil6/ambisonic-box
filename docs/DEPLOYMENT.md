@@ -8,6 +8,8 @@ The [quick start](../README.md#quick-start). Validated on WSL2 Ubuntu 24.04 LTS 
 
 ## Raspberry Pi 4 (ARM64): validated end to end
 
+Raspberry Pi OS 64-bit, kernel `6.18.34+rpt-rpi-v8`.
+
 `docker buildx build --platform linux/arm64` compiles and `docker compose up` brings up all six services, but the interesting part is what was confirmed **on the device** rather than inferred from a successful build: a real RTMP publish produced a real 16-channel Opus DASH manifest, and the manifest, the live-edge behaviour and the channel count were each checked directly.
 
 **Sustained load.** Twenty continuous minutes of real transcoding (H.264 passthrough plus the 16-channel Opus encode):

@@ -236,7 +236,7 @@ Two gitignored directories at the repo root, with opposite guarantees.
 | Host | Status |
 |---|---|
 | Local / lab (AMD64) | the [quick start](#quick-start) above; validated on WSL2 Ubuntu 24.04 LTS and on Ubuntu Server 26.04 LTS, the reference deployment host |
-| Raspberry Pi 4 (ARM64) | **validated end to end** on the device: real 16-channel Opus DASH from a real publish, and 20 minutes of sustained transcoding at 32-34 % CPU and 54.5-65.7 C with no throttling |
+| Raspberry Pi 4 (ARM64) | **validated end to end** on Raspberry Pi OS 64-bit (kernel `6.18.34+rpt-rpi-v8`): real 16-channel Opus DASH from a real publish, and 20 minutes of sustained transcoding at 32-34 % CPU and 54.5-65.7 C with no throttling |
 | Azure | planned, not yet validated; raw TCP ingress for 1935 is the constraint |
 
 Per-host settings (a private bind for the dashboard, host metric mounts, Telegram tokens, branding) go in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](docker-compose.override.yml.example); the base stack runs without it.
