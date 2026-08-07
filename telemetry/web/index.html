@@ -138,7 +138,7 @@
     <div class="tile"><div class="k">Stream</div><div class="v"><span class="badge b-off" id="streamBadge">—</span></div><div class="s" id="streamSub">&nbsp;</div></div>
     <div class="tile"><div class="k">Viewers now</div><div class="v" id="viewers">—</div><div class="s" id="viewersSub">&nbsp;</div></div>
     <div class="tile"><div class="k">CPU temp</div><div class="v" id="temp">—</div><div class="s" id="tempSub">&nbsp;</div></div>
-    <div class="tile"><div class="k">Encoder</div><div class="v" id="encoder">—</div><div class="s" id="encoderSub">&nbsp;</div></div>
+    <div class="tile" id="encoderTile"><div class="k">Encoder</div><div class="v" id="encoder">—</div><div class="s" id="encoderSub">&nbsp;</div></div>
     <!-- Clients whose binaural renderer actually initialised: they fetched the
          HOA impulse responses, which nothing else on the site requests. A
          different question from Viewers now, and the stronger one - it counts
@@ -533,15 +533,27 @@ async function tick(){
 
   // temp
   const t = s.system ? s.system.temp_c : null;
+  // encoder (moved above temp: the "hot" label needs to know whether
+  // anything is actually encoding right now, not just that the CPU is warm -
+  // a box idling hot for an unrelated reason should not claim "(encoding)")
+  const e = s.encoder||{};
+  const encoding = e.speed != null;
   $('temp').textContent = t!=null ? t+"°C" : "—";
   $('temp').style.color = tempColor(t);
-  $('tempSub').textContent = t==null?" " : t>=98?"critical" : t>=88?"hot (encoding)" : t>=78?"warm" : "cool";
+  $('tempSub').textContent = t==null ? " "
+    : t>=98 ? "critical"
+    : t>=88 ? (encoding ? "hot (encoding)" : "hot")
+    : t>=78 ? "warm" : "cool";
 
-  // encoder
-  const e = s.encoder||{};
   $('encoder').textContent = e.speed!=null ? e.speed.toFixed(2)+"×" : (live?"—":"idle");
   $('encoder').style.color = e.behind ? col('--red') : (e.speed!=null?col('--grn'):col('--dim'));
   $('encoderSub').textContent = e.speed==null ? " " : (e.behind ? "behind realtime" : "keeping up");
+  // The big number is ffmpeg's own lifetime average (smooths out any single
+  // dip); the sub-label is telemetry's instantaneous rate between polls, so
+  // it can flip to "behind realtime" a poll or two before the average moves
+  // at all, and back to "keeping up" before the average has caught down to
+  // it. Both are real - the sub-label is just the more current signal.
+  $('encoderTile').title = "big number: lifetime average speed (ffmpeg)\nsub-label: instantaneous rate since last poll - reacts to a thermal dip before the average does";
 
   // services: pills in signal order (contribution -> transcode -> delivery),
   // restart control integrated into each pill. earshot restarts only as the
