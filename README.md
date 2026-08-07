@@ -4,7 +4,7 @@
 
 Containerised toolchain for live streaming 360 video with Higher-Order Ambisonics audio, 1st to 3rd order (3OA, 16ch is the canonical configuration): RTMP in, MPEG-DASH (multichannel Opus, WebM) out, rendered binaurally in the browser by a [patched HOAST360](https://github.com/mormegil6/hoast360) player that picks the ambisonic order up from the stream.
 
-*Why "Ambisonic Box"? It ships as a Docker container (a box) - and was built and tested on a 2012 Mac Mini (a small box) and a Raspberry Pi 4 (a smaller box still). Ambisonic audio, in a box, in a box, in a box. It's boxes all the way down.*
+*Why "Ambisonic Box"? It ships as a Docker container (a box) - which was built and tested on a 2012 Mac Mini (a small box) and a Raspberry Pi 4 (a smaller box). Ambisonic audio, in a box, in a box, in a box. It's boxes all the way down.*
 
 **Live demo:** <https://stream.bmroz.eu/> · **Project page:** <https://bmroz.eu/projects/360-livestream/>
 
