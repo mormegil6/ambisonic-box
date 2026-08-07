@@ -44,6 +44,42 @@ gen_secret() {
 # ---------------------------------------------------------------------------
 if [ -e "$ENV_FILE" ]; then
     say "keeping your existing $ENV_FILE (not overwritten)"
+    # ...but complete the two things the owner route cannot run without, where
+    # doing so is provably safe. An .env made by hand (say, a renamed
+    # .env.example, which real first-time setups do) predates both secrets.
+    #
+    # RTMP_OWNER_KEY: replaced ONLY when missing, empty, or still one of the
+    # two committed, publicly-known values - those are not secrets by
+    # definition, so swapping them for a real one can break nothing but an
+    # attacker's luck. A value you chose yourself is never touched.
+    cur_key=$(grep -m1 '^RTMP_OWNER_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    case "${cur_key:-}" in
+        ''|CHANGE_ME_this_default_is_public|hoast_demo_owner)
+            k=$(gen_secret || true)
+            if [ -n "${k:-}" ]; then
+                if grep -q '^RTMP_OWNER_KEY=' "$ENV_FILE"; then
+                    awk -v k="$k" '/^RTMP_OWNER_KEY=/ {print "RTMP_OWNER_KEY=" k; next} {print}' \
+                        "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+                else
+                    printf '\nRTMP_OWNER_KEY=%s\n' "$k" >> "$ENV_FILE"
+                fi
+                say "RTMP_OWNER_KEY was missing or still the committed public default - replaced with a fresh secret"
+            fi ;;
+    esac
+    # SRT_OWNER_PASSPHRASE: append when absent. The override below references
+    # it, and the owner gateway refuses to start on an empty one, so without
+    # this an existing .env means a crash-looping owner container.
+    if ! grep -q '^SRT_OWNER_PASSPHRASE=' "$ENV_FILE"; then
+        p=$(gen_secret || true)
+        if [ -n "${p:-}" ]; then
+            printf '\n# Added by scripts/setup.sh - the owner SRT route requires this.\nSRT_OWNER_PASSPHRASE=%s\n' \
+                "$p" >> "$ENV_FILE"
+            say "added the SRT_OWNER_PASSPHRASE the owner route requires"
+        else
+            warn "could not generate SRT_OWNER_PASSPHRASE (no openssl and no usable /dev/urandom);"
+            warn "the owner route will not start until you set one in $ENV_FILE by hand"
+        fi
+    fi
 else
     [ -e .env.example ] || { warn "no .env.example here - run this from the repo root"; exit 1; }
     cp .env.example "$ENV_FILE"
