@@ -94,7 +94,14 @@ def faceted_uv(d, W, H):
 def cone(az, el, fov, n):
     ca, ce = np.radians(az), np.radians(el)
     fwd = np.array([-np.cos(ce) * np.cos(ca), np.sin(ce), np.cos(ce) * np.sin(ca)])
-    right = np.cross(fwd, [0, 1.0, 0]); right /= np.linalg.norm(right)
+    # closed form of normalize(cross(fwd, [0,1,0])): independent of elevation,
+    # so it stays well-defined at the exact pole instead of dividing a
+    # near-zero cross-product magnitude by itself (el=-90 makes the raw
+    # cross product ~6e-17 in magnitude - normalizing it "worked" here only
+    # because this measurement's worst-case-over-a-symmetric-grid design
+    # happens to be invariant to which valid orthonormal basis comes out the
+    # other end of that division, not because the division was safe)
+    right = np.array([-np.sin(ca), 0.0, -np.cos(ca)])
     up = np.cross(right, fwd)
     h = np.tan(np.radians(fov / 2)); xs = np.linspace(-h, h, n)
     return [v / np.linalg.norm(v) for sy in xs for sx in xs

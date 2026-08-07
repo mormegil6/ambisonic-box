@@ -37,7 +37,7 @@ are what the figure shows. Generate one first:
 The committed figure, docs/images/sphere-tessellation-before-after.png, is:
 
   scripts/render-sphere-distortion.py /tmp/testcard-8k.png \
-      --az 0 --el -88 --fov 60 --size 520 --out-dir docs/images
+      --az 90 --el -88 --fov 60 --size 520 --out-dir docs/images
 
 It looks near the nadir on purpose. The angular error there is only about 1.3x
 the equator's, but the quads degenerate to slivers and every meridian
@@ -46,6 +46,10 @@ not the typical one, and the caption on any page using it should say so. FOV is
 wide enough to keep the surrounding test-card panel in frame rather than
 filling the crop with an isolated crosshair; the bowing is still visible in the
 full-resolution PNG at native size, in the spokes nearest the crosshair.
+--az 90 rather than 0: purely which edge label (DOWN) lands fully in frame and
+right-way-up versus clipped by the crop at this FOV, not a property of the
+distortion being shown - any azimuth is an equally valid worst-case example at
+a fixed near-polar elevation.
 
 Usage:
   scripts/render-sphere-distortion.py SOURCE.png --out-dir docs/images
@@ -77,10 +81,14 @@ def camera_rays(az, el, fov, w, h):
     """Perspective camera ray directions, one per output pixel."""
     ca, ce = np.radians(az), np.radians(el)
     fwd = np.array([-np.cos(ce) * np.cos(ca), np.sin(ce), np.cos(ce) * np.sin(ca)])
-    world_up = np.array([0.0, 1.0, 0.0])
-    if abs(fwd @ world_up) > 0.999:          # looking at a pole: pick a stable right
-        world_up = np.array([0.0, 0.0, 1.0])
-    right = np.cross(fwd, world_up); right /= np.linalg.norm(right)
+    # right = normalize(cross(fwd, [0,1,0])) in closed form: [-sin(az), 0, -cos(az)],
+    # independent of elevation entirely, so it needs no near-pole fallback and has
+    # no discontinuity to snap through. The old world_up-swap branch changed which
+    # vector "right" was computed from once |fwd . [0,1,0]| crossed 0.999 (el
+    # beyond about +-87.4 deg), an exact 90 deg jump in "right" at that threshold,
+    # not a smooth transition - which is why this image (el -88, just past the
+    # threshold) rendered as though yawed 90 deg before pitching down.
+    right = np.array([-np.sin(ca), 0.0, -np.cos(ca)])
     up = np.cross(right, fwd)
 
     half = np.tan(np.radians(fov / 2))
