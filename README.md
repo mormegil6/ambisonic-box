@@ -76,7 +76,7 @@ Two operator-facing views of the same running stream:
 
 ## Stream your own content
 
-Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows, all 16 channels live.
+Two ways in, differing in transport. **SRT (Secure Reliable Transport) is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows, all 16 channels live. The older route is RTMP (Real-Time Messaging Protocol).
 
 | | SRT (recommended) | RTMP (legacy) |
 |---|---|---|

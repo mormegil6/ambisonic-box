@@ -2,7 +2,7 @@
 
 Everything here was established by pushing a per-channel tone ladder through real hardware and reading back what arrived. Where a setting looks arbitrary, it is not: the obvious-looking alternative fails silently, and the note says how.
 
-Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78 with ReaRoute, Windows 11.
+Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78 with ReaRoute, Windows 11. SRT is Secure Reliable Transport, the contribution protocol this stack recommends: stock OBS speaks it, and it carries the four audio tracks that become your 16 channels.
 
 The steps run in the same order as [the macOS guide](obs-macos.md). Only steps 1 and 3 differ, because Windows has no BlackHole, so the route is ASIO.
 
