@@ -36,7 +36,9 @@ Neither is arm64-specific in principle; the Pi is simply where a slow enough hos
 
 ## Azure: planned, not yet validated
 
-For one-off events. Raw TCP ingress for 1935 is the constraint to solve. Treat this as a direction rather than a documented path: this section grows real instructions when a real deployment produces them.
+For one-off events. The constraint is raw L4 ingress for the contribution leg, and it is not specific to RTMP: the recommended SRT path needs **UDP** 8890 (guest) or 8891 (owner), and the legacy RTMP path needs **TCP** 1935. HTTP-only front ends carry neither, so this wants a VM or an L4 load balancer - and UDP is the less widely supported of the two, so choosing SRT does not sidestep the problem, it changes which half of it you have. Delivery is the easy half either way: the player and DASH segments are ordinary HTTP and already sit behind a tunnel.
+
+Treat this as a direction rather than a documented path: this section grows real instructions when a real deployment produces them.
 
 ## Per-host overrides
 
