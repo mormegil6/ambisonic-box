@@ -117,26 +117,22 @@ Leave **Muxer Settings** empty; PID remapping is cosmetic for an ffmpeg receiver
 
 ### Pushing from another machine
 
-`127.0.0.1` above is the box talking to itself, which is right when OBS runs on the box. To push from a laptop, change two things and nothing else:
+`127.0.0.1` above means OBS is running on the box itself. Streaming from a laptop, or from a venue on the other side of the country, is two changes made once:
 
-- On the box, edit `docker-compose.override.yml` and replace `127.0.0.1` in the `srt-gateway-owner` ports line with the address you want to reach it on, then `docker compose up -d`.
-- In OBS, point the URL at that same address.
+1. **On the box**, change `127.0.0.1` to `0.0.0.0` in the `srt-gateway-owner` ports line of `docker-compose.override.yml`, then `docker compose up -d`. If the box sits behind a router, forward UDP 8891 to it.
+2. **In OBS**, put the address you reach the box on into the same URL:
 
-Which address depends on how you get there, and both answers are legitimate:
+`srt://<address-you-reach-the-box-on>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128`
 
-**A private VPN address (Tailscale, WireGuard) is the first choice** when you have one. The port then does not exist as far as the internet is concerned, which is the strongest position and costs you nothing extra.
+That is the whole thing: an address, a port, your key, and the stream goes. The URL has the same shape whether you reach the box over a LAN, a VPN or the open internet, so nothing about your OBS setup changes when you travel.
 
-**Reaching it over the internet is a supported deployment**, for the case a VPN cannot reach: streaming from a venue back to a server at your institution.
+**Why a key is enough.** SRT's passphrase is not a password checked after the request has been parsed - it is the AES key for the connection itself, so libsrt refuses the handshake before a single byte of your stream reaches the demuxer. An unauthenticated caller never gets as far as the parser. It is also less exposure than the guest endpoint on 8890, which takes no key at all.
 
-Which address to write depends on your network, and **getting it wrong fails silently**. Run `ip -4 addr show scope global` on the box and look for your public IP:
+**What it costs, plainly.** The port becomes scannable, so libsrt's handshake is your pre-auth surface. `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` belong to the guest arbiter and do not apply to owner sessions, so nothing but you throttles a misconfigured encoder. And anyone who obtains the passphrase can broadcast on your box. Use the generated one rather than one you invented, and rotate it if a venue machine has ever held it.
 
-- **It is listed** (a VPS, or any host holding a routable address): write that IP. Better than `0.0.0.0`, because it binds one interface instead of every one.
-- **It is not listed** (behind NAT, which covers most institutional and home networks): the public address belongs to your *router*, not to the box. Write `0.0.0.0` and forward UDP 8891 to the box on the router. You can narrow `0.0.0.0` to the box's own LAN address, which is what actually receives the forwarded packets.
+**If you want less exposure**, two options. A VPN address (Tailscale, WireGuard) in place of `0.0.0.0` keeps the port off the internet entirely. And if the box holds a routable address of its own - a VPS rather than something behind NAT - you can bind that exact IP, which opens one interface instead of all of them.
 
-Writing a public IP the machine does not hold would normally fail with `cannot assign requested address`. It does not here, because this project ships `net.ipv4.ip_nonlocal_bind=1` (`host/99-hoa360-nonlocal-bind.conf`, added to fix a boot race). Measured on the deployment box: the bind succeeds, the container reports **healthy**, `ss` even lists a socket on that address, and not a single packet can ever arrive. Every diagnostic says it is working.
- It is defensible here specifically because SRT's passphrase is not a password check bolted onto an already-parsed request - it is the AES key for the connection, so libsrt refuses the handshake before a single byte of your stream is demuxed. A caller without it never reaches the parser at all. Note also that it is *less* exposure than the guest endpoint this project already expects you to publish on 8890, which takes no passphrase whatsoever.
-
-What you give up by publishing it, stated plainly: the port becomes scannable, so libsrt's handshake is now your pre-auth attack surface (a much smaller one than the demuxer, but not nothing); the owner route bypasses the guest arbiter, so `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` do not apply and nothing but you throttles a misconfigured encoder; and anyone who obtains the passphrase can broadcast on your box, preempting a live guest. Use the generated 192-bit passphrase rather than one you invented, treat it like the credential it is, and rotate it if a venue laptop ever holds it.
+> **Do not bind a public IP the box does not actually hold.** Behind NAT that address belongs to your router, not the box, and binding it *looks* like it worked: the container reports healthy and `ss` lists the socket, but no packet ever arrives. Normally this errors; it does not here, because the stack ships `net.ipv4.ip_nonlocal_bind=1` to fix a boot race. `ip -4 addr show scope global` shows what the box really holds. When in doubt, `0.0.0.0` is always correct.
 
 ### Variant: the keyless guest endpoint
 

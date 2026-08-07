@@ -133,26 +133,23 @@ services:
       - XDG_CACHE_HOME=/tmp
       - GST_REGISTRY=/tmp/gst-registry.bin
     ports:
-      # LOOPBACK: reachable from OBS on THIS machine and nowhere else, which
-      # is the right default and wrong the moment you push from elsewhere.
-      # To push from another device, put the address you will reach it on
-      # here. A private VPN address (Tailscale/WireGuard) is the first choice.
-      # Reaching it from the internet is also supported - streaming from a
-      # venue back to a server a VPN cannot reach - and is safe here because
-      # the SRT passphrase is the connection's AES key, so libsrt refuses the
-      # handshake before anything is parsed.
+      # LOOPBACK: OBS on THIS machine only.
       #
-      # WHICH address, though: run `ip -4 addr show scope global` and look for
-      # your public IP. PRESENT (a VPS) -> write that IP, better than 0.0.0.0
-      # because it binds one interface. ABSENT (behind NAT, most institutional
-      # and home networks) -> the public address belongs to your router, not to
-      # this machine; write 0.0.0.0 and forward UDP 8891 to it. Writing an
-      # address the machine does not hold does NOT error here, because this
-      # project ships net.ipv4.ip_nonlocal_bind=1: the bind succeeds, the
-      # container reports healthy, and nothing ever arrives.
+      # To stream from anywhere else (a laptop, a venue), change this to
+      # 0.0.0.0 and forward UDP 8891 to this host on your router. Then point
+      # OBS at srt://<that-public-address>:8891 with the same streamid and
+      # passphrase. That is all it takes; the key is what authenticates you,
+      # and SRT uses it as the connection's AES key, so an unauthenticated
+      # caller is refused at the handshake before anything is parsed.
       #
-      # The "Pushing from another machine" section of either OBS guide has the
-      # full trade-offs.
+      # A VPN address (Tailscale/WireGuard) instead of 0.0.0.0 keeps the port
+      # off the internet entirely, if you have one.
+      #
+      # Do NOT write a public IP this machine does not itself hold: behind NAT
+      # it belongs to your router, and the bind will appear to succeed while
+      # receiving nothing (this stack sets net.ipv4.ip_nonlocal_bind=1, so it
+      # does not even error). `ip -4 addr show scope global` lists what is
+      # really here. When in doubt, 0.0.0.0.
       - "127.0.0.1:8891:8890/udp"
     read_only: true
     tmpfs:
