@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the paper below (preferred), or the software directly."
-title: "HOA 360 Stream: containerised Higher-Order Ambisonics + 4K 360 livestream toolchain"
+title: "Ambisonic Box: containerised Higher-Order Ambisonics + 4K 360 livestream toolchain"
 abstract: >-
   A freely-accessible, containerised toolchain for live streaming music events
   with Higher-Order Ambisonics audio (3rd order, 16 channels, ACN/SN3D) and 4K
@@ -12,7 +12,7 @@ authors:
     orcid: "https://orcid.org/0000-0002-8983-9050"
     email: "bartlomiej.mroz@pg.edu.pl"
     affiliation: "Department of Multimedia Systems, Gdańsk University of Technology"
-repository-code: "https://git.pg.edu.pl/p829296/hoa-360-stream"
+repository-code: "https://git.pg.edu.pl/p829296/ambisonic-box"
 url: "https://bmroz.eu/projects/360-livestream/"
 license: "Apache-2.0"
 keywords:

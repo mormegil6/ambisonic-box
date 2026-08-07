@@ -18,7 +18,7 @@
 # check).
 set -u
 
-BASE="${DEMO_BASE_URL:-https://github.com/mormegil6/hoa-360-stream/releases/download/vod-clips}"
+BASE="${DEMO_BASE_URL:-https://github.com/mormegil6/ambisonic-box/releases/download/vod-clips}"
 DEST="${DEMO_VOD_DIR:-/content/vod/masters}"
 
 # asset<TAB>sha256, one per line. Update BOTH the release asset and this list

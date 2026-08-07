@@ -10,7 +10,7 @@
  *   - stop/load reset cycle survives.
  *
  * Prerequisites (one-time):
- *   cd hoa-360-stream && npm init -y && npm i -D playwright-core@^1.60
+ *   cd ambisonic-box && npm init -y && npm i -D playwright-core@^1.60
  *   npx playwright install chromium
  *   sudo npx playwright install-deps chromium   # system libs (libnspr4, libnss3, ...)
  *
