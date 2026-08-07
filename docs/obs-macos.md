@@ -126,7 +126,15 @@ Which address depends on how you get there, and both answers are legitimate:
 
 **A private VPN address (Tailscale, WireGuard) is the first choice** when you have one. The port then does not exist as far as the internet is concerned, which is the strongest position and costs you nothing extra.
 
-**`0.0.0.0` with the port forwarded is a supported deployment**, for the case a VPN cannot reach: streaming from a venue back to a server at your institution. It is defensible here specifically because SRT's passphrase is not a password check bolted onto an already-parsed request - it is the AES key for the connection, so libsrt refuses the handshake before a single byte of your stream is demuxed. A caller without it never reaches the parser at all. Note also that it is *less* exposure than the guest endpoint this project already expects you to publish on 8890, which takes no passphrase whatsoever.
+**Reaching it over the internet is a supported deployment**, for the case a VPN cannot reach: streaming from a venue back to a server at your institution.
+
+Which address to write depends on your network, and **getting it wrong fails silently**. Run `ip -4 addr show scope global` on the box and look for your public IP:
+
+- **It is listed** (a VPS, or any host holding a routable address): write that IP. Better than `0.0.0.0`, because it binds one interface instead of every one.
+- **It is not listed** (behind NAT, which covers most institutional and home networks): the public address belongs to your *router*, not to the box. Write `0.0.0.0` and forward UDP 8891 to the box on the router. You can narrow `0.0.0.0` to the box's own LAN address, which is what actually receives the forwarded packets.
+
+Writing a public IP the machine does not hold would normally fail with `cannot assign requested address`. It does not here, because this project ships `net.ipv4.ip_nonlocal_bind=1` (`host/99-hoa360-nonlocal-bind.conf`, added to fix a boot race). Measured on the deployment box: the bind succeeds, the container reports **healthy**, `ss` even lists a socket on that address, and not a single packet can ever arrive. Every diagnostic says it is working.
+ It is defensible here specifically because SRT's passphrase is not a password check bolted onto an already-parsed request - it is the AES key for the connection, so libsrt refuses the handshake before a single byte of your stream is demuxed. A caller without it never reaches the parser at all. Note also that it is *less* exposure than the guest endpoint this project already expects you to publish on 8890, which takes no passphrase whatsoever.
 
 What you give up by publishing it, stated plainly: the port becomes scannable, so libsrt's handshake is now your pre-auth attack surface (a much smaller one than the demuxer, but not nothing); the owner route bypasses the guest arbiter, so `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` do not apply and nothing but you throttles a misconfigured encoder; and anyone who obtains the passphrase can broadcast on your box, preempting a live guest. Use the generated 192-bit passphrase rather than one you invented, treat it like the credential it is, and rotate it if a venue laptop ever holds it.
 

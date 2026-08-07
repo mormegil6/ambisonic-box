@@ -137,11 +137,22 @@ services:
       # is the right default and wrong the moment you push from elsewhere.
       # To push from another device, put the address you will reach it on
       # here. A private VPN address (Tailscale/WireGuard) is the first choice.
-      # 0.0.0.0 with the port forwarded is also supported - for streaming from
-      # a venue back to a server a VPN cannot reach - and is safe here only
-      # because the SRT passphrase is the connection's AES key, so libsrt
-      # refuses the handshake before anything is parsed. See the "Pushing from
-      # another machine" section of either OBS guide for what that costs.
+      # Reaching it from the internet is also supported - streaming from a
+      # venue back to a server a VPN cannot reach - and is safe here because
+      # the SRT passphrase is the connection's AES key, so libsrt refuses the
+      # handshake before anything is parsed.
+      #
+      # WHICH address, though: run `ip -4 addr show scope global` and look for
+      # your public IP. PRESENT (a VPS) -> write that IP, better than 0.0.0.0
+      # because it binds one interface. ABSENT (behind NAT, most institutional
+      # and home networks) -> the public address belongs to your router, not to
+      # this machine; write 0.0.0.0 and forward UDP 8891 to it. Writing an
+      # address the machine does not hold does NOT error here, because this
+      # project ships net.ipv4.ip_nonlocal_bind=1: the bind succeeds, the
+      # container reports healthy, and nothing ever arrives.
+      #
+      # The "Pushing from another machine" section of either OBS guide has the
+      # full trade-offs.
       - "127.0.0.1:8891:8890/udp"
     read_only: true
     tmpfs:
