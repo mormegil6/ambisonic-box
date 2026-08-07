@@ -466,6 +466,12 @@ async function tick(){
       gs.textContent = 'reconnect window' + (ep.remaining_s != null ? ' (' + ep.remaining_s + 's)' : '');
     } else if (ep.state === 'owner') {
       gs.textContent = 'taken by owner';
+    } else if (ep.state === 'off') {
+      // Say it, do not hide it. This row used to disappear when the feature
+      // was off, so an operator whose OBS push was being refused saw an
+      // all-green page with no mention of the endpoint at all.
+      gs.textContent = 'disabled';
+      gs.title = 'Set GUEST_ENABLED=1 in .env, then docker compose up -d.\nBoth OBS guides push to this endpoint. While it is disabled the arbiter refuses every caller, and OBS can only report a generic I/O error.';
     } else {
       gs.textContent = ep.cooldown_s ? ('free (cooldown ' + ep.cooldown_s + 's)') : 'free';
     }

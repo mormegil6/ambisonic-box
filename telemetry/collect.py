@@ -590,7 +590,11 @@ def live_probe():
             "on_demand": IDLE_STOP_MIN > 0,
             "starting": now - _last_start[0] < 120,
             "mpd": mpd,
-            **({"endpoint": ep} if (ep := guest_public()) else {})}
+            # off is a state, not an absence. This endpoint is served on :8090
+            # only (private), so unlike the public status.json it can say so;
+            # the dashboard overlays this over stats.json and would otherwise
+            # drop the row again.
+            "endpoint": guest_public() or {"state": "off"}}
 
 
 def idle_state(**set_):
@@ -2541,6 +2545,15 @@ def collect_once():
     if ep:
         s["endpoint"] = {**ep, "addr": _guest.get("addr")}   # addr: private page only
         s["bans"] = _bans_lists()                            # private page only
+    else:
+        # Disabled is a STATE the operator needs to see, not an absence. The
+        # public status.json still omits the key entirely (below) so a
+        # deployment with the feature off leaves no trace of it to the world -
+        # that stays deliberate. But on the private dashboard, hiding the row
+        # meant an all-green page while every SRT push was being refused, which
+        # is exactly how a first-time setup burns an afternoon: OBS reports a
+        # bare I/O error, and the one page that could explain it says nothing.
+        s["endpoint"] = {"state": "off"}
     auto_idle(strm, vw.get("any", vw["now"]))
     # Read back after the decision so the panel shows the current countdown
     # rather than last cycle's.
