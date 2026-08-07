@@ -1523,6 +1523,34 @@ def _ingest_live_publishing(stream_name=None):
     return len(s2) == 2 and "<publishing/>" in s2[1].split("</stream>", 1)[0]
 
 
+def _ingest_live_owner_name():
+    """The name of whichever non-loop publisher is currently live on
+    ingest's /live application, or None. _owner["live"] only ever gets SET
+    by the one-shot on_publish notify, so a telemetry restart mid-owner-
+    session loses it permanently even though the publish itself never
+    stopped - measured 2026-08-07: the dashboard read "free" for the rest of
+    a session that was live throughout, and worse, guest_publish() only
+    consults this same in-memory flag, so a guest could have been admitted
+    during that window instead of correctly rejected. owner_tick's re-latch
+    check below uses this to notice and repair that, the same way it already
+    notices and repairs a latch that outlived its publisher."""
+    x = sh(f"curl -s --max-time 4 {INGEST_STAT}")
+    seg = x.split("<name>live</name>", 1)
+    if len(seg) != 2:
+        return None
+    app = seg[1].split("</application>", 1)[0]
+    for block in app.split("<stream>")[1:]:
+        if "<publishing/>" not in block:
+            continue
+        nseg = block.split("<name>", 1)
+        if len(nseg) != 2:
+            continue
+        name = nseg[1].split("</name>", 1)[0]
+        if name and name != LOOP_NAME:
+            return name
+    return None
+
+
 def owner_notify(name_arg):
     """/rtmp/live/notify: a publish just passed the key check at rtmp-ingest.
     Three cases:
@@ -1610,6 +1638,34 @@ def owner_done(name_arg):
         _resume_after_guest()
 
 
+def _owner_relatch_check():
+    """The other direction of owner_tick's backstop: re-derive the latch
+    from ingest's own publisher list when it is currently UNSET, so a
+    telemetry restart mid-owner-session cannot leave it permanently wrong
+    (see _ingest_live_owner_name's docstring - this was observed live on
+    2026-08-07, not theoretical).
+
+    Deliberately does NOT repeat owner_notify's takeover side effects
+    (guest-kill, loop-stop): if the session predates this telemetry
+    process, those already ran once against the real event, and redoing
+    them here is not needed in the common case, only the latch state is
+    actually missing. Residual risk, accepted rather than chased: a guest
+    admitted during the exact gap between the restart and this check
+    firing (bounded by one INTERVAL) is not retroactively evicted. Narrow,
+    and this whole scenario has only been observed following telemetry's
+    own redeploys, never in normal operation."""
+    name = _ingest_live_owner_name()
+    if not name:
+        return
+    with _owner_lock:
+        if _owner["live"]:
+            return              # set by a real notify while we were probing
+        _owner.update(live=True, name=name, since=time.time())
+        _owner_miss[0] = 0
+    print(f"owner latch re-derived from ingest (name={name}); a telemetry "
+          f"restart most likely dropped the original notify", flush=True)
+
+
 def owner_tick():
     """Per-cycle backstop for the latch: if the owner's publish_done was
     lost (an rtmp-ingest restart is the realistic path), the latch would
@@ -1622,10 +1678,17 @@ def owner_tick():
     re-arming the latch mid-probe changes it, and the stale clear must then
     abort rather than wipe the new session. The miss counter is only touched
     under the same identity check, so a probe overlapping a session change
-    can never lend its miss to the wrong session."""
+    can never lend its miss to the wrong session.
+
+    When the latch is unset this defers to _owner_relatch_check instead -
+    the mirror-image backstop, for when telemetry itself is what lost track,
+    not the publisher."""
     with _owner_lock:
         live, since, oname = _owner["live"], _owner["since"], _owner["name"]
-    if not live or time.time() - (since or 0) < 60:
+    if not live:
+        _owner_relatch_check()
+        return
+    if time.time() - (since or 0) < 60:
         return
     publishing = _ingest_live_publishing(oname)
     with _owner_lock:
