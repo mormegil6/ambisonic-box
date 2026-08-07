@@ -38,23 +38,31 @@ import numpy as np
 
 
 def vert(iu, iv, W, H):
+    # x sign matches three.js's real equirectUv convention (atan2(z, x), no
+    # negation) - see dir_to_uv. Getting this wrong doesn't change any
+    # measured angular error (a mirror doesn't change magnitude), only
+    # whether the illustrative render reads correctly left-to-right.
     u = iu / W; v = iv / H
     phi = u * 2 * np.pi; theta = v * np.pi
-    return (np.array([-np.cos(phi) * np.sin(theta), np.cos(theta),
+    return (np.array([np.cos(phi) * np.sin(theta), np.cos(theta),
                       np.sin(phi) * np.sin(theta)]),
             np.array([u, 1 - v]))
 
 
 def dir_to_uv(d):
+    # atan2(z, x), matching three.js's actual equirectUv shader convention.
+    # Previously atan2(z, -x): a genuine mirror (== pi - atan2(z, x)), not
+    # merely a rotation offset, which is why render-sphere-distortion.py's
+    # output previously showed every text label backwards.
     x, y, z = d
     theta = np.arccos(np.clip(y, -1, 1))
-    phi = np.arctan2(z, -x) % (2 * np.pi)
+    phi = np.arctan2(z, x) % (2 * np.pi)
     return np.array([phi / (2 * np.pi), 1 - theta / np.pi])
 
 
 def uv_to_dir(uv):
     phi = uv[0] * 2 * np.pi; theta = (1 - uv[1]) * np.pi
-    return np.array([-np.cos(phi) * np.sin(theta), np.cos(theta),
+    return np.array([np.cos(phi) * np.sin(theta), np.cos(theta),
                      np.sin(phi) * np.sin(theta)])
 
 
