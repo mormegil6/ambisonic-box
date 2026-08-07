@@ -175,7 +175,7 @@ services:
       start_period: 5s
     restart: unless-stopped
 YAML
-    say "created $OVR_FILE with the owner SRT route on 127.0.0.1:$OWNER_PORT"
+    say "created $OVR_FILE with the owner SRT route on all interfaces, port $OWNER_PORT"
 fi
 
 # ---------------------------------------------------------------------------
