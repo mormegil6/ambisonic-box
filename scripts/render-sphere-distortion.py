@@ -37,7 +37,7 @@ are what the figure shows. Generate one first:
 The committed figure, docs/images/sphere-tessellation-before-after.png, is:
 
   scripts/render-sphere-distortion.py /tmp/testcard-8k.png \
-      --az 0 --el -90 --fov 64 --size 520 --out-dir docs/images
+      --az 0 --el -90 --fov 68 --size 520 --out-dir docs/images
 
 It looks straight down the nadir on purpose. The angular error there is only
 about 1.3x the equator's, but the quads degenerate to slivers and every
@@ -58,13 +58,18 @@ until you know why, so:
             (which points FRONT, see make-360-testcard.py's geometry note) at
             screen top, so the card renders upright and unmirrored with its
             name at bottom centre. Any other azimuth rolls the same picture.
-  --fov 64  the DOWN wordmark is drawn at face-local t = 0.566, and a cube face
+  --fov 68  wide enough to clear BOTH lines of the card's own identity block.
+            The DOWN wordmark is drawn at face-local t = 0.566, and a cube face
             spans 90 deg, so it sits atan(0.566) = 29.5 deg off-axis with its
-            glyphs reaching 31.2 deg. A 60 deg FOV puts the frame edge at
-            exactly 30.0 deg and slices the bottom third off the word; 64
-            clears it. Still wide enough to keep the surrounding test-card
-            panel in frame rather than filling the crop with an isolated
-            crosshair, which is why it was never narrow to begin with.
+            glyphs reaching 31.2 deg; the bearing caption printed under it
+            reaches 33.5 deg. A 60 deg FOV puts the frame edge at exactly
+            30.0 deg and slices the bottom third off the word, 64 clears the
+            word alone, 68 clears the caption too. The caption earns the extra
+            magnification it costs: it is drawn on the CARD by
+            make-360-testcard.py, not added by this script, so the figure
+            states its own camera parameters from a source independent of this
+            script's caption strip. The two agree at "el -90" here, and would
+            visibly disagree if the camera were ever pointed somewhere else.
 
 Usage:
   scripts/render-sphere-distortion.py SOURCE.png --out-dir docs/images
