@@ -35,3 +35,67 @@ services:
       # brand.json (About text, a citation, a copyright line) that the page loads
       # at startup. Keys are documented in services/hoast-player/brand.example.json.
       - ./custom/brand.json:/usr/share/nginx/html/brand.json:ro
+
+  # ---------------------------------------------------------------------------
+  # OWNER SRT ROUTE (optional). Push your OWN 16-channel stream from stock OBS
+  # without ever enabling the keyless guest endpoint.
+  #
+  # WHY THIS IS A SECOND INSTANCE and not a flag on the one above: the public
+  # srt-gateway parses hostile pre-auth bytes off the internet and deliberately
+  # holds NO credentials. This instance holds RTMP_OWNER_KEY and publishes
+  # straight into the token-authed `live` application, bypassing the guest
+  # arbiter (no slot, no session cap, and it preempts a live guest). That power
+  # is safe only because it is never reachable from the internet, which is what
+  # the private bind below is for. Same image, same code, different mode.
+  #
+  # THE BIND IS THE SECURITY BOUNDARY. Bind it to a VPN/private interface only
+  # (a Tailscale/WireGuard address, or 127.0.0.1 for a purely local test),
+  # NEVER 0.0.0.0. `gateway.py` refuses to start in owner mode without a
+  # passphrase, but a passphrase on a public port is a password, not a boundary.
+  #
+  # Prerequisites in .env: RTMP_OWNER_KEY (your own, `openssl rand -hex 24`)
+  # and SRT_OWNER_PASSPHRASE (likewise). GUEST_ENABLED can stay 0 throughout.
+  #
+  # OBS then targets (Recording > Custom Output (FFmpeg), container mpegts,
+  # four 4-channel tracks - the same recipe as docs/obs-windows.md section 5,
+  # only the URL differs):
+  #   srt://<private-ip>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128
+  #
+  # Uncomment the whole block to use it.
+  #
+  # srt-gateway-owner:
+  #   image: hoa360-srt-gateway:local     # same image the base build produces
+  #   build:
+  #     context: ./services/srt-gateway
+  #   environment:
+  #     - SRT_ENABLED=1
+  #     - SRT_MODE=owner
+  #     - RTMP_OWNER_KEY=${RTMP_OWNER_KEY}
+  #     - SRT_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # MANDATORY in owner mode
+  #     - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
+  #     - HOME=/tmp
+  #     - XDG_CACHE_HOME=/tmp
+  #     - GST_REGISTRY=/tmp/gst-registry.bin
+  #   ports:
+  #     # Host port 8891 so it can coexist with the guest instance on 8890;
+  #     # the container side stays 8890. Replace 100.64.0.1 with THIS host's
+  #     # private/VPN address. Do not use 0.0.0.0 (see above).
+  #     - "100.64.0.1:8891:8890/udp"
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp
+  #   cap_drop: [ALL]
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   init: true
+  #   depends_on:
+  #     rtmp-ingest:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "python3", "-c",
+  #            "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 5s
+  #   restart: unless-stopped
