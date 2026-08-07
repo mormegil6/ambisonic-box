@@ -83,6 +83,8 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 ## 5. Point OBS at the box
 
+**First, on the box: the SRT endpoint must be switched on, or every push below is refused.** This page pushes to the guest endpoint, which ships OFF because it takes no key. In the stack folder set `GUEST_ENABLED=1` in `.env` (copy `.env.example` to `.env` if you have not yet) and run `docker compose up -d` - no need to stop anything first, only the two affected containers restart. The dashboard on `:8090` then shows a **GUEST ENDPOINT** row reading `free`; if that row is missing, the setting has not taken and OBS will fail with a bare `Couldn't open ... I/O error` that looks like a network problem and is not one.
+
 **Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
 | Setting | Value |
