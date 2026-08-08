@@ -1,0 +1,44 @@
+# Keeps the build context small. Docker copies the whole context to the daemon
+# BEFORE any Dockerfile runs, so without this a `docker compose build` shipped
+# 2.0 GB - 1.1 G of content/, 250 M of scratch/, 154 M of output/ - none of
+# which any Dockerfile reads. It was slow rather than harmful, but it is slow on
+# every single build.
+#
+# SCOPE: this file applies to the ROOT build context only, which is hoast-player
+# (docker-compose.yml `context: .`). The other services declare their own
+# contexts (./services/earshot/src, ./services/rtmp-ingest, ./services/srt-gateway,
+# ./telemetry) and would each need their own .dockerignore, none of which is
+# currently large enough to be worth one.
+#
+# WHAT THE ROOT CONTEXT ACTUALLY NEEDS, so nobody has to re-derive it before
+# adding a line here: services/hoast-player/* (index.html, nginx.conf,
+# vod-locations.conf, 00-logformat.conf, 15-vod-enabled.sh, check/, fonts/)
+# plus hoast360/dist/ and hoast360/irs/. Everything below is outside that set.
+
+# Media. Rebuildable or released; never read at build time.
+content/
+
+# earshot's DASH working directory. Wiped on every container start anyway.
+output/
+
+# Persistent working dir: harnesses, probe captures, one-off files.
+scratch/
+
+# Only hoast360/dist and hoast360/irs are copied; the source tree and its
+# dependencies are not needed, and node_modules is by far the biggest of them.
+node_modules/
+**/node_modules/
+hoast360/src/
+hoast360/dependencies/
+
+# History and tooling.
+.git/
+.github/
+lip-sync-test/
+docs/
+
+# Local editor and OS noise.
+.DS_Store
+**/.DS_Store
+.vscode/
+.idea/
