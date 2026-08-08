@@ -26,6 +26,29 @@ Noted, not built. The same per-track pattern extends past 3rd order. Six tracks 
 
 The pipeline is order-flexible where the tools allow it. Earshot's transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder only accepts *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) work while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders).
 
+### Why 2nd order pads to 16 rather than to 10
+
+A reasonable idea, once you know modern ffmpeg: send 2nd order as a 10-channel named layout such as `5.1.4` and waste one channel instead of seven. It does not work here, and the reason is the **vendored ffmpeg's age**, not the format.
+
+Earshot pins its own ffmpeg fork (`FFMPEG_VERSION=earshot-v0.1`, a 4.3-era tree). Listing every named layout it accepts, from 6 channels up:
+
+| Channels | Layouts this build has |
+|---|---|
+| 6, 7, 8 | `5.1`, `6.0`, `hexagonal`, `6.1`, `7.0`, `7.1`, `octagonal`, ... |
+| 9 to 15 | **none at all** |
+| 16 | `hexadecagonal` |
+| 24 | `22.2` |
+
+The table jumps straight from 8 to 16. There is no 9- or 10-channel name to land 2nd order in, so 9 channels must be zero-padded to 16: not a design preference, the only reachable layout.
+
+Modern ffmpeg genuinely does have these. Version 8.1.2 lists `5.1.4` and `7.1.2` at 10 channels, `7.1.4` at 12, `9.1.4` at 14. So a layout table checked against a system ffmpeg will suggest options the transcoder cannot accept. Check inside the image before designing around one:
+
+```bash
+docker run --rm --entrypoint ffmpeg hoa360-earshot:local -hide_banner -layouts
+```
+
+This also bounds what a re-vendor could buy: moving earshot to a current ffmpeg would put a 10-channel 2nd-order path within reach, though the player would then need to read 10 channels as 2nd order with one unused, rather than inferring order from the channel count alone.
+
 **Over SRT, 16 channels is not just the ceiling but the requirement.** `srt-gateway` joins exactly four 4-channel tracks into one `hexadecagonal` stream (`join=inputs=4:channel_layout=hexadecagonal` in `services/srt-gateway/gateway.py`), so the SRT route carries 3rd order and nothing else today. A 1st-order source is fine on the RTMP route as a single `quad` push, but sending it over SRT would mean either teaching the gateway a second layout or padding 4 channels up to 16 at the sender. Worth knowing because SRT is otherwise the recommended route. A plain stereo or mono push produces no output at all and is auto-ended on the guest endpoint with that reason.
 
 ## Independent corroboration: a Quest 3 decodes both layouts
