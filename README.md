@@ -142,7 +142,7 @@ RTMP carries exactly one audio track, so 16 channels over it need [OBS Studio Mu
 | Stream key | `hoast_demo_owner` (or your `RTMP_OWNER_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
 
-The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `RTMP_OWNER_KEY`: a custom stream key no longer moves the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
+The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `RTMP_OWNER_KEY`: a custom stream key does not move the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
 
 The demo loop publishes over this same `live` application under its own separate `LIVE_APP_KEY`, never over the public internet - see Configuration below.
 

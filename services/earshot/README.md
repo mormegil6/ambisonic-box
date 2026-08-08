@@ -49,7 +49,7 @@ Upstream wipes `/opt/data` at startup, which fails on a busy mountpoint when a D
 
 A guarded `sed` on `libavformat/dashenc.c` at image build floors the MPD's `suggestedPresentationDelay` at `DASH_SPD_FLOOR` seconds (build arg, default 30). No ffmpeg flag can set SPD for WebM DASH (`-target_latency` is force-zeroed outside LL-DASH mode) and upstream hardcodes it to the last segment duration, which makes players join right at the live edge and gap-jump.
 
-The guard is anchored to the `suggestedPresentationDelay=` line at both ends, so an upstream restructuring of that line fails the build rather than silently producing an image without the floor (the unanchored post-check this replaced could match an unrelated `FFMAX()` elsewhere in the file and pass). Offered upstream as [#58](https://github.com/EnvelopSound/Earshot/pull/58).
+The guard is anchored to the `suggestedPresentationDelay=` line at both ends, so an upstream restructuring of that line fails the build rather than silently producing an image without the floor (an unanchored check could match an unrelated `FFMAX()` elsewhere in the file and pass silently). Offered upstream as [#58](https://github.com/EnvelopSound/Earshot/pull/58).
 
 ### 4. `src/nginx-transcoder/nginx*.conf`: `wait_key` / `wait_video` on the relay
 
@@ -91,7 +91,7 @@ ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
   -f dash /opt/data/dash/${DASH_NAME}.mpd
 ```
 
-That is the line as it stands in `src/nginx-transcoder/nginx-no-ssl.conf:58`, which is the canonical copy: read the rationale for `-b:a 1024k` and for keeping `$name` on `-i` only in the comment block directly above it (`nginx-no-ssl.conf:38-57`) rather than here. `nginx.conf` (the `SSL_ENABLED=true` variant) must carry the identical exec line; it lost `-b:a 1024k` at one point, which meant an SSL deployment ran an audio configuration that was never tested, so diff the two lines whenever either changes.
+That is the line as it stands in `src/nginx-transcoder/nginx-no-ssl.conf:58`, which is the canonical copy: read the rationale for `-b:a 1024k` and for keeping `$name` on `-i` only in the comment block directly above it (`nginx-no-ssl.conf:38-57`) rather than here. `nginx.conf` (the `SSL_ENABLED=true` variant) must carry the identical exec line, so diff the two whenever either changes: if they drift, an SSL deployment runs an audio configuration nothing has tested.
 
 16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see `.env.example` at the repo root - `-c:v copy` passthrough by default, VP9 realtime documented as the opt-in codec policy). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
 
