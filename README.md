@@ -251,7 +251,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 
 ## Documentation
 
-- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here, and the two below are exactly that.
+- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here: the segment-duration study in [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md) and the A/V-sync instruments in [tests/av-sync/README.md](tests/av-sync/README.md), both listed below.
 - [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md): why the live path stops at 16 channels, what is already 4th-order verified, and the two routes past the AAC ceiling
 - [docs/BITRATE.md](docs/BITRATE.md): contribution bitrate, audio and video, with the published anchors
 - [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md): the guest session rules in full, and the `SRT_MODE=owner` route
