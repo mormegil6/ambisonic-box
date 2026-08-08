@@ -26,7 +26,9 @@ The trailing `100 100` are this project's base frequency and step. `check-tones.
 
 ## The OBS presets
 
-> These files are exported from a real machine, so before committing an update, check that no local paths came with it. OBS stores three: `FFFilePath`, `FilePath` and `RecFilePath`. All three ship empty; OBS asks for a recording location the first time you need one, and this recipe streams to a URL rather than a file, so none of them is used by the documented flow.
+> The three recording-path settings OBS stores (`FFFilePath`, `FilePath`, `RecFilePath`) ship empty. OBS will ask you for a recording location the first time it needs one; this recipe streams to a URL rather than to a file, so none of them affects it.
+>
+> *Updating these fixtures?* They are exported from a real machine, so check those same three keys came back empty before committing.
 
 
 Import the profile with **Profile > Import** and the scene collection with **Scene Collection > Import**, then change two things:

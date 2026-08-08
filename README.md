@@ -36,7 +36,7 @@ Without `content/demo.mp4` the stack still demos itself: on first start loop-sou
 
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
-**Contribution is H.264 + 16-channel AAC on both routes.** Over RTMP that is protocol necessity, since legacy RTMP/FLV cannot carry VP9 or Opus. Over SRT the sender is free of it (OBS sends four separate 4-channel AAC tracks in MPEG-TS), but the gateway rejoins those tracks and republishes them as one 16-channel AAC stream over RTMP into the same ingest, deliberately, so that every piece of guest arbitration applies to SRT unchanged. From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
+**Contribution is H.264 + 16-channel AAC on both routes.** Over RTMP that is protocol necessity, since legacy RTMP/FLV cannot carry VP9 or Opus. Over SRT the sender is free of it (OBS sends four separate 4-channel AAC tracks in MPEG-TS), but `srt-gateway` rejoins those tracks and republishes them as one 16-channel AAC stream over RTMP into the same ingest, deliberately, so that every piece of guest arbitration applies to SRT unchanged. From the earshot transcode onward the audio is always 16-ch Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
 
 **Why 16 and not 25, and what would lift it.** ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) pass while 9 and 25 are refused outright. That is a limit on the AAC hop, not on delivery or rendering: the on-demand path never touches AAC and is **4th-order verified end to end** (a 25-channel clip auto-detected as order 4, rendered through the full order-4 impulse-response set). Live 4th order is therefore **theoretically reachable but untested**. Reaching it needs two independent things: a wider sender layout, which multitrack SRT already makes possible (25 channels would fit as five 5-channel tracks, each individually a layout AAC accepts), and a gateway that stops funnelling through 16-channel AAC over RTMP, which is architectural rather than configuration. The full argument, the two candidate routes past the ceiling, and the sender-side arithmetic beyond 3rd order are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
 
@@ -50,8 +50,8 @@ docker compose config | grep FFMPEG_FLAGS
 
 | Service | Role | Host port |
 |---|---|---|
-| `rtmp-ingest` | public RTMP ingest; stream-key auth, relay to earshot | 1935 |
 | `srt-gateway` | SRT contribution ingest (native OBS multitrack); joins 4x4 to 16-ch, republishes into the guest arbiter. Privilege-separated. See `SRT_ENABLED` / `GUEST_ENABLED` | 8890/udp |
+| `rtmp-ingest` | RTMP contribution ingest (legacy route); stream-key auth, relay to earshot | 1935 |
 | `earshot` | transcode to 16-ch Opus + video per `FFMPEG_FLAGS` (H.264 passthrough default, VP9 opt-in), live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
@@ -64,11 +64,11 @@ Two operator-facing views of the same running stream:
 
 <div align="center"> <img src="docs/images/telemetry-dashboard.png" width="85%" alt="The telemetry dashboard: a services row showing srt-gateway, rtmp-ingest, earshot, hoast-player and telemetry all healthy; reachability chips for the tunnel, the VOD origin and the backup; stream detail (resolution, bitrate, egress, RTMP links, segment age); host load, memory, disk and uptime; and three-hour history sparklines for viewers, CPU temperature and stream liveness."> </div>
 
-<p align="center"><em>The custom telemetry dashboard on :8090: service health, reachability, stream detail, host load and three-hour history. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
+<p align="center"><em>The custom telemetry dashboard on <code>:8090</code>: service health, reachability, stream detail, host load and three-hour history. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
 
 <div align="center"> <img src="docs/images/earshot-webtools.png" width="85%" alt="Earshot's own built-in debug monitor at :8081/webtools, showing the live 360 video preview of the demo concert recording, server and video representation info (4096x2048, avc1 H.264 passthrough), the DASH stream info panel, and all 16 ambisonic audio channels metering individually"> </div>
 
-<p align="center"><em>Earshot's own built-in monitor on :8081, which is where the 16 individual audio channels and the live DASH representation details are actually visible.</em></p>
+<p align="center"><em>Earshot's own built-in monitor on <code>:8081</code>, which is where the 16 individual audio channels and the live DASH representation details are actually visible.</em></p>
 
 <div align="center"> <img src="docs/images/quest3-browser-capability.jpg" width="85%" alt="The VOD page open in a Meta Quest 3 browser at stream.bmroz.eu/vod/?dbg, showing the 360 test card rendered with the ambisonic energy overlay, and a diagnostic panel reporting that 2-, 16- and 25-channel Opus all decoded"> </div>
 
@@ -115,7 +115,7 @@ Custom Output (FFmpeg) is a **Recording**-tab output in OBS, even though it is s
 **Per-OS routing, step by step:** creating the four 4-channel sources above is the one OS-specific step, so this is where the shared setup ends and your platform's guide takes over.
 
 - **[docs/obs-macos.md](docs/obs-macos.md)** - a multichannel Core Audio device ([BlackHole](https://github.com/ExistentialAudio/BlackHole))
-- **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via REAPER's ReaRoute and the atkAudio plugin
+- **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via [REAPER](https://www.reaper.fm/)'s ReaRoute and the [atkAudio plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/)
 
 Feed those four tracks from four 4-channel sources - device channels 1-4, 5-8, 9-12, 13-16, downmixing off - assigned one per track in Advanced Audio Properties. The join is strictly positional (track 1 becomes channels 1-4, and so on, never a downmix), so AmbiX order survives end to end.
 
@@ -135,6 +135,8 @@ Audio is paid once on the uplink, so the contribution rule is generous: 96 kbit/
 ### Legacy: RTMP
 
 RTMP carries exactly one audio track, so 16 channels over it need [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only patched fork. It stays fully supported - the demo loop uses this path - but new setups should start with SRT above.
+
+These are the settings for your OWN stream (the `live` application, authenticated by your key). Guests use a different application, covered under [Guest test endpoint](#guest-test-endpoint-the-guest-application).
 
 | Setting | Value |
 |---|---|

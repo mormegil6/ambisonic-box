@@ -48,10 +48,10 @@ The docker socket telemetry mounts is read-write, because starting and stopping 
 
 `?dbg` shows a small on-page diagnostic badge: the build tag, live delay, the video element / drawing buffer / decoded video-frame dimensions, aspect, and `gl.MAX_TEXTURE_SIZE`. It is a read-only overlay for debugging render and sizing issues, and because it needs no dev console it is the way to read that state on a phone. It does not affect playback and is off by default.
 
-Audio-path flags (mechanism measured in the publication notes; see the README's Documentation section). The player compensates for a video edit list Chromium's MSE ignores by driving the audio itself (the SegmentAudioFeed), on **desktop Chromium** only; Firefox and mobile use the legacy element audio.
+**Audio-path flags.** The player can get its audio in one of two ways. The simple one is to let the `<video>` element play it ("element audio"), which is what Firefox and mobile browsers use. The other fetches the audio segments itself and schedules them in Web Audio (the "segment audio feed"), which desktop Chromium needs because it ignores a timing offset in the video track that would otherwise put picture and sound out of step. Each browser gets the right one automatically; these flags override that choice for testing, and neither is needed for normal playback. (The underlying browser behaviour is written up in the publication notes; see the README's Documentation section.)
 
-- `?audiofeed` forces the segment-audio feed ON where it is off by default, i.e. on mobile Chromium, for testing the decode/sync there before it is enabled.
-- `?legacyaudio` forces the old element-audio wiring ON anywhere (Firefox-style), for A/B comparison against the feed.
+- `?audiofeed` uses the segment audio feed even where it is off by default, i.e. on mobile Chromium, to test decode and sync there before enabling it.
+- `?legacyaudio` uses element audio anywhere, to compare the two side by side.
 
 ## What telemetry itself polls (the monitoring inputs)
 

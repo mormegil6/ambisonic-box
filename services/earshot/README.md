@@ -25,7 +25,7 @@ Sections 1, 2, 4, 6 and 7 below are now identical to the pinned commit - kept do
 | 3 | `suggestedPresentationDelay` floor | **open**, [#58](https://github.com/EnvelopSound/Earshot/pull/58) |
 | 5 | `DASH_NAME` decoupled from the stream key | **open**, [#59](https://github.com/EnvelopSound/Earshot/pull/59) |
 | 8 | `max_message 10M` | **open**, [#60](https://github.com/EnvelopSound/Earshot/pull/60) |
-| 9 | `yarn --network-timeout` for slow build hosts | **open**, [#61](https://github.com/EnvelopSound/Earshot/pull/61) |
+| 9 | `yarn --network-timeout` for slow build hosts | **merged upstream**, [#61](https://github.com/EnvelopSound/Earshot/pull/61) |
 
 If those merge, they move into the table above and this section shrinks to the `.gitkeep` refinement plus one line: #58 and #60 are byte-identical to what is vendored here (bar comment wording), but #59 defaults `DASH_NAME` to the generic `stream` upstream against `hoast_demo` here, so that default stays a local deviation either way.
 
