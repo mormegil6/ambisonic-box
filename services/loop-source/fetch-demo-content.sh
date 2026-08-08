@@ -24,7 +24,7 @@ DEST="${DEMO_VOD_DIR:-/content/vod/masters}"
 # asset<TAB>sha256, one per line. Update BOTH the release asset and this list
 # together (verify size + SHA-256 by re-downloading after upload).
 ASSETS="colortones_8k360_16ch.webm bf9bb0b70e9ab0851e31847ee92cce2b9f278ed6091de2c2bbe5c62619720057
-directions_8k360_16ch.webm a6736260447c4372cb3d58ede8fcef7dc8f94c191365f28d7d2e26773ae3ed79"
+directions_8k360_16ch.webm f1fbf5ae47fae066c79f4fde6136ce00530958f57b937b185fb0f74d8076cc28"
 
 log() { echo "[demo-fetch] $*"; }
 
