@@ -28,7 +28,7 @@ fi
 
 if [ "$DEMO_CONTENT" = "1" ] && [ "${VOD_ENABLED:-0}" = "1" ]; then
     # VOD masters, pinned tag + pinned SHA-256, cache-aware, fail-soft. Runs
-    # backgrounded so a 369 MB first fetch never delays the stream; it keeps
+    # backgrounded so a 185 MB first fetch never delays the stream; it keeps
     # running after the exec below (reparented, same container).
     sh "$DIR/fetch-demo-content.sh" &
 elif [ "$DEMO_CONTENT" = "1" ]; then

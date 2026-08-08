@@ -224,7 +224,7 @@ services:
       - DASH_NAME=${DASH_NAME:-hoast_demo}
       # Demo content, ON by default: synthesise content/demo.mp4 in-container
       # when missing (no network involved) and fetch the two VOD reference
-      # masters from the pinned vod-clips release (~373 MB once, background,
+      # masters from the pinned vod-clips release (~185 MB once, background,
       # SHA-256-pinned, fail-soft). 0 = neither: the loop idles until you
       # provide content/demo.mp4 yourself.
       - DEMO_CONTENT=${DEMO_CONTENT:-1}

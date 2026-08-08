@@ -2,7 +2,7 @@
 # VOD feature gate, mirroring the guest endpoint's shape: code ships in the
 # image, the feature is OFF unless the deployer sets VOD_ENABLED=1. The
 # stack's purpose is live HOA streaming; VOD is an addition a fresh clone
-# should not get unasked (nor its 373 MB reference-master fetch, which
+# should not get unasked (nor its 185 MB reference-master fetch, which
 # loop-source gates on the same flag).
 #
 # Enabled:  the real VOD locations (page + packaged DASH) are included.

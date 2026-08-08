@@ -9,7 +9,7 @@
 # - Fail-soft per file: log clearly and continue; the demo loop never depends
 #   on this fetch (it is synthesised locally), so network trouble costs only
 #   the /vod/ masters.
-# - Progress: a poller logs downloaded size every 5 s; 369 MB on a first run
+# - Progress: a poller logs downloaded size every 5 s; 185 MB on a first run
 #   must not look like a hang.
 #
 # DEMO_BASE_URL overrides the release base URL (used by the test harness with
