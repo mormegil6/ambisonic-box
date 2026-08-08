@@ -52,6 +52,31 @@ rtmp {
 }
 
 http {
+
+    # FAILED PUBLISH AUTH, and only that, gets its own line. Without this a
+    # brute-force attempt against the stream key leaves no trace at all: /auth
+    # runs with access_log off, deliberately, because the credential arrives as
+    # ?token= and would otherwise be written to docker logs on every successful
+    # publish. So the rule is not "log /auth" but "log only the rejections, and
+    # only the fields that are not the secret".
+    #
+    # $status is evaluated at log time, so mapping it here picks out rejections
+    # without needing a second location block.
+    map $status $auth_denied {
+        401     1;
+        default 0;
+    }
+
+    # $arg_addr is the PUBLISHER's address, handed over by nginx-rtmp in the
+    # on_publish callback. $remote_addr would be worse than useless: the callback
+    # is nginx-rtmp calling its own HTTP side, so it is always 127.0.0.1, and a
+    # fail2ban jail keyed on it would ban loopback.
+    #
+    # Deliberately absent: $args, $arg_token, $arg_name. A rejected guess is the
+    # attacker's string rather than the key, but a fat-fingered REAL key would
+    # land here too, so none of them are recorded.
+    log_format rtmpauth 'rtmp-auth-denied client=$arg_addr app=$arg_app';
+
     access_log /dev/stdout;
 
     # Temp paths must be stated, not defaulted: the container runs a read-only
@@ -88,7 +113,17 @@ http {
             # The publish credential arrives here as ?token= (or the stream
             # name); keep it out of the access log so the key is not written to
             # stdout/docker logs on every publish.
-            access_log off;
+            # There is deliberately NO `access_log off;` here. nginx treats off
+            # as cancelling EVERY access_log directive on the level, including
+            # ones that follow it, so pairing the two silently logged nothing -
+            # which is exactly how the first version of this failed.
+            #
+            # This one directive replaces the inherited `combined` format, which
+            # must never apply here: it logs $request, and the credential arrives
+            # as ?token=, so the key would reach docker logs on every successful
+            # publish. rtmpauth carries no credential, and if= means only
+            # rejections are written at all.
+            access_log /dev/stdout rtmpauth if=$auth_denied;
             if ($arg_name = '${RTMP_OWNER_KEY}') {
                 return 418;
             }
