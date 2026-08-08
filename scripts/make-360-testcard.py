@@ -393,7 +393,7 @@ def render_card_face(name, size, ss=2):
     wf = font(30 * k)
     for cxx, cyy, ang in ((0.5, 0.272, 0), (0.5, 0.728, 180),
                           (0.272, 0.5, 90), (0.728, 0.5, 270)):
-        _rot_text(img, P(cxx), P(cyy), "HOA 360", wf, DIM, ang)
+        _rot_text(img, P(cxx), P(cyy), "Ambisonic Box", wf, DIM, ang)
 
     # -- the name of the wall you are looking at, and its bearing ------------
     # The bearing sits directly under the name, as one identity block. Floated
