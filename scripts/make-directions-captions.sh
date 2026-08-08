@@ -58,13 +58,13 @@ PL_DIR = {'F': 'Przód', 'B': 'Tył',  'L': 'Lewo',
 
 # The clip doubles as a captions test, so the second line cycles through the
 # things worth exercising: the language switch and Polish diacritics.
-EN_HELP = ["Captions test — press CC ▸ to switch language",
+EN_HELP = ["Captions test - press CC ▸ to switch language",
            "English captions · choose Polski in the CC menu",
            "Diacritics: Gdańsk, Wrocław, łóżko",
            "Reads are panned in 3rd-order Ambisonics (16 ch)",
            "The glow marks where the sound is coming from",
            "Six directions: front, back, left, right, top, bottom"]
-PL_HELP = ["Test napisów — naciśnij CC ▸, aby zmienić język",
+PL_HELP = ["Test napisów - naciśnij CC ▸, aby zmienić język",
            "Napisy po polsku · wybierz English w menu CC",
            "Znaki diakrytyczne: Gdańsk, Wrocław, łóżko",
            "Odczyty panoramowane w Ambisonice 3. rzędu (16 kan.)",
