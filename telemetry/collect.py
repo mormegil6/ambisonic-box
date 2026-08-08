@@ -2251,7 +2251,7 @@ def vod_origin_probe():
     try:
         # Cloudflare's bot rules 403 the default Python-urllib agent
         req = urllib.request.Request(VOD_PROBE_URL, method="HEAD",
-                                     headers={"User-Agent": "hoa360-telemetry/1.0"})
+                                     headers={"User-Agent": "ambi-box-telemetry/1.0"})
         r = urllib.request.urlopen(req, timeout=6)
         out["code"] = r.status
         out["ok"] = 200 <= r.status < 400
@@ -2296,7 +2296,7 @@ def cf_vod_analytics():
             data=json.dumps(q).encode(),
             headers={"Authorization": f"Bearer {CF_ANALYTICS_TOKEN}",
                      "Content-Type": "application/json",
-                     "User-Agent": "hoa360-telemetry/1.0"})
+                     "User-Agent": "ambi-box-telemetry/1.0"})
         j = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
         groups = j["data"]["viewer"]["accounts"][0]["rumPageloadEventsAdaptiveGroups"]
         views, visits, countries = 0, 0, {}
