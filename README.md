@@ -81,7 +81,7 @@ Two ways in, differing in transport. **SRT (Secure Reliable Transport) is the re
 | | SRT (recommended) | RTMP (legacy) |
 |---|---|---|
 | Sender | stock OBS, macOS or Windows | OBS Studio Music Edition, Windows only |
-| Audio | 4 tracks x 4 channels, joined to 16 by `srt-gateway` | one 16-channel AAC track |
+| Audio | one 4-channel track (1st order) or four (3rd order); `srt-gateway` reads which and handles both | one 16-channel AAC track |
 | Enabled | on by default (`SRT_ENABLED=0` unbinds the port) | always |
 
 Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place, and a guest arriving by either transport is held to the same session rules.
@@ -251,7 +251,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 
 ## Documentation
 
-- Measurement notes: the detailed measured results behind this README (transcode thermals, codec constraints, segment-duration trade-offs, A/V-sync mechanism, AV1 viability) are being written up for publication and are deliberately not in the repo. This README will carry the citation and the tagged commit once the papers are out.
+- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here, and the two below are exactly that.
 - [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md): why the live path stops at 16 channels, what is already 4th-order verified, and the two routes past the AAC ceiling
 - [docs/BITRATE.md](docs/BITRATE.md): contribution bitrate, audio and video, with the published anchors
 - [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md): the guest session rules in full, and the `SRT_MODE=owner` route

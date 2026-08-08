@@ -112,6 +112,8 @@ Four sources now appear in the OBS **Sources** panel, with real level meters. Th
 <div align="center"><img src="images/obs-windows/12_OBS-tracks-routing.png" width="88%" alt="OBS Advanced Audio Properties on Windows: the four Ph2Out sources each have exactly one of tracks 1 to 4 ticked."></div>
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
+**Sending 1st order (4 channels) instead?** Then this whole step is one line: a single 4-channel source on Track 1, and nothing on tracks 2 to 4. In [section 5](#5-point-obs-at-the-box) tick only **Track 1**. Everything else on this page is the same, including the URL. The box reads how many tracks arrive and treats one 4-channel track as 1st order and four as 3rd, so there is nothing to set at that end.
+
 
 ## 5. Point OBS at the box
 
