@@ -66,7 +66,7 @@ Two operator-facing views of the same running stream:
 
 <p align="center"><em>The custom telemetry dashboard on <code>:8090</code>: service health, reachability, stream detail, host load and three-hour history. Details in <a href="telemetry/README.md">telemetry/README.md</a>.</em></p>
 
-<div align="center"> <img src="docs/images/earshot-webtools.png" width="85%" alt="Earshot's own built-in debug monitor at :8081/webtools, showing the live 360 video preview of the demo concert recording, server and video representation info (4096x2048, avc1 H.264 passthrough), the DASH stream info panel, and all 16 ambisonic audio channels metering individually"> </div>
+<div align="center"> <img src="docs/images/earshot-webtools.png" width="85%" alt="Earshot's own built-in debug monitor at :8081/webtools, showing the live 360 video preview of the demo concert recording, server and video representation info (4096x2048, avc1 H.264 passthrough), the DASH stream info panel, and an individual gain slider for each of the 16 ambisonic audio channels, all at zero"> </div>
 
 <p align="center"><em>Earshot's own built-in monitor on <code>:8081</code>, which is where the 16 individual audio channels and the live DASH representation details are actually visible.</em></p>
 
