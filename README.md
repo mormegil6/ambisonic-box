@@ -82,15 +82,19 @@ Two ways in, differing in transport. **SRT (Secure Reliable Transport) is the re
 |---|---|---|
 | Sender | stock OBS, macOS or Windows | OBS Studio Music Edition, Windows only |
 | Audio | 4 tracks x 4 channels, joined to 16 by `srt-gateway` | one 16-channel AAC track |
-| Enabled | on by default (`SRT_ENABLED=0` unbinds the port). The **guest** gateway on 8890 admits nobody until `GUEST_ENABLED=1`; the **owner** route on 8891 is separate, needs no such flag, and is what `scripts/setup.sh` sets up | always |
+| Enabled | on by default (`SRT_ENABLED=0` unbinds the port) | always |
 
-Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place and obey the same guest session rules.
+Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place, and a guest arriving by either transport is held to the same session rules.
 
 ### Stock OBS over SRT
 
 These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
 
-The URL below is the **owner** route, authenticated by a key `./scripts/setup.sh` generates for you and prints ready to paste. It listens on all interfaces, like the stack's other two contribution ports, so streaming in from elsewhere needs only a UDP 8891 forward on your router and your public address in the URL. Either OBS guide covers narrowing the bind and what publishing it costs. To let *other* people push to your box instead, see the [guest test endpoint](#guest-test-endpoint-the-guest-application).
+Run `./scripts/setup.sh` first. It creates your `.env`, generates a publish key and a passphrase that are yours alone, switches on the SRT endpoint for your own broadcasts, and prints the URL below with your real passphrase already filled in.
+
+That endpoint listens on every network interface, so pushing from a different machine needs nothing more than a UDP 8891 forward on your router, and your box's public address in place of the one below. Anyone without the passphrase is refused: SRT uses it as the connection's encryption key, so an unauthenticated caller never gets past the handshake. Both OBS guides cover restricting it further, and what leaving it open costs you.
+
+(There is a second, separate endpoint for letting *other people* push to your box without a key. It is off by default and has its own rules: see [guest test endpoint](#guest-test-endpoint-the-guest-application).)
 
 | Setting | Value |
 |---|---|
