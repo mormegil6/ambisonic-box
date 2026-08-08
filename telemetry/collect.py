@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# hoa360 telemetry: containerised collector + alerter + dashboard server.
+# ambisonic-box telemetry: containerised collector + alerter + dashboard server.
 #
 # Runs as the `telemetry` compose service. Every INTERVAL seconds it:
 #   - reads container health + the player access log via the mounted docker socket,
@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-HOST     = os.environ.get("TEL_HOST", "hoa360")
+HOST     = os.environ.get("TEL_HOST", "ambisonic-box")
 def _own_project():
     """The compose project this telemetry container actually belongs to, read
     from its own labels (hostname == container id). The env var is only a
@@ -33,7 +33,7 @@ def _own_project():
             return out
     except Exception:
         pass
-    return os.environ.get("COMPOSE_PROJECT_NAME", "hoa360")
+    return os.environ.get("COMPOSE_PROJECT_NAME", "ambi-box")
 
 PROJECT  = _own_project()
 DATA     = Path(os.environ.get("TEL_DATA", "/data"))          # persisted volume + web root

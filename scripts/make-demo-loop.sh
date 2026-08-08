@@ -45,13 +45,13 @@ fi
 DEMO_DUR=$SECS
 . services/loop-source/demo-graph.sh
 
-docker image inspect hoa360-earshot:local >/dev/null 2>&1 \
+docker image inspect ambi-box-earshot:local >/dev/null 2>&1 \
     || docker compose build earshot
 
 OUTDIR=$(cd "$(dirname "$OUT")" && pwd)
 OUTNAME=$(basename "$OUT")
 # shellcheck disable=SC2086   # DEMO_ENC word-splitting is intentional
-docker run --rm -v "$OUTDIR:/outdir" --entrypoint ffmpeg hoa360-earshot:local \
+docker run --rm -v "$OUTDIR:/outdir" --entrypoint ffmpeg ambi-box-earshot:local \
     -hide_banner -loglevel error -y \
     -filter_complex "$DEMO_GRAPH" -map '[out0]' -map '[out1]' \
     $DEMO_ENC -t "$SECS" "/outdir/$OUTNAME"

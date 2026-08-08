@@ -44,7 +44,7 @@ The table jumps straight from 8 to 16. There is no 9- or 10-channel name to land
 Modern ffmpeg genuinely does have these. Version 8.1.2 lists `5.1.4` and `7.1.2` at 10 channels, `7.1.4` at 12, `9.1.4` at 14. So a layout table checked against a system ffmpeg will suggest options the transcoder cannot accept. Check inside the image before designing around one:
 
 ```bash
-docker run --rm --entrypoint ffmpeg hoa360-earshot:local -hide_banner -layouts
+docker run --rm --entrypoint ffmpeg ambi-box-earshot:local -hide_banner -layouts
 ```
 
 This also bounds what a re-vendor could buy: moving earshot to a current ffmpeg would put a 10-channel 2nd-order path within reach, though the player would then need to read 10 channels as 2nd order with one unused, rather than inferring order from the channel count alone.

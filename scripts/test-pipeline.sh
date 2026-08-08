@@ -37,7 +37,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TEST_STREAM=pipeline-test
-PUSH_CONTAINER=hoa360-pipeline-test-push
+PUSH_CONTAINER=ambi-box-pipeline-test-push
 PUSH_SECONDS=30
 HEALTHY_DEADLINE=120     # first `up` may also build images; polling starts after up returns
 FIRST_SEGMENT_DEADLINE=20   # expectation is <15 s from push start

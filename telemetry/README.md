@@ -36,8 +36,8 @@ If you would rather not use it, swapping is deliberately small: `telegram()` in 
 
 | var | default | meaning |
 |-----|---------|---------|
-| `TEL_HOST` | `hoa360` | name shown on the dashboard + in alerts |
-| `COMPOSE_PROJECT_NAME` | `hoa360` | compose project label used to find containers |
+| `TEL_HOST` | `ambisonic-box` | name shown on the dashboard + in alerts |
+| `COMPOSE_PROJECT_NAME` | `ambi-box` | compose project label used to find containers |
 | `FFMPEG_FLAGS` | – | parsed for reported resolution/bitrate (pass the same value earshot gets) |
 | `BOT_TOKEN` / `CHAT_ID` | – | Telegram; unset ⇒ alerting disabled |
 | `TEL_INTERVAL` | `60` | seconds between collections |

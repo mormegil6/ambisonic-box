@@ -81,7 +81,7 @@ services:
   # Uncomment the whole block to use it.
   #
   # srt-gateway-owner:
-  #   image: hoa360-srt-gateway:local     # same image the base build produces
+  #   image: ambi-box-srt-gateway:local     # same image the base build produces
   #   build:
   #     context: ./services/srt-gateway
   #   environment:

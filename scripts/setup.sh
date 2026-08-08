@@ -120,7 +120,7 @@ else
 # opening the keyless guest endpoint. See docs/GUEST-ENDPOINT.md.
 services:
   srt-gateway-owner:
-    image: hoa360-srt-gateway:local
+    image: ambi-box-srt-gateway:local
     build:
       context: ./services/srt-gateway
     environment:

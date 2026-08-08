@@ -14,8 +14,8 @@
 #         ./scripts/scan-gateway.sh ssh box    (scans on a remote docker host)
 set -eu
 
-IMAGE="${GATEWAY_IMAGE:-hoa360-srt-gateway:local}"
-CONTAINER="${GATEWAY_CONTAINER:-hoa360-srt-gateway-1}"
+IMAGE="${GATEWAY_IMAGE:-ambi-box-srt-gateway:local}"
+CONTAINER="${GATEWAY_CONTAINER:-ambi-box-srt-gateway-1}"
 RUN="${*:-}"          # optional prefix, e.g. "ssh box"
 
 d() { if [ -n "$RUN" ]; then $RUN "$@"; else sh -c "$*"; fi; }

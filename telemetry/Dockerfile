@@ -1,4 +1,4 @@
-# hoa360 telemetry: collector + alerter + private dashboard server.
+# ambisonic-box telemetry: collector + alerter + private dashboard server.
 # Multi-arch (amd64 + arm64). Needs only the docker *CLI* (talks to the mounted
 # socket) plus curl; no docker engine, no extra python deps (stdlib only).
 FROM python:3.12-slim

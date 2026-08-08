@@ -19,7 +19,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PROJECT="${COMPOSE_PROJECT_NAME:-hoa360}"
+PROJECT="${COMPOSE_PROJECT_NAME:-ambi-box}"
 NET="${PROJECT}_default"
 TEL=http://127.0.0.1:8090
 WORK=scratch/srt-e2e
@@ -75,7 +75,7 @@ echo "[3/6] pushing as an SRT caller from inside the compose network"
 # ONE audio track of the four (the same footgun the Windows SRT receiver test
 # hit), and the gateway's fixed 4x4 join then correctly refuses the input
 docker run -d --name "$CALLER" --network "$NET" \
-    -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg hoa360-srt-gateway:local \
+    -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg ambi-box-srt-gateway:local \
     -hide_banner -loglevel warning -re -stream_loop -1 -i /w/clip.ts \
     -map 0 -c copy -f mpegts \
     "srt://srt-gateway:8890?mode=caller&streamid=srte2e&latency=2000000" >/dev/null
@@ -110,7 +110,7 @@ ffmpeg -v error -i "$WORK/dash-audio.webm" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16l
 echo "[5/6] second concurrent caller must be rejected at the handshake"
 set +e
 timeout 15 docker run --rm --network "$NET" \
-    -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg hoa360-srt-gateway:local \
+    -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg ambi-box-srt-gateway:local \
     -hide_banner -loglevel error -re -i /w/clip.ts -map 0 -c copy -t 4 -f mpegts \
     "srt://srt-gateway:8890?mode=caller&streamid=reject-probe&latency=2000000" \
     >/dev/null 2>&1
