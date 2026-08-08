@@ -70,7 +70,17 @@ BUFFER_MB     = int(os.environ.get("SRT_BUFFER_MB", "64"))
 SNAP_POLL_S   = 2      # snapshot refresh cadence
 SNAP_TTL_S    = 10     # older than this = arbiter unreachable = fail closed
 CHURN_MEMO_S  = 5      # per-IP rejection memo against reconnect hammering
-AUDIO_BITRATE = "1536k"   # 96 kbit/s x 16 ch, the contribution-leg rule
+# The child cannot be spawned until we know whether the caller is sending one
+# 4-channel track (1st order) or four (3rd order), because that decides the
+# filter graph. Buffer this much of the stream head, probe it, then spawn.
+# 1 MB is several mpegts PAT/PMT cycles at any contribution bitrate this
+# stack accepts; the wait is the ceiling for a sender that stalls after the
+# handshake, and is well inside PUBLISH_BUDGET_S.
+PROBE_BYTES    = 1024 * 1024
+PROBE_WAIT_S   = 8
+PROBE_TIMEOUT_S = 5    # ffprobe itself, on bytes a stranger chose
+AUDIO_BITRATE_PER_CH = 96          # kbit/s, the contribution-leg rule
+AUDIO_BITRATE = "1536k"   # 96 kbit/s x 16 ch, kept for the 3rd-order path
 PENDING_TTL_S = 5      # handshake accepted but caller-added never arrived: free
                        # the slot rather than let a half-open caller hold it
 PUBLISH_BUDGET_S = 20  # a child must become an nginx publisher within this
@@ -136,27 +146,73 @@ def build_join_map():
 JOIN_MAP = None  # built once at startup when enabled
 
 
-def child_command(name, ip):
-    """One session = one ffmpeg: demux the caller's mpegts, join the four
-    4-ch AAC tracks positionally to one 16-ch stream whose named layout makes
-    the AAC encoder emit the PCE the contribution leg needs, copy video, and
-    publish FLV into rtmp-ingest. The gw secret + realip args are how
-    telemetry attributes the session to the real caller instead of this
-    container's address (it honors them only from this service's resolved
-    address, with a constant-time compare)."""
-    fc = (f"[0:a:0][0:a:1][0:a:2][0:a:3]"
-          f"join=inputs=4:channel_layout=hexadecagonal:map={JOIN_MAP}[a]")
+def child_command(name, ip, tracks):
+    """One session = one ffmpeg: demux the caller's mpegts, put the audio into
+    a NAMED layout the AAC encoder can write a PCE for, copy video, and publish
+    FLV into rtmp-ingest. The gw secret + realip args are how telemetry
+    attributes the session to the real caller instead of this container's
+    address (it honors them only from this service's resolved address, with a
+    constant-time compare).
+
+    `tracks` is how many 4-channel audio tracks the caller is sending, which
+    decides the shape:
+
+      4 -> 3rd order. Join them positionally into one 16-channel
+           `hexadecagonal` stream. Merged channel g IS track t's channel o;
+           never a semantic reorder.
+      1 -> 1st order. The single track is already `quad`, itself a named
+           layout, so there is nothing to join and no filter at all.
+
+    Both land on a layout the RTMP leg accepts. Nothing between them does:
+    see docs/AMBISONIC-ORDER.md for why 2nd order has to be padded to 16 by
+    the sender."""
     if MODE == "guest":
         target = f"{INGEST_URL}/{name}?realip={ip}&gw={GW_SECRET}"
     else:
         target = f"{INGEST_URL}/{name}?token={RTMP_OWNER_KEY}"
-    return ["ffmpeg", "-hide_banner", "-loglevel", "warning",
-            "-analyzeduration", "10M", "-probesize", "20M",
-            "-f", "mpegts", "-i", "pipe:0",
-            "-filter_complex", fc,
-            "-map", "0:v:0", "-map", "[a]",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", "48000",
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning",
+           "-analyzeduration", "10M", "-probesize", "20M",
+           "-f", "mpegts", "-i", "pipe:0"]
+    if tracks == 1:
+        cmd += ["-map", "0:v:0", "-map", "0:a:0"]
+    else:
+        fc = (f"[0:a:0][0:a:1][0:a:2][0:a:3]"
+              f"join=inputs=4:channel_layout=hexadecagonal:map={JOIN_MAP}[a]")
+        cmd += ["-filter_complex", fc, "-map", "0:v:0", "-map", "[a]"]
+    # 96 kbit/s per channel, so a 4-channel 1st-order push gets 384k rather
+    # than the 1536k sized for 16 channels. Passing the 16-ch figure to a
+    # 4-ch encode would spend four times the rate the rule asks for on the
+    # contribution leg, which is the one hop where bitrate is paid for good.
+    bitrate = f"{AUDIO_BITRATE_PER_CH * 4 * tracks}k"
+    cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", bitrate, "-ar", "48000",
             "-f", "flv", target]
+    return cmd
+
+
+def probe_audio_tracks(head):
+    """How many audio tracks, and how many channels each, are in this mpegts
+    head? Returns (tracks, channels_per_track) or (0, 0) when the head is not
+    yet decodable. ffprobe reads the same bytes the child would, from a pipe,
+    so a partial final packet is harmless."""
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-f", "mpegts", "-select_streams", "a",
+             "-show_entries", "stream=channels", "-of", "json", "-i", "pipe:0"],
+            input=head, capture_output=True, timeout=PROBE_TIMEOUT_S)
+    except (subprocess.TimeoutExpired, OSError):
+        return 0, 0
+    # JSON, not csv: with a program in the mpegts, csv output lists every
+    # stream TWICE (once under the program, once at top level, separated by a
+    # blank line), which reads as 8 tracks for a normal 4-track push and would
+    # reject it. The json writer emits one `streams` array.
+    try:
+        streams = json.loads(r.stdout.decode("utf-8", "ignore")).get("streams", [])
+    except ValueError:
+        return 0, 0
+    counts = [s.get("channels") for s in streams if s.get("channels")]
+    if not counts:
+        return 0, 0
+    return len(counts), counts[0]
 
 
 class Snapshot:
@@ -304,24 +360,16 @@ class Gateway:
                 self._drop_caller()
                 return
             name = pend[1]
-        try:
-            child = subprocess.Popen(child_command(name, ip),
-                                     stdin=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, bufsize=0)
-        except OSError as e:
-            log(f"spawn failed for {name} from {ip}: {e}")
-            with self.lock:
-                self._reset_locked()
-            self._memoize(ip)
-            self._drop_caller()
-            return
         # confirmed starts True in owner mode: _confirm_published can only see
         # the GUEST endpoint via the arbiter, so an owner session could never
         # confirm - the watchdog would tear it down at PUBLISH_BUDGET_S and
         # memoize the caller, a 20 s-on / 5 s-off sawtooth. It also keeps
         # child_exit's early-death memo from punishing an owner whose relay
         # dies at startup (an immediate manual retry should just work).
-        s = {"name": name, "ip": ip, "sock_id": sock_id, "child": child,
+        # child is spawned by _writer once it has probed the stream head, so
+        # everything that touches s["child"] either starts after that or
+        # tolerates None (a session can be torn down while still probing).
+        s = {"name": name, "ip": ip, "sock_id": sock_id, "child": None,
              "buf": collections.deque(), "bytes": 0,
              "cond": threading.Condition(), "closing": False,
              "overflowed": False, "confirmed": MODE == "owner",
@@ -330,18 +378,104 @@ class Gateway:
             self.pending = None
             self.session = s
         threading.Thread(target=self._writer, args=(s,), daemon=True).start()
-        threading.Thread(target=self._child_log, args=(s,), daemon=True).start()
-        threading.Thread(target=self._reaper, args=(s,), daemon=True).start()
         if MODE == "guest":
             # the watchdog exists to catch a child that never becomes an
             # ARBITER-VISIBLE publisher; the owner has no arbiter view (its
             # /auth is fail-open and /api/live only reports guests), so for
             # owner the confirm can never pass and the thread must not run
             threading.Thread(target=self._watchdog, args=(s,), daemon=True).start()
-        log(f"session start: {name} from {ip} (child pid {child.pid})")
+        log(f"session start: {name} from {ip} (probing stream head)")
+
+    def _spawn_after_probe(self, s):
+        """Collect the stream head, ask ffprobe what is in it, and spawn the
+        child that matches. Returns the head to replay, or None if the session
+        was ended or the caller is sending something this gateway cannot join.
+
+        The probe reads only what the child would have read anyway, so it adds
+        no new class of exposure to this process; it just reads it first."""
+        head, deadline = bytearray(), time.time() + PROBE_WAIT_S
+        while True:
+            with s["cond"]:
+                while not s["buf"] and not s["closing"] and time.time() < deadline:
+                    s["cond"].wait(timeout=0.25)
+                if s["closing"]:
+                    return None
+                while s["buf"]:
+                    chunk = s["buf"].popleft()
+                    s["bytes"] -= len(chunk)
+                    head += chunk
+            if len(head) >= PROBE_BYTES or time.time() >= deadline:
+                break
+        if not head:
+            # memoize as every other caller-blaming teardown does (on_connecting,
+            # the spawn failure below, _watchdog, child_exit). Without it a
+            # sender that never sends media can re-claim the single slot the
+            # instant it is freed, looping every PROBE_WAIT_S with no backoff.
+            self._memoize(s["ip"])
+            self.events.put(("force_teardown", "no media after handshake"))
+            return None
+
+        tracks, channels = probe_audio_tracks(bytes(head))
+        # 4x4 is the documented multitrack recipe; 1x4 is a 1st-order source.
+        # Anything else cannot be put into a named AAC layout here, and saying
+        # so now is kinder than letting the transcode stall for 45 s.
+        if tracks == 4 and channels == 4:
+            order = "3rd"
+        elif tracks == 1 and channels == 4:
+            order = "1st"
+        else:
+            log(f"reject {s['ip']} (unusable audio: {tracks} track(s) "
+                f"x {channels} ch; expected 4x4 or 1x4)")
+            self._memoize(s["ip"])      # same reason as above: no free retry loop
+            self.events.put(("force_teardown",
+                             f"unsupported audio layout ({tracks}x{channels})"))
+            return None
+
+        # The session can have been torn down while we were in ffprobe (the
+        # caller dropping is the common way). Spawning then would leave an
+        # ffmpeg the gateway no longer tracks, briefly publishing the buffered
+        # head as a caller who has already gone, which makes telemetry open a
+        # grace window for a session that never legitimately started. Check
+        # under the lock, and check AGAIN after the spawn, because a teardown
+        # can land in between; on that path kill what we just started.
+        with self.lock:
+            if self.session is not s or s["closing"]:
+                return None
+        try:
+            child = subprocess.Popen(child_command(s["name"], s["ip"], tracks),
+                                     stdin=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, bufsize=0)
+        except OSError as e:
+            log(f"spawn failed for {s['name']} from {s['ip']}: {e}")
+            self._memoize(s["ip"])
+            self.events.put(("force_teardown", "spawn failed"))
+            return None
+
+        with self.lock:
+            still_current = self.session is s and not s["closing"]
+            if still_current:
+                s["child"] = child      # published under the same lock
+                                        # _terminate_child reads it under
+        if not still_current:
+            log(f"session ended while probing; discarding child pid {child.pid}")
+            try:
+                child.kill()
+                child.stdin.close()
+            except OSError:
+                pass
+            return None
+        threading.Thread(target=self._child_log, args=(s,), daemon=True).start()
+        threading.Thread(target=self._reaper, args=(s,), daemon=True).start()
+        log(f"session media: {s['name']} from {s['ip']} - {tracks} x {channels} ch "
+            f"({order} order, child pid {child.pid})")
+        return bytes(head)
 
     def _writer(self, s):
+        head = self._spawn_after_probe(s)
+        if head is None:
+            return
         try:
+            s["child"].stdin.write(head)
             while True:
                 with s["cond"]:
                     while not s["buf"] and not s["closing"]:
@@ -414,6 +548,11 @@ class Gateway:
         log(f"session end: {s['name']} from {s['ip']} ({reason})")
 
     def _terminate_child(self, s):
+        with self.lock:
+            child = s["child"]
+        if child is None:
+            return      # ended while still probing; _spawn_after_probe's own
+                        # post-spawn re-check kills anything started after this
         s["child"].terminate()
         deadline = time.time() + 8      # under docker's 10 s stop grace
         while s["child"].poll() is None and time.time() < deadline:
