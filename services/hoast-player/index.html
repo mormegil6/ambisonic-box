@@ -321,7 +321,13 @@
           // (the VOD page re-calls showVodDownloads itself, so nothing is
           // lost when the guard skips it here)
           var lead = document.getElementById('aboutLead');
-          if (b.lead && lead && MODE !== 'vod') lead.innerHTML = b.lead;
+          // MODE is declared further down this file, in a different scope, so
+          // referencing it here threw a ReferenceError and aborted the whole
+          // brand.json apply at this line - taking the reference, the copyright
+          // line and the favicon override with it, silently, on every page load.
+          // Same test, computed locally, so it cannot throw.
+          var isVodPage = /^\/vod\/?$/.test(location.pathname);
+          if (b.lead && lead && !isVodPage) lead.innerHTML = b.lead;
           var ref = document.getElementById('brandRef');
           if (b.reference && ref) { ref.innerHTML = b.reference; ref.hidden = false; addBibCopy(ref); }
           var cp = document.getElementById('brandCopyright');
