@@ -26,9 +26,15 @@
 # host has no such Python, run the Python parts in a container:
 #   docker build -t cardgen:local - <<'EOF'
 #   FROM python:3.12-slim
+#   RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+#       && rm -rf /var/lib/apt/lists/*
 #   RUN pip install --no-cache-dir numpy pillow matplotlib
 #   EOF
-#   docker run --rm -v "$PWD:/w" -w /w cardgen:local ./scripts/make-doc-figures.sh
+#   docker run --rm -v "$PWD:/w" -w /w cardgen:local env PY=python ./scripts/make-doc-figures.sh
+#
+# ffmpeg belongs in that image on purpose. Without it the container does four of
+# the five and the host does the fifth, which is two half-runs and a chance to
+# forget one; with it, one command produces all five in one environment.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -72,7 +78,7 @@ echo "  sphere-tessellation-before-after.png"
 
 if [ ! -f "$ENERGY" ]; then
     echo "  SKIPPED directions-energy-frame.png: $ENERGY not present" >&2
-    echo "    fetch it: gh release download vod-clips -p '"'"'$(basename "$ENERGY")'"'"' -D '"'"'$(dirname "$ENERGY")'"'"'" >&2
+    echo "    fetch it: gh release download vod-clips -p $(basename "$ENERGY") -D $(dirname "$ENERGY")" >&2
 elif ! command -v ffmpeg >/dev/null 2>&1; then
     # the container fallback in the header has Python but no ffmpeg, and the four
     # figures above are the ones that need Python - so this is a normal split,
