@@ -193,9 +193,17 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 			# A direct-listener ffmpeg is identifiable without ambiguity: it
 			# reads pipe:0 and its parent is init. The RTMP relay transcoders
 			# are children of nginx and read rtmp://, so they can never match.
-			for pid in $(ps -o pid,args | grep "[f]fmpeg" | grep -- "-i pipe:0" | awk "{print \$1}"); do
-				[ -r "/proc/$pid/status" ] || continue
-				ppid=$(awk "/^PPid:/{print \$2}" "/proc/$pid/status" 2>/dev/null)
+			# Identify by /proc/PID/comm, NEVER by matching the cmdline: this
+			# watchdog IS a shell whose own command line contains the whole
+			# text of these checks, so any literal it greps for (a process
+			# name, an ffmpeg flag) appears in its own cmdline and it kills
+			# itself. That has now happened twice, by two different literals -
+			# comm is the only identifier a shell cannot accidentally carry.
+			for d in /proc/[0-9]*; do
+				pid=${d#/proc/}
+				[ -r "$d/comm" ] && [ -r "$d/status" ] || continue
+				[ "$(cat "$d/comm" 2>/dev/null)" = "ffmpeg" ] || continue
+				ppid=$(awk "/^PPid:/{print \$2}" "$d/status" 2>/dev/null)
 				[ "$ppid" = "1" ] || continue
 				echo "[direct-dash] watchdog: killing orphaned transcoder pid $pid (no feeder, reparented to init)" >> /tmp/nginx_rtmp_ffmpeg_log
 				kill -9 "$pid" 2>/dev/null
