@@ -69,4 +69,55 @@ else
 	  /etc/nginx/nginx-no-ssl.conf.template > /etc/nginx/nginx.conf
 fi
 
+# ---- SRT direct-DASH listeners --------------------------------------------
+# Design: docs/srt-direct-dash-design.md in the deployment repo. The owner SRT
+# gateway can feed raw mpegts here instead of republishing over RTMP/FLV, which
+# deletes the FLV hop's forced 16-ch AAC re-encode (measured at 59 % of a core
+# at 20 Mbps) AND one lossy audio generation (OBS AAC -> gateway AAC -> Opus
+# becomes OBS AAC -> Opus).
+#
+# THIS ffmpeg on purpose: the SPD floor (DASH_SPD_FLOOR) and the PCE-aware
+# decode exist only in this image's build, and /opt/data/dash tolerates exactly
+# one writer, which this container already is. Two fixed-layout listeners
+# rather than one parameterised one, because the join filter depends on the
+# probed track count and two dumb listeners beat a smart handshake:
+#   9100 - 4x4ch tracks (3rd order), joined to hexadecagonal
+#   9101 - 1x4ch track  (1st order), passthrough map
+# Ports are compose-internal only; nothing publishes them. -listen 1 accepts
+# one connection, transcodes until EOF, exits; the loop re-arms it. Idle
+# listeners cost nothing. Audio bitrates follow the gateway's 96 kbit/s per
+# channel rule (16 ch matches the RTMP relay's 1024k closely enough for A/B).
+# The join map is derived from THIS ffmpeg's own layout table, exactly as the
+# gateway's build_join_map() does: merged channel g IS track g/4's channel g%4.
+if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
+	JOIN_MAP=$(ffmpeg -hide_banner -layouts 2>/dev/null | awk '$1=="hexadecagonal"{n=split($2,a,"+");s="";for(i=0;i<16;i++){t=int(i/4);o=i%4;s=s sprintf("%s%d.%d-%s",(i?"|":""),t,o,a[i+1])};print s}')
+	if [ -n "$JOIN_MAP" ]; then
+		# Plain ( ... ) & subshells, NOT the $( ... ) & idiom the certbot lines
+		# above use: on this image's shell the substitution variant survived
+		# exactly one ffmpeg exit and then died silently, leaving no listener
+		# and no log line. Each re-arm logs itself so a dead loop can never be
+		# silent again.
+		( while :; do
+			echo "[direct-dash] 9100 (4x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
+			ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
+			  -f matroska -i "tcp://0.0.0.0:9100?listen=1" \
+			  -filter_complex "[0:a:0][0:a:1][0:a:2][0:a:3]join=inputs=4:channel_layout=hexadecagonal:map=${JOIN_MAP}[a]" \
+			  -map 0:v:0 -map "[a]" -strict -2 -c:a libopus -mapping_family 255 -b:a 1536k \
+			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			sleep 1
+		done ) &
+		( while :; do
+			echo "[direct-dash] 9101 (1x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
+			ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
+			  -f matroska -i "tcp://0.0.0.0:9101?listen=1" \
+			  -map 0:v:0 -map 0:a:0 -strict -2 -c:a libopus -mapping_family 255 -b:a 384k \
+			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			sleep 1
+		done ) &
+		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4)"
+	else
+		echo "SRT direct-DASH listeners DISABLED: no hexadecagonal layout in this ffmpeg"
+	fi
+fi
+
 nginx

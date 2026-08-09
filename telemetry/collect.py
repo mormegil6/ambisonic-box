@@ -205,7 +205,16 @@ def segment_age():
 
 def stream_state():
     x = sh(f"curl -s --max-time 5 {EARSHOT}")
-    publishing = "<publishing/>" in x
+    # The RTMP stat is the source of truth for RTMP publishers. An SRT owner on
+    # the DIRECT path (gateway -> earshot's mpegts listener, 2026-08-09; design
+    # in the deployment repo) never appears there - the whole point is skipping
+    # the RTMP/FLV hop - but the gateway latches _owner via the same
+    # /rtmp/live/notify the ingest callbacks use, and re-notifies every 30 s.
+    # So the latch IS the publishing signal for that path. A stale latch
+    # (owner_tick clears it within ~2 cycles) briefly reports publishing with
+    # aging segments; `live` stays false then, and auto_idle's source_stop on
+    # an already-stopped loop is a no-op, so the residue is cosmetic.
+    publishing = "<publishing/>" in x or _owner["live"]
     m = re.search(r"<nclients>(\d+)</nclients>", x)
     nclients = int(m.group(1)) if m else 0
     seg_age = segment_age()

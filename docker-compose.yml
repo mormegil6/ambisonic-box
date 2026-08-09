@@ -54,6 +54,14 @@ services:
       # becomes a rotatable secret without moving the manifest URL. Validated
       # against [A-Za-z0-9_-]+ in the earshot entrypoint.
       - DASH_NAME=${DASH_NAME:-hoast_demo}
+      # SRT direct-DASH listeners (:9100 4x4, :9101 1x4; compose-internal, never
+      # published). The owner SRT gateway can feed raw mpegts here instead of
+      # republishing over RTMP/FLV, which deletes a 16-ch AAC re-encode
+      # (measured 59 % of a core at 20 Mbps) and one lossy audio generation.
+      # Enable by setting SRT_DIRECT=1 on the OWNER gateway service (the
+      # deployment override); idle listeners cost nothing, hence default 1
+      # here. Design: the deployment repo's docs/srt-direct-dash-design.md.
+      - SRT_DIRECT_LISTENERS=${SRT_DIRECT_LISTENERS:-1}
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
       # Default: video passthrough. This is the configuration the deployment
       # actually runs and the one the thermal numbers were measured on (39 %

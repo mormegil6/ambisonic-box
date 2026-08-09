@@ -46,6 +46,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 MODE          = os.environ.get("SRT_MODE", "guest")           # guest | owner
@@ -98,6 +99,23 @@ OWNER_MAX_S   = int(os.environ.get("SRT_OWNER_MAX_S", "86400"))
                        # overflow. 0 disables the ceiling. Guest mode never
                        # reads this (telemetry's 3 h cap fires first).
 _SECRET_RE    = re.compile(r"\b(gw|token)=[^&\s]+")   # scrub creds from logs
+# --- direct-to-DASH handoff (owner mode only; design in the deployment repo's
+# docs/srt-direct-dash-design.md). Instead of the FLV republish - whose forced
+# 4x4-AAC -> 16-ch-AAC re-encode measured 59 % of a core at 20 Mbps and costs a
+# lossy audio generation - pipe the caller's mpegts to earshot's fixed-layout
+# listeners, where earshot's OWN patched ffmpeg (SPD floor, PCE decode, the one
+# writer /opt/data/dash tolerates) does join+opus in a single pass. The child
+# here becomes a bare -c copy remux, which keeps every existing guard (writer,
+# reaper, log scrubber, watchdog wiring) attached to a real process.
+# The RTMP chain no longer sees these sessions, so the gateway itself latches
+# telemetry's owner state through the same /rtmp/live/notify the ingest
+# callbacks use, re-notifying every 30 s: that both keeps owner_tick's 2-miss
+# expiry from firing mid-session and heals the latch across a telemetry
+# restart. Guests NEVER take this path.
+SRT_DIRECT    = os.environ.get("SRT_DIRECT", "0") == "1"
+EARSHOT_HOST  = os.environ.get("EARSHOT_HOST", "earshot")
+DIRECT_PORTS  = {4: 9100, 1: 9101}      # by probed track count
+DIRECT_NOTIFY_S = 30
 
 _log_lock = threading.Lock()
 
@@ -166,6 +184,23 @@ def child_command(name, ip, tracks):
     Both land on a layout the RTMP leg accepts. Nothing between them does:
     see docs/AMBISONIC-ORDER.md for why 2nd order has to be padded to 16 by
     the sender."""
+    if MODE == "owner" and SRT_DIRECT:
+        # Bare remux to earshot's listener: no filter, no audio codec, no FLV.
+        # The listener's ffmpeg owns the join and the opus encode.
+        # MATROSKA on the wire, not raw TS, and it is load-bearing: TS carries
+        # h264 as Annex-B with no global extradata, and earshot's older ffmpeg
+        # fork cannot then write the mp4/DASH header ("incorrect codec
+        # parameters", found on the first live test). THIS ffmpeg reconstructs
+        # the SPS/PPS extradata at demux, and mkv carries it explicitly, so
+        # the listener's mp4 muxer gets exactly what FLV used to hand it.
+        # aac_adtstoasc converts the TS's ADTS AAC to the extradata form mkv
+        # needs - the same conversion the FLV muxer auto-inserted, which is why
+        # the legacy path never saw this. Without it the mux fails at header
+        # time: "Error parsing AAC extradata, unable to determine samplerate".
+        return ["ffmpeg", "-hide_banner", "-loglevel", "warning",
+                "-f", "mpegts", "-i", "pipe:0",
+                "-map", "0", "-c", "copy", "-bsf:a", "aac_adtstoasc",
+                "-f", "matroska", f"tcp://{EARSHOT_HOST}:{DIRECT_PORTS[tracks]}"]
     if MODE == "guest":
         target = f"{INGEST_URL}/{name}?realip={ip}&gw={GW_SECRET}"
     else:
@@ -466,9 +501,47 @@ class Gateway:
             return None
         threading.Thread(target=self._child_log, args=(s,), daemon=True).start()
         threading.Thread(target=self._reaper, args=(s,), daemon=True).start()
+        if MODE == "owner" and SRT_DIRECT:
+            threading.Thread(target=self._direct_latch, args=(s,), daemon=True).start()
         log(f"session media: {s['name']} from {s['ip']} - {tracks} x {channels} ch "
-            f"({order} order, child pid {child.pid})")
+            f"({order} order, child pid {child.pid}"
+            f"{', DIRECT to earshot:' + str(DIRECT_PORTS[tracks]) if MODE == 'owner' and SRT_DIRECT else ''})")
         return bytes(head)
+
+    def _direct_latch(self, s):
+        """Owner-direct sessions bypass rtmp-ingest, so nothing fires the
+        /rtmp/live callbacks that latch telemetry's owner state - the latch
+        that locks guests out, stops the demo loop, and (since 2026-08-09)
+        feeds stream_state's publishing flag. This thread IS those callbacks:
+        notify on start, re-notify every DIRECT_NOTIFY_S while the session
+        lives, done once on the way out.
+
+        The re-notify is load-bearing twice over: owner_tick clears a latch
+        after two consecutive cycles with no ingest publisher under its name -
+        which on this path is EVERY cycle - and a same-name notify resets that
+        counter; and it re-latches across a telemetry restart mid-session,
+        which the RTMP path's one-shot notify cannot. Failures are logged and
+        swallowed: the arbiter being briefly unreachable must never tear down
+        a healthy broadcast, and the next re-notify heals it."""
+        def ping(kind):
+            url = f"{ARBITER_URL}/rtmp/live/{kind}?name={urllib.parse.quote(s['name'])}"
+            try:
+                urllib.request.urlopen(url, timeout=4).read()
+                return True
+            except Exception as e:
+                log(f"direct-latch {kind} failed (retrying next cycle): {e}")
+                return False
+        ping("notify")
+        while True:
+            with s["cond"]:
+                s["cond"].wait(timeout=DIRECT_NOTIFY_S)
+                closing = s["closing"]
+            with self.lock:
+                current = self.session is s
+            if closing or not current:
+                break
+            ping("notify")
+        ping("done")
 
     def _writer(self, s):
         head = self._spawn_after_probe(s)
