@@ -22,7 +22,7 @@ flowchart TD
 
     SRTOBS -- "SRT :8890" --> GATEWAY
     GATEWAY -- "RTMP /guest" --> INGEST
-    GATEWAY -- "MPEG-TS, direct (owner)" --> EARSHOT
+    GATEWAY -- "MPEG-TS, direct" --> EARSHOT
     OBS -- "RTMP :1935" --> INGEST
     LOOP -- "RTMP (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT
