@@ -2982,8 +2982,21 @@ def serve():
             # latch owner state, locking out every guest and holding the demo
             # loop down. 404, not 403, so an unauthorised prober cannot even
             # confirm the routes exist.
-            if p.startswith("/rtmp/") and not _ingest_peer_ok(self.client_address[0]):
-                return self._json(404, {"error": "not found"})
+            # rtmp-ingest is the usual caller, but NOT the only legitimate
+            # one: srt-gateway polls /rtmp/guest/precheck-snapshot directly,
+            # and a gateway with no GUEST_GW_SECRET latches the owner through
+            # /rtmp/live/notify (the upgrade-in-place path). Both are
+            # authenticated by the same socket-bound rule the session
+            # protocol uses, so admit them here too.
+            # Getting this wrong is not theoretical: gating on ingest alone
+            # 404'd the gateway's own snapshot poll, its Snapshot went stale,
+            # verdict() failed closed, and the SRT guest endpoint refused
+            # EVERY caller while a legacy owner streamed on unlatched. Caught
+            # by review the same hour, before it reached the box.
+            if p.startswith("/rtmp/"):
+                _peer = self.client_address[0]
+                if not (_ingest_peer_ok(_peer) or _gw_peer_role(_peer)):
+                    return self._json(404, {"error": "not found"})
             if p.startswith("/rtmp/guest/"):
                 args = urllib.parse.parse_qs(q)
                 name = (args.get("name") or [""])[0]
