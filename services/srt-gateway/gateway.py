@@ -545,6 +545,16 @@ class Gateway:
             if closing or not current:
                 break
             ping("notify")
+        # Done TWICE, six seconds apart, and the pause is load-bearing:
+        # owner_done drops any done arriving within 5 s of the latch's `since`
+        # as a dead predecessor's late callback - a guard built for RTMP
+        # reconnects, where notify fires once. Our keepalive refreshes `since`
+        # every 30 s, so a session ending shortly after a re-notify has its
+        # first done eaten by that guard (~1-in-6 odds) and the latch then
+        # lingers for minutes on tick backstops. The second done is always
+        # older than the guard window relative to the final re-notify.
+        ping("done")
+        time.sleep(6)
         ping("done")
 
     def _writer(self, s):
