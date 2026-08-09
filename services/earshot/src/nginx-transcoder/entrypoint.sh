@@ -183,6 +183,23 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 					fi
 				fi
 			done
+			# SECOND DETECTOR: an ORPHANED transcoder. When socat exits but
+			# its exec-ed ffmpeg does not notice the peer is gone, the ffmpeg
+			# is reparented to PID 1 and lingers - measured at over 4 minutes
+			# on the box after a caller was cut off abruptly, still holding
+			# the DASH tree open. The port itself is fine (socat re-armed), so
+			# the CLOSE_WAIT check above cannot see it, and retargeting that
+			# check onto socat is what removed the old coverage of this case.
+			# A direct-listener ffmpeg is identifiable without ambiguity: it
+			# reads pipe:0 and its parent is init. The RTMP relay transcoders
+			# are children of nginx and read rtmp://, so they can never match.
+			for pid in $(ps -o pid,args | grep "[f]fmpeg" | grep -- "-i pipe:0" | awk "{print \$1}"); do
+				[ -r "/proc/$pid/status" ] || continue
+				ppid=$(awk "/^PPid:/{print \$2}" "/proc/$pid/status" 2>/dev/null)
+				[ "$ppid" = "1" ] || continue
+				echo "[direct-dash] watchdog: killing orphaned transcoder pid $pid (no feeder, reparented to init)" >> /tmp/nginx_rtmp_ffmpeg_log
+				kill -9 "$pid" 2>/dev/null
+			done
 		done' &
 		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4), peer-IP gated, CLOSE_WAIT watchdog on both"
 	else
