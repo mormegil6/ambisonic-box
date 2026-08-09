@@ -455,6 +455,29 @@ class Gateway:
             return None
 
         tracks, channels = probe_audio_tracks(bytes(head))
+        if tracks == 0:
+            # A caller joining MID-STREAM (a bridge reconnecting without
+            # restarting its encoder) can land the probe window on a stretch
+            # where ffprobe identifies nothing, and at contribution bitrates
+            # 1 MB is only ~0.4 s. Real encoders restart on reconnect and
+            # always present a fresh head, so this is rare - but rejecting it
+            # put the caller into a reject/reconnect loop that never converged
+            # (observed 2026-08-09). Buffer up to 4x more and probe once again
+            # before giving up.
+            log(f"probe found no audio in {len(head)} bytes from {s['ip']}; "
+                f"buffering more for one retry")
+            deadline = time.time() + PROBE_WAIT_S
+            while len(head) < PROBE_BYTES * 4 and time.time() < deadline:
+                with s["cond"]:
+                    if not s["buf"] and not s["closing"]:
+                        s["cond"].wait(timeout=0.25)
+                    if s["closing"]:
+                        return None
+                    while s["buf"]:
+                        chunk = s["buf"].popleft()
+                        s["bytes"] -= len(chunk)
+                        head += chunk
+            tracks, channels = probe_audio_tracks(bytes(head))
         # 4x4 is the documented multitrack recipe; 1x4 is a 1st-order source.
         # Anything else cannot be put into a named AAC layout here, and saying
         # so now is kinder than letting the transcode stall for 45 s.
