@@ -102,6 +102,18 @@ That endpoint listens on every network interface, so pushing from a different ma
 
 (There is a second, separate endpoint for letting *other people* push to your box without a key. It is off by default and has its own rules: see [guest test endpoint](#guest-test-endpoint-the-guest-application).)
 
+**Lost the URL setup.sh printed?** The values live in your `.env`. Read one at a time rather than opening the whole file, so a screen-share or terminal scroll-back does not expose the rest:
+
+```sh
+grep -m1 '^SRT_OWNER_PASSPHRASE=' .env | cut -d= -f2-   # the srt:// passphrase, for stock OBS
+grep -m1 '^RTMP_OWNER_KEY='       .env | cut -d= -f2-   # the stream key, for OBS Music Edition over RTMP
+docker compose exec srt-gateway-owner printenv SRT_PASSPHRASE   # what the RUNNING container actually has
+```
+
+That last one is worth knowing: Compose reads `.env` when a container is *created*, so after editing a secret you need `docker compose up -d srt-gateway-owner` (recreate), not `restart`, or the file and the running process disagree.
+
+`GUEST_GW_SECRET` is **not** a streaming credential and never goes into OBS - it authenticates the gateway containers to telemetry over the internal Docker network. The guest endpoint stays keyless whether or not it is set.
+
 | Setting | Value |
 |---|---|
 | Settings > Audio > Channels | **`4.0`** |
