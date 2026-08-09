@@ -20,9 +20,10 @@ flowchart TD
 
     VIEWER["viewer browser<br/>HOAST360<br/>binaural HOA"]
 
-    SRTOBS -- "SRT :8890" --> GATEWAY
-    GATEWAY -- "RTMP, guest" --> INGEST
+    SRTOBS -- "SRT :8891, owner" --> GATEWAY
+    SRTOBS -- "SRT :8890, guest*" --> GATEWAY
     GATEWAY -- "RTMP, owner" --> INGEST
+    GATEWAY -- "RTMP, guest*" --> INGEST
     GATEWAY -- "MPEG-TS, direct" --> EARSHOT
     OBS -- "RTMP :1935" --> INGEST
     LOOP -- "RTMP, owner (internal)" --> INGEST

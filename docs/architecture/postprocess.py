@@ -154,10 +154,32 @@ vhw = node_halfwidth('VIEWER')
 # OBS sits left of the box (its left edge set by GAP); the viewer is centred on
 # the SAME vertical axis as OBS (OBS is wider, so the viewer is inset & centred,
 # not left-aligned). anchor_left is that shared left reference == OBS's left edge.
-# gutter. Wide enough that the port labels ('RTMP :1935' is the widest) sit
-# between the external senders and the box wall without touching either.
 GAP = float(sys.argv[3]) if len(sys.argv) > 3 else 162.0   # gutter (overridable)
 ohw = node_halfwidth('OBS')
+
+# The gutter has to be wide enough for the PORT LABELS that sit in it, and it
+# is MEASURED rather than guessed: a hand-tuned constant here has already been
+# outgrown twice (once when the route labels got longer, once when the single
+# "SRT :8890" became the :8891/:8890 pair), and the failure is silent in the
+# build - the label simply renders underneath the gateway node with its tail
+# cut off. The labels are centred between the external senders' right edge and
+# the gateway's left face, so the gutter must be at least as wide as the widest
+# of them. Solving the placement chain below for that condition:
+#     gutter = GW_INSET + GAP - 2 * (ohw - vhw)
+GUTTER_PAD = 16.0
+def edge_label_width(eid):
+    """Rendered width of an edge label, read from the raw SVG (the second
+    occurrence of the id is the label group; the first is the path)."""
+    hits = [m.start() for m in re.finditer('data-id="' + eid + '"', s)]
+    if len(hits) < 2:
+        return 0.0
+    m = re.search(r'<foreignObject width="([-\d.]+)"', s[hits[1]:hits[1] + 400])
+    return float(m.group(1)) if m else 0.0
+
+_port_w = max(edge_label_width(e) for e in
+              ('L_SRTOBS_GATEWAY_0', 'L_SRTOBS_GATEWAY_2', 'L_OBS_INGEST_0'))
+GAP = max(GAP, _port_w + GUTTER_PAD - GW_INSET + 2 * (ohw - vhw))
+
 anchor_left = box_left - GAP - 2 * vhw
 VX = anchor_left + ohw           # viewer centre == OBS centre
 VY = py                          # same height as hoast-player
@@ -222,17 +244,26 @@ def set_label(eid, lx, ly):
     s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="' + eid + r'")',
                lambda m: f"{m.group(1)}{lx}, {ly}{m.group(2)}", s, count=1)
 
-# 1) stock OBS -> srt-gateway: straight horizontal, crossing the box wall
+# 1) stock OBS -> srt-gateway: TWO parallel lines, mirroring the pair into
+#    ingest below. One stock-OBS sender reaches either gateway instance, and
+#    the port it dials IS the difference between the two routes - :8891 is the
+#    owner instance, :8890 the guest one - so a single "SRT" arrow hid the one
+#    thing a sender has to get right. The box already stands for both
+#    instances (see this directory's README); now its input side says so.
+SRT_SEP = 30.0
 sr_sx, sr_ex = SX + shw, GX - ghw - 6.0
-set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{GY}L{sr_ex},{GY}")
-# Both port labels share one x so they line up vertically. It is the midpoint
-# to the GATEWAY, not to the box wall, so the labels deliberately overlap the
-# wall and break it the way the DOCKER COMPOSE title chip does - that overlap
-# is the intended look, not a collision to correct. Measured from whichever
-# external box reaches furthest right, so the wider label ("RTMP :1935")
-# cannot ride up onto it.
+SRT_OWNER_Y, SRT_GUEST_Y = GY - SRT_SEP, GY + SRT_SEP
+set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{SRT_OWNER_Y}L{sr_ex},{SRT_OWNER_Y}")
+set_edge('L_SRTOBS_GATEWAY_2', f"M{sr_sx},{SRT_GUEST_Y}L{sr_ex},{SRT_GUEST_Y}")
+# All three port labels share one x so they line up vertically. It is the
+# midpoint to the GATEWAY, not to the box wall, so the labels deliberately
+# overlap the wall and break it the way the DOCKER COMPOSE title chip does -
+# that overlap is the intended look, not a collision to correct. Measured from
+# whichever external box reaches furthest right, so the wider label cannot
+# ride up onto it.
 PORT_LX = (max(SX + shw, OX + ohw) + (GX - ghw)) / 2.0
-set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
+set_label('L_SRTOBS_GATEWAY_0', PORT_LX, SRT_OWNER_Y - 15.0)
+set_label('L_SRTOBS_GATEWAY_2', PORT_LX, SRT_GUEST_Y + 15.0)
 
 # 2) srt-gateway -> ingest: TWO parallel lines, not one. The gateway can land
 #    a stream in either of ingest's applications - guests through the one that
@@ -240,26 +271,26 @@ set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
 #    secret) through the one that is only key-checked - and drawing them as
 #    two lines between the same two boxes is the point: same wire, two
 #    different security models, exactly as real as each other. mermaid gives
-#    the second GATEWAY->INGEST edge in source order the id _2, not _1 (its
-#    own global edge counter, confirmed empirically, not a typo here).
+#    the second edge of a repeated pair the id _2, not _1 (its own global edge
+#    counter, confirmed empirically for both pairs, not a typo here).
 # Three arrows land on ingest's left face in total (this pair, plus OBS Music
-# Edition's curve below) and are spaced evenly by ARROW_SEP: guest (arbiter-
-# gated) on top, owner (key-authed) dead centre on the shared gateway/ingest
-# row (iy == GY - "the middle of the vertical edge of srt-gateway/rtmp-
-# ingest"), OBS Music Edition below (its own landing point, o_ey further
-# down, mirrors this).
+# Edition's curve below) and are spaced evenly by ARROW_SEP. OWNER IS ON TOP,
+# here and on the SRT pair above: it is the route that is on by default, while
+# guest exists only where the operator turned it on. Order therefore comes
+# from the source file - the first edge of each pair takes the top slot - so
+# swapping the two lines in architecture.mmd swaps them in the drawing.
 ARROW_SEP = 30.0
 g_sx, g_ex = GX + ghw, ix - ihw - 6.0
-GATED_Y, KEYED_Y = iy - ARROW_SEP, iy
-set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{GATED_Y}L{g_ex},{GATED_Y}")
-set_edge('L_GATEWAY_INGEST_2', f"M{g_sx},{KEYED_Y}L{g_ex},{KEYED_Y}")
-# Labels sit close to their own line, not the ±22 used elsewhere: owner's
-# only has ~31px before the OBS Music Edition curve passes beneath it (that
-# curve's closest approach to this label is y=iy+31, at the label's own right
-# edge), so anything looser would ride onto the curve.
+OWNER_Y, GUEST_Y = iy - ARROW_SEP, iy
+set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{OWNER_Y}L{g_ex},{OWNER_Y}")
+set_edge('L_GATEWAY_INGEST_2', f"M{g_sx},{GUEST_Y}L{g_ex},{GUEST_Y}")
+# Labels sit close to their own line, not the ±22 used elsewhere: the lower
+# one has only ~31px before the OBS Music Edition curve passes beneath it
+# (that curve's closest approach is y=iy+31, at the label's own right edge),
+# so anything looser would ride onto the curve.
 ROUTE_LABEL_OFF = 15.0
-set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, GATED_Y - ROUTE_LABEL_OFF)
-set_label('L_GATEWAY_INGEST_2', (g_sx + (ix - ihw)) / 2.0, KEYED_Y + ROUTE_LABEL_OFF)
+set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, OWNER_Y - ROUTE_LABEL_OFF)
+set_label('L_GATEWAY_INGEST_2', (g_sx + (ix - ihw)) / 2.0, GUEST_Y + ROUTE_LABEL_OFF)
 
 # 2b) srt-gateway -> earshot, the OWNER route: leaves the gateway's underside
 #     and lands on earshot's left face, deliberately below and clear of the
@@ -346,6 +377,19 @@ s = s.replace(old_rect, new_rect + mask, 1)
 s = re.sub(r'(<g class="cluster-label ?" transform="translate\()[-\d.]+,\s*[-\d.]+(\)")',
            lambda m: f"{m.group(1)}{tx}, {NEW_TOP - 12}{m.group(2)}", s, count=1)
 
+# 3b) legend for the `*` on the two guest labels. The marker is one character
+#     because the labels have no room for a clause, so the clause lives here.
+#     Written as plain SVG <text> rather than a mermaid node: dagre would lay
+#     a node out inside the graph, and this belongs beside the drawing, not in
+#     it. Sits under the box's bottom-left corner; the viewBox grows to fit.
+LEGEND_TEXT = "* off by default; set GUEST_ENABLED=1"
+LEGEND_GAP  = 26.0
+legend_y = box_bottom + LEGEND_GAP
+s = s.replace('</svg>',
+              f'<text x="{box_left:.2f}" y="{legend_y:.2f}" '
+              f'style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,'
+              f'Helvetica,Arial,sans-serif;font-size:15px;fill:#8b9bb4">{LEGEND_TEXT}</text></svg>', 1)
+
 # 4) trim the viewBox: widen left for the viewer, trim the now-empty top down to
 #    the title, and trim the bottom (the raw layout reserved space below the box).
 #    Do NOT touch any styled <rect>.
@@ -354,7 +398,8 @@ x0, y0, w, h = map(float, vb.groups())
 leftmost = min(VX - vhw, OX - ohw, SX - shw)   # widest external box sets the left extent
 new_x0 = min(x0, leftmost - 20.0)
 new_y0 = NEW_TOP - 34.0                   # just above the title on the edge
-new_h = box_bottom - new_y0 + 22.0        # box is the lowest element
+# the legend, not the box, is now the lowest element
+new_h = legend_y - new_y0 + 12.0
 # Trim the right to the real content instead of inheriting mermaid's width:
 # every node that used to sit out there has been repositioned, so the raw
 # layout's right extent is stale padding. The box wall is now the rightmost
