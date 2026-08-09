@@ -536,15 +536,24 @@ class Gateway:
                 log(f"direct-latch {kind} failed (retrying next cycle): {e}")
                 return False
         ping("notify")
+        # 5 s ticks with a counter, NOT one long wait: end_session's notify()
+        # wakes a single waiter and the writer thread usually wins it, so a
+        # DIRECT_NOTIFY_S-long wait rode out its full 30 s after every session
+        # end and the latch unwind inherited the delay. Re-notify still fires
+        # every DIRECT_NOTIFY_S; closing is noticed within 5 s.
+        waited = 0
         while True:
             with s["cond"]:
-                s["cond"].wait(timeout=DIRECT_NOTIFY_S)
+                s["cond"].wait(timeout=5)
                 closing = s["closing"]
             with self.lock:
                 current = self.session is s
             if closing or not current:
                 break
-            ping("notify")
+            waited += 5
+            if waited >= DIRECT_NOTIFY_S:
+                waited = 0
+                ping("notify")
         # Done TWICE, six seconds apart, and the pause is load-bearing:
         # owner_done drops any done arriving within 5 s of the latch's `since`
         # as a dead predecessor's late callback - a guard built for RTMP
