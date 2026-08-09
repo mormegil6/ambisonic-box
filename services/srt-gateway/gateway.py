@@ -230,16 +230,26 @@ def child_command(name, ip, tracks):
 
 def probe_audio_tracks(head):
     """How many audio tracks, and how many channels each, are in this mpegts
-    head? Returns (tracks, channels_per_track) or (0, 0) when the head is not
-    yet decodable. ffprobe reads the same bytes the child would, from a pipe,
-    so a partial final packet is harmless."""
+    head? Returns (tracks, channels_per_track, rows), where rows counts the
+    audio streams the PMT declares even when their channel count could not be
+    resolved. ffprobe reads the same bytes the child would, from a pipe, so a
+    partial final packet is harmless.
+
+    rows > 0 with tracks == 0 is the signature of a MID-STREAM join: quad and
+    hexadecagonal AAC have no standard ADTS channel_configuration, so the
+    channel count lives only in the PCE at the very head of the stream. A
+    caller that reconnects without restarting its encoder never resends it,
+    and its audio is genuinely undecodable from that point on - not merely
+    unprobeable (verified offline 2026-08-09: mid-stream slices of the same
+    mux probe as 4 rows x 0 ch at 1 MB and at 4 MB alike, while slices from
+    byte 0 probe as 4x4)."""
     try:
         r = subprocess.run(
             ["ffprobe", "-v", "error", "-f", "mpegts", "-select_streams", "a",
              "-show_entries", "stream=channels", "-of", "json", "-i", "pipe:0"],
             input=head, capture_output=True, timeout=PROBE_TIMEOUT_S)
     except (subprocess.TimeoutExpired, OSError):
-        return 0, 0
+        return 0, 0, 0
     # JSON, not csv: with a program in the mpegts, csv output lists every
     # stream TWICE (once under the program, once at top level, separated by a
     # blank line), which reads as 8 tracks for a normal 4-track push and would
@@ -247,11 +257,11 @@ def probe_audio_tracks(head):
     try:
         streams = json.loads(r.stdout.decode("utf-8", "ignore")).get("streams", [])
     except ValueError:
-        return 0, 0
+        return 0, 0, 0
     counts = [s.get("channels") for s in streams if s.get("channels")]
     if not counts:
-        return 0, 0
-    return len(counts), counts[0]
+        return 0, 0, len(streams)
+    return len(counts), counts[0], len(streams)
 
 
 class Snapshot:
@@ -454,17 +464,20 @@ class Gateway:
             self.events.put(("force_teardown", "no media after handshake"))
             return None
 
-        tracks, channels = probe_audio_tracks(bytes(head))
+        tracks, channels, rows = probe_audio_tracks(bytes(head))
         if tracks == 0:
-            # A caller joining MID-STREAM (a bridge reconnecting without
-            # restarting its encoder) can land the probe window on a stretch
-            # where ffprobe identifies nothing, and at contribution bitrates
-            # 1 MB is only ~0.4 s. Real encoders restart on reconnect and
-            # always present a fresh head, so this is rare - but rejecting it
-            # put the caller into a reject/reconnect loop that never converged
-            # (observed 2026-08-09). Buffer up to 4x more and probe once again
-            # before giving up.
-            log(f"probe found no audio in {len(head)} bytes from {s['ip']}; "
+            # The retry exists for a FRESH head cut short: at contribution
+            # bitrates 1 MB is only ~0.4 s and video-dominant muxing can leave
+            # the first audio frames (and with them the PCE) still in flight.
+            # It cannot rescue a true MID-STREAM join - a bridge reconnecting
+            # without restarting its encoder - because the PCE the channel
+            # count lives in is only ever at the stream head (see
+            # probe_audio_tracks); there the second probe fails identically
+            # and the reject below says why. Real encoders (OBS) restart on
+            # reconnect and always present a fresh head.
+            what = (f"{rows} audio track(s) declared but no channel info"
+                    if rows else "no audio")
+            log(f"probe: {what} in {len(head)} bytes from {s['ip']}; "
                 f"buffering more for one retry")
             deadline = time.time() + PROBE_WAIT_S
             while len(head) < PROBE_BYTES * 4 and time.time() < deadline:
@@ -477,7 +490,7 @@ class Gateway:
                         chunk = s["buf"].popleft()
                         s["bytes"] -= len(chunk)
                         head += chunk
-            tracks, channels = probe_audio_tracks(bytes(head))
+            tracks, channels, rows = probe_audio_tracks(bytes(head))
         # 4x4 is the documented multitrack recipe; 1x4 is a 1st-order source.
         # Anything else cannot be put into a named AAC layout here, and saying
         # so now is kinder than letting the transcode stall for 45 s.
@@ -486,8 +499,14 @@ class Gateway:
         elif tracks == 1 and channels == 4:
             order = "1st"
         else:
-            log(f"reject {s['ip']} (unusable audio: {tracks} track(s) "
-                f"x {channels} ch; expected 4x4 or 1x4)")
+            if tracks == 0 and rows:
+                why = (f"{rows} audio track(s) but channel count never "
+                       f"resolved - mid-stream join without the stream-head "
+                       f"PCE? restart the encoder and reconnect")
+            else:
+                why = (f"unusable audio: {tracks} track(s) x {channels} ch; "
+                       f"expected 4x4 or 1x4")
+            log(f"reject {s['ip']} ({why})")
             self._memoize(s["ip"])      # same reason as above: no free retry loop
             self.events.put(("force_teardown",
                              f"unsupported audio layout ({tracks}x{channels})"))
