@@ -15,6 +15,7 @@ The diagram draws the data path and compresses everything else. The omissions ar
 - **`srt-gateway` is drawn first because it is the recommended contribution path** (stock OBS, same recipe on macOS and Windows) and it is on by default. What the drawing cannot show is that binding the port admits nobody on its own: the guest arbiter refuses every caller unless `GUEST_ENABLED=1`, which is itself off by default.
 - **the guest arbitration behind that gateway is invisible here.** The drawn edge into `rtmp-ingest` hides the whole session lifecycle the SRT route inherits by republishing into the existing `guest` application: single-slot admission, session cap, cooldown, reconnect grace, IP bans and the dashboard kill. See the guest section of the top-level `README.md`.
 - **only the `dash-output` volume is drawn**; `telemetry-data` (private dashboard history) and `status-public` (public status JSON) exist but carry no arrows here.
+- **the `dash-output` cylinder has exactly one live writer** (`earshot`); `hoast-player` and `telemetry` mount it read-only, so the internet-facing player can serve the live segments but cannot alter them. That single-writer invariant is load-bearing beyond the diagram - it is what the SRT contribution paths are careful never to violate by putting a second writer on the tree.
 
 - `architecture.png` - what the README embeds (see the foreignObject note below)
 - `architecture.svg` - the scalable vector source (open it directly to view)
