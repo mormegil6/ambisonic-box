@@ -82,6 +82,18 @@ _,   vy_ = node_pos('VOL');     vhw_, vhh_ = _cyl_half('VOL')
 _,   ppy = node_pos('PLAYER');  phh = node_halfheight('PLAYER')
 _,   tty = node_pos('TELEM');   thh = node_halfheight('TELEM')
 
+# Slide the whole lower X-cluster right so earshot sits directly under
+# rtmp-ingest and the relay edge (RTMP relay, authenticated) is a straight
+# vertical instead of a diagonal. earshot, shaka, the volume, hoast-player and
+# telemetry all shift by the same delta, so the X keeps its shape; the edges
+# below already derive from ex_/sx_, so only the two edges INTO earshot need
+# redrawing (the relay just below, the owner-direct edge at its own section).
+X_DELTA = _ix - ex_
+_move('EARSHOT', _ix, ey_)
+_move('SHAKA', sx_ + X_DELTA, sy_)
+ex_ = _ix
+sx_ = sx_ + X_DELTA
+
 PLX = ex_                      # hoast-player under earshot
 TLX = sx_                      # telemetry under shaka
 VLX = (ex_ + sx_) / 2.0        # volume centred between the columns
@@ -228,6 +240,12 @@ set_edge('L_GATEWAY_EARSHOT_0',
 # where this edge passes closest to the guest run's own label, and two labels
 # that near each other read as one.
 set_label('L_GATEWAY_EARSHOT_0', d_sx - 30.0, d_sy + 26.0)
+
+# With earshot now under ingest, redraw the relay edge as a straight vertical
+# (dagre drew it diagonal for the pre-shift earshot position). Its label rides
+# on the line, its dark bg box occluding it the way every other edge label does.
+set_edge('L_INGEST_EARSHOT_0', f"M{ix},{iy + ihh}L{ex_},{ey_ - ehh - 6}")
+set_label('L_INGEST_EARSHOT_0', ix, (iy + ihh + ey_ - ehh) / 2.0 - 8.0)
 
 # 3) OBS Music Edition -> ingest: a symmetric S-curve in the style of the
 #    dash-output volume edges - horizontal at both ends, sweeping up into
