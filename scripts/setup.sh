@@ -126,6 +126,14 @@ services:
     environment:
       - SRT_ENABLED=1
       - SRT_MODE=owner
+      # Direct-to-DASH: hand the probed stream straight to earshot's own
+      # transcoder instead of re-encoding it to 16-ch AAC and republishing
+      # over RTMP/FLV. Measured on the Mac Mini at 20 Mbps: ~28-42 % of a
+      # core against the legacy ~90-130 %, and one lossy audio generation
+      # deleted (OBS AAC -> Opus, with no AAC in between). Owner only; the
+      # guest route keeps the RTMP hop, which is where guest admission and
+      # the kick lever live. Set SRT_DIRECT=0 in .env to fall back.
+      - SRT_DIRECT=${SRT_DIRECT:-1}
       - RTMP_OWNER_KEY=${RTMP_OWNER_KEY}
       - SRT_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # mandatory in owner mode
       - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
