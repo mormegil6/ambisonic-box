@@ -2976,13 +2976,19 @@ def serve():
                 role = _gw_session_ok(peer, (args.get("gw") or [""])[0])
                 if not role:
                     return self._json(403, {"error": "not a known gateway"})
-                if not _gw_rate_ok(peer):
-                    # A misbehaving or hostile beat loop must not be able to do
-                    # what the 2026-08-09 latch flood did: bury this server in
-                    # handler threads until it hits the container pids limit.
-                    # Cheap, before any lock is taken or any state is touched.
-                    return self._json(429, {"error": "slow down"})
                 act = p.rsplit("/", 1)[-1]
+                # The floor applies to BEATS ONLY. They are the repetitive
+                # call - the 2026-08-09 flood was a keepalive gone wrong - and
+                # throttling them costs nothing because a missed beat is
+                # retried by design. claim and done are one-shot lifecycle
+                # events and MUST NOT be throttled: a done arrives immediately
+                # after the 403 beat that ordered the teardown, so a shared
+                # floor rejected it, and the session stayed live with its slot
+                # held and a kill flag nobody could act on (caught in testing,
+                # 2026-08-09 - the limiter broke the very teardown it was
+                # protecting).
+                if act == "beat" and not _gw_rate_ok(peer):
+                    return self._json(429, {"error": "slow down"})
                 if act == "claim":
                     code, body = gw_claim(
                         role,

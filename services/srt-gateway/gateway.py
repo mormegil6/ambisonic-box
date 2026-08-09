@@ -46,6 +46,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -107,15 +108,29 @@ _SECRET_RE    = re.compile(r"\b(gw|token)=[^&\s]+")   # scrub creds from logs
 # writer /opt/data/dash tolerates) does join+opus in a single pass. The child
 # here becomes a bare -c copy remux, which keeps every existing guard (writer,
 # reaper, log scrubber, watchdog wiring) attached to a real process.
-# The RTMP chain no longer sees these sessions, so the gateway itself latches
-# telemetry's owner state through the same /rtmp/live/notify the ingest
-# callbacks use, re-notifying every 30 s: that both keeps owner_tick's 2-miss
-# expiry from firing mid-session and heals the latch across a telemetry
-# restart. Guests NEVER take this path.
+# The RTMP chain no longer sees these sessions, so admission and liveness move
+# to telemetry's session protocol (/gw/session/claim|beat|done): claim BEFORE
+# dialing earshot is the fail-closed gate on_publish used to be, and the beat
+# response is the kick lever on_update used to be. GUESTS TAKE THIS PATH TOO
+# since 2026-08-09, which is why claim is not optional - a guest that cannot
+# be admitted must never reach the listener, and a guest that cannot be
+# beaten at must be droppable. The listener enforces the other half (only the
+# gateway containers may connect at all; services/earshot/.../
+# direct-dash-gate.sh). An older telemetry without the protocol answers 404,
+# and only OWNER sessions then fall back to the legacy /rtmp/live latch.
 SRT_DIRECT    = os.environ.get("SRT_DIRECT", "0") == "1"
 EARSHOT_HOST  = os.environ.get("EARSHOT_HOST", "earshot")
 DIRECT_PORTS  = {4: 9100, 1: 9101}      # by probed track count
-DIRECT_NOTIFY_S = 30
+DIRECT_NOTIFY_S = 30                    # legacy /rtmp/live latch re-notify
+DIRECT_BEAT_S   = 10                    # session-protocol beat; matches the
+                                        # RTMP path's on_update cadence
+CLAIM_TIMEOUT_S = 20                    # telemetry holds a claim through the
+                                        # demo-loop handover (docker stop plus
+                                        # the earshot unwind), so this must
+                                        # exceed that whole budget or a real
+                                        # admission reads as a timeout
+CLAIM_RETRY_S   = 2                     # fixed wall-clock 409 retry
+CLAIM_BUDGET_S  = 40                    # total, bounded under the SRT buffer
 
 _log_lock = threading.Lock()
 
@@ -184,7 +199,7 @@ def child_command(name, ip, tracks):
     Both land on a layout the RTMP leg accepts. Nothing between them does:
     see docs/AMBISONIC-ORDER.md for why 2nd order has to be padded to 16 by
     the sender."""
-    if MODE == "owner" and SRT_DIRECT:
+    if SRT_DIRECT:
         # Bare remux to earshot's listener: no filter, no audio codec, no FLV.
         # The listener's ffmpeg owns the join and the opus encode.
         # MPEGTS on the wire, deliberately: TS is built for joining mid-stream
@@ -516,6 +531,17 @@ class Gateway:
         with self.lock:
             if self.session is not s or s["closing"]:
                 return None
+        # CLAIM BEFORE CONNECT, and the ordering is the whole point: on the
+        # direct path telemetry's answer here is the fail-closed admission
+        # gate that nginx-rtmp's on_publish is on the RTMP path. No 200, no
+        # bytes to earshot. Doing it after the spawn would put an unadmitted
+        # writer on the single-writer DASH tree for as long as the round trip
+        # takes, which is exactly the hole the design review called BLOCKER 2's
+        # sibling. Owner sessions claim too: it is how telemetry latches the
+        # owner, locks guests out and stops the demo loop.
+        if SRT_DIRECT:
+            if not self._session_claim(s, tracks):
+                return None
         try:
             child = subprocess.Popen(child_command(s["name"], s["ip"], tracks),
                                      stdin=subprocess.PIPE,
@@ -541,50 +567,130 @@ class Gateway:
             return None
         threading.Thread(target=self._child_log, args=(s,), daemon=True).start()
         threading.Thread(target=self._reaper, args=(s,), daemon=True).start()
-        if MODE == "owner" and SRT_DIRECT:
+        if SRT_DIRECT:
             threading.Thread(target=self._direct_latch, args=(s,), daemon=True).start()
         log(f"session media: {s['name']} from {s['ip']} - {tracks} x {channels} ch "
             f"({order} order, child pid {child.pid}"
-            f"{', DIRECT to earshot:' + str(DIRECT_PORTS[tracks]) if MODE == 'owner' and SRT_DIRECT else ''})")
+            f"{', DIRECT to earshot:' + str(DIRECT_PORTS[tracks]) if SRT_DIRECT else ''})")
         return bytes(head)
 
-    def _direct_latch(self, s):
-        """Owner-direct sessions bypass rtmp-ingest, so nothing fires the
-        /rtmp/live callbacks that latch telemetry's owner state - the latch
-        that locks guests out, stops the demo loop, and (since 2026-08-09)
-        feeds stream_state's publishing flag. This thread IS those callbacks:
-        notify on start, re-notify every DIRECT_NOTIFY_S while the session
-        lives, done once on the way out.
+    def _session_claim(self, s, tracks):
+        """Ask telemetry to admit this session, BEFORE any byte is sent to
+        earshot. True means admitted (and s['session'] now holds the id).
 
-        The re-notify is load-bearing twice over: owner_tick clears a latch
-        after two consecutive cycles with no ingest publisher under its name -
-        which on this path is EVERY cycle - and a same-name notify resets that
-        counter; and it re-latches across a telemetry restart mid-session,
-        which the RTMP path's one-shot notify cannot. Failures are logged and
-        swallowed: the arbiter being briefly unreachable must never tear down
-        a healthy broadcast, and the next re-notify heals it."""
-        def ping(kind):
-            url = f"{ARBITER_URL}/rtmp/live/{kind}?name={urllib.parse.quote(s['name'])}"
+        This is the direct path's fail-closed admission gate - the equivalent
+        of nginx-rtmp's on_publish, which does not exist here. It runs the ban
+        list, the owner lockout, the single-slot rule, the cooldown, the
+        grace-address carve-out and the demo-loop handover, because telemetry
+        answers it with the very same code the RTMP path uses.
+
+        409 means 'not yet, retry': the slot could not be cleared inside the
+        handover budget. Retried on a fixed wall-clock interval, bounded well
+        under the SRT receive buffer's depth so a drain that never settles
+        ends the session rather than silently overflowing it.
+
+        A 404 means this telemetry predates the protocol. Owner sessions then
+        fall back to the /rtmp/live alias (legacy mode in the beat loop) so a
+        gateway upgraded ahead of telemetry still works; guests do NOT - their
+        admission is the thing being asked for, and assuming it would put an
+        unadmitted stranger on the DASH tree."""
+        deadline = time.time() + CLAIM_BUDGET_S
+        while True:
+            url = (f"{ARBITER_URL}/gw/session/claim"
+                   f"?role={'owner' if MODE == 'owner' else 'guest'}"
+                   f"&name={urllib.parse.quote(s['name'])}"
+                   f"&ip={urllib.parse.quote(s['ip'])}"
+                   f"&tracks={tracks}"
+                   f"&gw={urllib.parse.quote(GW_SECRET)}")
+            try:
+                with urllib.request.urlopen(url, timeout=CLAIM_TIMEOUT_S) as r:
+                    body = json.loads(r.read() or b"{}")
+                s["session"] = body.get("session")
+                s["tracks"] = tracks
+                return True
+            except urllib.error.HTTPError as e:
+                if e.code == 409 and time.time() < deadline:
+                    time.sleep(CLAIM_RETRY_S)
+                    continue
+                if e.code == 404 and MODE == "owner":
+                    log("arbiter has no session protocol; using the legacy "
+                        "/rtmp/live latch for this owner session")
+                    s["session"] = None
+                    s["tracks"] = tracks
+                    return True
+                log(f"claim refused for {s['name']} from {s['ip']} "
+                    f"(HTTP {e.code}); rejecting the caller")
+                self._memoize(s["ip"])
+                self.events.put(("force_teardown", "not admitted by the arbiter"))
+                return False
+            except Exception as e:
+                # The arbiter is unreachable. Fail CLOSED: admission is the one
+                # decision that must never default to yes, and a guest admitted
+                # while telemetry is down is a guest nothing can kick.
+                if time.time() < deadline:
+                    time.sleep(CLAIM_RETRY_S)
+                    continue
+                log(f"claim unreachable for {s['name']} from {s['ip']}: {e}")
+                self._memoize(s["ip"])
+                self.events.put(("force_teardown", "arbiter unreachable"))
+                return False
+
+    def _direct_latch(self, s):
+        """The DIRECT path has no rtmp-ingest in front of it, so nothing
+        fires the nginx callbacks telemetry relies on: this thread IS those
+        callbacks. It beats every DIRECT_BEAT_S while the session lives and
+        sends one done on the way out, both keyed on the session id the claim
+        returned.
+
+        THE BEAT RESPONSE IS THE KICK LEVER, and acting on it is what makes an
+        operator kill, the session cap, a ban, the resource guard and owner
+        preemption reach a direct session at all - on the RTMP path they all
+        arrive as a non-2xx answer to nginx's on_update ping, which does not
+        exist here. Verdicts:
+          403  telemetry has ended this session: terminate and drop the caller
+          410  telemetry does not know this session (a redeploy lost it, or it
+               was demoted): re-claim with full identity, the direct analogue
+               of the RTMP path's stat-backed adoption
+          anything else, including an unreachable arbiter: transient, keep
+               streaming and retry. A briefly unreachable arbiter must never
+               tear down a healthy broadcast; only a DELIBERATE 403 does.
+
+        Wall-clock deadlines, never a wakeup counter: the session cond is
+        notified for every arriving SRT packet, so a live stream wakes this
+        wait thousands of times a minute. The first version counted each
+        wakeup as five elapsed seconds and re-notified at packet rate (~80
+        requests/s measured), burying telemetry in handler threads to its pids
+        limit within minutes (2026-08-09). Telemetry now refuses that rate
+        itself with a 429, but the client stays correct on its own."""
+        legacy = not s.get("session")     # older telemetry; see _session_claim
+
+        def beat():
+            """Returns 'ok', 'kill', 'reclaim' or 'transient'."""
+            if legacy:
+                url = (f"{ARBITER_URL}/rtmp/live/notify"
+                       f"?name={urllib.parse.quote(s['name'])}")
+            else:
+                url = (f"{ARBITER_URL}/gw/session/beat"
+                       f"?session={urllib.parse.quote(s['session'])}"
+                       f"&gw={urllib.parse.quote(GW_SECRET)}")
             try:
                 urllib.request.urlopen(url, timeout=4).read()
-                return True
+                return "ok"
+            except urllib.error.HTTPError as e:
+                if e.code == 403:
+                    return "kill"
+                if e.code == 410:
+                    return "reclaim"
+                log(f"direct-session beat got {e.code}; treating as transient")
+                return "transient"
             except Exception as e:
-                log(f"direct-latch {kind} failed (retrying next cycle): {e}")
-                return False
-        ping("notify")
-        # Short waits, NOT one long wait: end_session's notify() wakes a
-        # single waiter and the writer thread usually wins it, so a
-        # DIRECT_NOTIFY_S-long wait rode out its full 30 s after every
-        # session end and the latch unwind inherited the delay.
-        # Re-notify on a WALL-CLOCK deadline, never a wakeup counter: the
-        # session cond is notified for every arriving SRT packet, so a live
-        # stream wakes this wait thousands of times a minute. The first
-        # version counted each wakeup as five elapsed seconds and re-notified
-        # at packet rate (~80 requests/s measured), which buried telemetry in
-        # handler threads to its pids limit within minutes (2026-08-09).
-        # After a failed ping the deadline is 5 s out, so an arbiter restart
-        # is healed quickly; closing is still noticed within 5 s.
-        next_ping = time.time() + DIRECT_NOTIFY_S
+                log(f"direct-session beat failed (retrying): {e}")
+                return "transient"
+
+        if legacy:
+            beat()                        # the alias's one-shot notify
+        verdict = None
+        next_beat = time.time() + (DIRECT_NOTIFY_S if legacy else DIRECT_BEAT_S)
         while True:
             with s["cond"]:
                 s["cond"].wait(timeout=5)
@@ -594,20 +700,51 @@ class Gateway:
             if closing or not current:
                 break
             now = time.time()
-            if now >= next_ping:
-                ok = ping("notify")
-                next_ping = now + (DIRECT_NOTIFY_S if ok else 5)
-        # Done TWICE, six seconds apart, and the pause is load-bearing:
-        # owner_done drops any done arriving within 5 s of the latch's `since`
-        # as a dead predecessor's late callback - a guard built for RTMP
-        # reconnects, where notify fires once. Our keepalive refreshes `since`
-        # every 30 s, so a session ending shortly after a re-notify has its
-        # first done eaten by that guard (~1-in-6 odds) and the latch then
-        # lingers for minutes on tick backstops. The second done is always
-        # older than the guard window relative to the final re-notify.
-        ping("done")
-        time.sleep(6)
-        ping("done")
+            if now >= next_beat:
+                r = beat()
+                if r == "kill":
+                    verdict = "kill"
+                    break
+                if r == "reclaim" and not legacy:
+                    # Idempotent re-introduction. A refusal means the slot is
+                    # genuinely gone (preempted, banned, capped): a real
+                    # verdict, not a blip, so the session ends.
+                    if not self._session_claim(s, s.get("tracks")):
+                        verdict = "kill"
+                        break
+                    log(f"direct-session re-claimed after 410: {s['name']}")
+                interval = DIRECT_NOTIFY_S if legacy else DIRECT_BEAT_S
+                next_beat = now + (interval if r in ("ok", "reclaim") else 5)
+        if verdict == "kill":
+            log(f"direct-session ended by the arbiter: {s['name']} from {s['ip']}")
+            self.events.put(("force_teardown", "ended by the arbiter"))
+        # One done, not the RTMP path's two-six-seconds-apart pair: that hack
+        # existed because a name-only done could not be told from a dead
+        # predecessor's late callback, so telemetry guessed with a 5 s window
+        # and swallowed roughly one legitimate done in six. The session id
+        # settles identity outright, so a single done is sufficient and exact.
+        if legacy:
+            url = f"{ARBITER_URL}/rtmp/live/done?name={urllib.parse.quote(s['name'])}"
+        else:
+            url = (f"{ARBITER_URL}/gw/session/done"
+                   f"?session={urllib.parse.quote(s['session'])}"
+                   f"&gw={urllib.parse.quote(GW_SECRET)}")
+        # Retried, because a lost done strands the slot: telemetry would hold
+        # this session live until the 60 s beat-silence rule demoted it, with
+        # the demo loop still down. Cheap insurance against a transient blip.
+        for attempt in range(3):
+            try:
+                urllib.request.urlopen(url, timeout=4).read()
+                break
+            except Exception as e:
+                log(f"direct-session done failed (attempt {attempt + 1}/3): {e}")
+                time.sleep(1.5)
+        if legacy:
+            time.sleep(6)
+            try:
+                urllib.request.urlopen(url, timeout=4).read()
+            except Exception:
+                pass
 
     def _writer(self, s):
         head = self._spawn_after_probe(s)

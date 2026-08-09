@@ -446,6 +446,16 @@ services:
       - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
       - SRT_PASSPHRASE=${SRT_PASSPHRASE:-}
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
+      # Direct-to-DASH for GUESTS. Default OFF, unlike the owner route: a
+      # guest is an untrusted stranger, so this only turns on where the
+      # operator has decided the whole session protocol is in place -
+      # telemetry authenticates every claim/beat/done, and earshot's listener
+      # refuses any connection that is not a gateway. With it off, guests take
+      # the RTMP hop exactly as before and nothing here is reachable.
+      # Requires GUEST_GW_SECRET (the routes fail closed without it) and
+      # SRT_DIRECT_LISTENERS=1 on earshot, or the claim succeeds and the dial
+      # then hits a port nothing is listening on.
+      - SRT_DIRECT=${GUEST_SRT_DIRECT:-0}
       - XDG_CACHE_HOME=/tmp
     ports:
       # public-intent binding, so it must live in the BASE file: compose
