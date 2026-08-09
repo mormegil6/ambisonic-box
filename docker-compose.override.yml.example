@@ -43,7 +43,7 @@ services:
   # WHY THIS IS A SECOND INSTANCE and not a flag on the one above: the public
   # srt-gateway parses hostile pre-auth bytes off the internet and deliberately
   # holds NO credentials. This instance holds RTMP_OWNER_KEY and publishes
-  # straight into the token-authed `live` application, bypassing the guest
+  # straight into the token-authed `owner` application, bypassing the guest
   # arbiter (no slot, no session cap, and it preempts a live guest). Keeping it
   # a separate service means the internet-facing guest gateway still holds no
   # credentials at all. Same image, same code, different mode.

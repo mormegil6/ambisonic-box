@@ -16,7 +16,7 @@
 # earshot transcode (always 16-ch Opus; video per FFMPEG_FLAGS) is what this
 # test verifies.
 #
-# The test publishes as "pipeline-test?token=$LIVE_APP_KEY" (exercising the
+# The test publishes as "pipeline-test?token=$LOOP_SOURCE_KEY" (exercising the
 # token-auth path). earshot writes every stream's chunks into the same
 # directory with identical default names, so the test refuses to run while
 # another publisher is active; if that publisher is loop-source, it is
@@ -45,16 +45,16 @@ STOP_PUBLISH_DEADLINE=20
 MIN_CHUNKS=5             # >=10 s of content at 2 s segments
 OUTPUT_DIR=./output
 
-# Read LIVE_APP_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
+# Read LOOP_SOURCE_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
 # first, then .env. Never shell-source .env - the compose dialect allows
 # unquoted values with spaces (see FFMPEG_FLAGS in .env.example).
 env_get() {
     sed -n "s/^$1=//p" .env | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
-if [ -z "${LIVE_APP_KEY:-}" ] && [ -f .env ]; then LIVE_APP_KEY=$(env_get LIVE_APP_KEY); fi
+if [ -z "${LOOP_SOURCE_KEY:-}" ] && [ -f .env ]; then LOOP_SOURCE_KEY=$(env_get LOOP_SOURCE_KEY); fi
 if [ -z "${FFMPEG_FLAGS:-}" ] && [ -f .env ]; then FFMPEG_FLAGS=$(env_get FFMPEG_FLAGS); fi
-LIVE_APP_KEY="${LIVE_APP_KEY:-hoast_demo}"
+LOOP_SOURCE_KEY="${LOOP_SOURCE_KEY:-hoast_demo}"
 FFMPEG_FLAGS="${FFMPEG_FLAGS:-}"
 if [ -z "${DASH_NAME:-}" ] && [ -f .env ]; then DASH_NAME=$(env_get DASH_NAME); fi
 DASH_NAME="${DASH_NAME:-hoast_demo}"
@@ -76,9 +76,15 @@ mkdir -p "$OUTPUT_DIR"
 # a guess here is exactly how this script came to assert VP9 while the stack
 # shipped passthrough, failing its own test against a correct host. Runs after
 # the docker checks above, since it shells out to compose.
+# Read it as JSON, not as the YAML rendering: `docker compose config` wraps a
+# long scalar onto a continuation line, and this value sits right at the wrap
+# column, so a line-oriented read returned "... -c:v" with the "copy" on the
+# next line. That silently reclassified passthrough as a VP9 policy and failed
+# the run against a perfectly correct host - the same class of false failure
+# the comment above already warns about, arriving by a different route.
 if [ -z "$FFMPEG_FLAGS" ]; then
-    FFMPEG_FLAGS=$(docker compose config 2>/dev/null \
-        | awk '/^  [a-z-]+:$/{svc=$1} svc=="earshot:" && /FFMPEG_FLAGS:/ {sub(/^[^:]*: */,""); print; exit}')
+    FFMPEG_FLAGS=$(docker compose config --format json 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["earshot"]["environment"].get("FFMPEG_FLAGS",""))' 2>/dev/null)
 fi
 case "$FFMPEG_FLAGS" in
     *"libvpx-vp9"*) VIDEO_CODEC=vp09 ;;   # VP9 transcode
@@ -236,7 +242,7 @@ for i in $(seq 0 15); do
 done
 graph+="${labels}join=inputs=16:channel_layout=hexadecagonal[out1]"
 
-log "pushing ${PUSH_SECONDS}s synthetic H.264 + 16-ch AAC (PCE) to live/${TEST_STREAM} (token auth)"
+log "pushing ${PUSH_SECONDS}s synthetic H.264 + 16-ch AAC (PCE) to owner/${TEST_STREAM} (token auth)"
 push_start=$(date +%s)
 docker compose run --rm --no-deps -T --name "$PUSH_CONTAINER" \
     --entrypoint ffmpeg loop-source \
@@ -247,7 +253,7 @@ docker compose run --rm --no-deps -T --name "$PUSH_CONTAINER" \
     -b:v 4M -g 60 -keyint_min 60 \
     -c:a aac -b:a 512k -ar 48000 \
     -t "$PUSH_SECONDS" \
-    -f flv "rtmp://rtmp-ingest:1935/live/${TEST_STREAM}?token=${LIVE_APP_KEY}" &
+    -f flv "rtmp://rtmp-ingest:1935/owner/${TEST_STREAM}?token=${LOOP_SOURCE_KEY}" &
 push_pid=$!
 
 # ------------------------------------------- first-segment deadline ---------

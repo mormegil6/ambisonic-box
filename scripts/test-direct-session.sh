@@ -112,7 +112,7 @@ PY
 
 r=$(docker run --rm --network "${PROJECT}_default" alpine:3.11 sh -c \
       "apk add --update curl >/dev/null 2>&1; curl -s -o /dev/null -w '%{http_code}' \
-       'http://telemetry:8090/rtmp/live/notify?name=evil'" 2>/dev/null)
+       'http://telemetry:8090/rtmp/owner/notify?name=evil'" 2>/dev/null)
 [ "$r" = "404" ] && ok "a stranger cannot latch owner state through the /rtmp alias" \
                  || bad "alias from a stranger got $r, expected 404"
 

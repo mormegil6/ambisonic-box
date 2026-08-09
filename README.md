@@ -154,17 +154,17 @@ Audio is paid once on the uplink, so the contribution rule is generous: 96 kbit/
 
 RTMP carries exactly one audio track, so 16 channels over it need [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only patched fork. It stays fully supported - the demo loop uses this path - but new setups should start with SRT above.
 
-These are the settings for your OWN stream (the `live` application, authenticated by your key). Guests use a different application, covered under [Guest test endpoint](#guest-test-endpoint-the-guest-application).
+These are the settings for your OWN stream (the `owner` application, authenticated by your key). Guests use a different application, covered under [Guest test endpoint](#guest-test-endpoint-the-guest-application).
 
 | Setting | Value |
 |---|---|
-| Server | `rtmp://<host>:1935/live` |
+| Server | `rtmp://<host>:1935/owner` |
 | Stream key | `hoast_demo_owner` (or your `RTMP_OWNER_KEY`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `RTMP_OWNER_KEY`: a custom stream key does not move the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
 
-The demo loop publishes over this same `live` application under its own separate `LIVE_APP_KEY`, never over the public internet - see Configuration below.
+The demo loop publishes over this same `owner` application under its own separate `LOOP_SOURCE_KEY`, never over the public internet - see Configuration below.
 
 ## Guest test endpoint (the `guest` application)
 
@@ -179,7 +179,7 @@ Anyone with an ambisonic microphone rig and OBS can test their stream against th
 | Server (SRT, recommended) | `srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128` |
 | Server (RTMP) | `rtmp://<host>:1935/guest` |
 | Stream key / streamid | anything you like (it names your session in the status pages) |
-| Audio / video | same requirements as the `live` application [above](#stream-your-own-content) |
+| Audio / video | same requirements as the `owner` application [above](#stream-your-own-content) |
 
 The four rules that decide whether a session works:
 
@@ -209,14 +209,14 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 | Variable | Default | Purpose |
 |---|---|---|
 | `RTMP_OWNER_KEY` | `hoast_demo_owner` | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Rotate this before any deployment reachable from the internet; also gates the SRT owner route's relay into `live` |
-| `LIVE_APP_KEY` | `hoast_demo` | Publish auth for loop-source only. Checked the same way as `RTMP_OWNER_KEY` but never crosses the public internet (loop-source publishes over the docker-internal network); safe to leave at the default |
-| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `RTMP_OWNER_KEY`/`LIVE_APP_KEY` so either key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
+| `LOOP_SOURCE_KEY` | `hoast_demo` | Publish auth for loop-source only. Checked the same way as `RTMP_OWNER_KEY` but never crosses the public internet (loop-source publishes over the docker-internal network); safe to leave at the default |
+| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `RTMP_OWNER_KEY`/`LOOP_SOURCE_KEY` so either key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
 | `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |
 | `DEMO_CONTENT` | `1` | Self-provisioning demo at loop-source start: synthesise the spherical placeholder when `content/demo.mp4` is missing, fetch the VOD masters from the pinned release when absent (~185 MB once, SHA-256-verified, fail-soft). `0` = neither; see Quick start |
 | `VOD_ENABLED` | `0` | On-demand VOD page + packaged clips, off by default: the stack's purpose is live streaming, VOD is opt-in. `0` serves no VOD route and suppresses the reference-master fetch even with `DEMO_CONTENT=1`; the packaging scripts stay in the repo, inert until run |
 | `SRT_ENABLED` | `1` | SRT contribution ingest (`srt-gateway`), the recommended path. On by default; it still admits nobody unless `GUEST_ENABLED=1`. `0` leaves UDP 8890 unbound |
 | `GUEST_ENABLED` | `0` | Keyless guest test endpoint, off by default; see the Guest test endpoint section. Timing knobs (`GUEST_GRACE_S`, `GUEST_MAX_S`, `GUEST_COOLDOWN_S`, `GUEST_RETENTION_DAYS`, `GUEST_BAN_DAYS`) and the resource guard (`GUEST_MAX_TEMP_C`, `GUEST_MAX_MBPS`, `GUEST_LIMIT_STRIKES`) are documented in `.env.example` |
-| `SRT_MODE` | `guest` | What `srt-gateway` does with a caller: `guest` republishes into the arbitrated `guest` application; `owner` hands the stream to earshot directly by default (see `SRT_DIRECT`), or republishes into the token-authed `live` application with `RTMP_OWNER_KEY` when `SRT_DIRECT=0`; either way it bypasses guest arbitration. Not set by the shipped compose file; `scripts/setup.sh` writes an `srt-gateway-owner` service into `docker-compose.override.yml` that sets it, and the same block ships commented in `docker-compose.override.yml.example`. Owner mode refuses to start without `SRT_PASSPHRASE` and `RTMP_OWNER_KEY`, the key being required even though the direct route never uses it, so that `SRT_DIRECT=0` stays a working fallback. This is how you push your own 16 channels from stock OBS with `GUEST_ENABLED=0`. See [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md#the-owner-srt-route-srt_modeowner) |
+| `SRT_MODE` | `guest` | What `srt-gateway` does with a caller: `guest` republishes into the arbitrated `guest` application; `owner` hands the stream to earshot directly by default (see `SRT_DIRECT`), or republishes into the token-authed `owner` application with `RTMP_OWNER_KEY` when `SRT_DIRECT=0`; either way it bypasses guest arbitration. Not set by the shipped compose file; `scripts/setup.sh` writes an `srt-gateway-owner` service into `docker-compose.override.yml` that sets it, and the same block ships commented in `docker-compose.override.yml.example`. Owner mode refuses to start without `SRT_PASSPHRASE` and `RTMP_OWNER_KEY`, the key being required even though the direct route never uses it, so that `SRT_DIRECT=0` stays a working fallback. This is how you push your own 16 channels from stock OBS with `GUEST_ENABLED=0`. See [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md#the-owner-srt-route-srt_modeowner) |
 | `SRT_DIRECT` | `1` | Owner route only: hand the SRT stream to earshot as a bare MPEG-TS remux instead of re-encoding it to 16-channel AAC and republishing over RTMP. Deletes one lossy audio generation and most of the gateway's CPU (~28-42 % of a core at 20 Mbps against ~90-130 %). `0` restores the RTMP republish, which is what to use if you want the owner's stream in rtmp-ingest's stat page or are bisecting a fault across the two routes. Guests always take the RTMP hop, because that is where guest admission and the kick lever live. Written into the override by `scripts/setup.sh`; on an existing install edit the override's `SRT_DIRECT` line or set it in `.env` if that line reads `${SRT_DIRECT:-1}` |
 | `SRT_OWNER_MAX_S` | `86400` | Owner-mode session ceiling (24 h), ending a session on purpose before the MPEG-TS 33-bit timestamp wrap at ~26.5 h, whose behaviour through either chain is unverified. Reconnect continues. `0` disables; guest mode never reads it |
 | `ENABLE_NONFREE` | `0` | earshot ffmpeg licence stamp: the stack builds WITHOUT `--enable-nonfree` so images are redistributable; `1` restores the stock upstream configure line (`services/earshot/README.md` section 7) |

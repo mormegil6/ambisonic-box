@@ -29,7 +29,7 @@
 # Usage:
 #   merge-obs-tracks.sh --check <obs-recording>
 #   merge-obs-tracks.sh <obs-recording> [merged.mov] [--channels N]
-#   merge-obs-tracks.sh <obs-recording> --push rtmp://<host>:1935/live/<key> [--channels N]
+#   merge-obs-tracks.sh <obs-recording> --push rtmp://<host>:1935/owner/<key> [--channels N]
 #
 #   --channels N   keep only the first N merged channels (default: all).
 #                  Use 16 when capturing 3OA across 4-channel tracks.

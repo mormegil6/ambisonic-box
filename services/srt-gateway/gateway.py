@@ -65,7 +65,7 @@ STATUS_PORT   = int(os.environ.get("STATUS_PORT", "8091"))
 ARBITER_URL   = os.environ.get("ARBITER_URL", "http://telemetry:8090")
 INGEST_URL    = os.environ.get("INGEST_URL",
                                "rtmp://rtmp-ingest:1935/guest" if MODE == "guest"
-                               else "rtmp://rtmp-ingest:1935/live")
+                               else "rtmp://rtmp-ingest:1935/owner")
 GW_SECRET     = os.environ.get("GUEST_GW_SECRET", "")
 RTMP_OWNER_KEY = os.environ.get("RTMP_OWNER_KEY", "")         # owner mode only
 BUFFER_MB     = int(os.environ.get("SRT_BUFFER_MB", "64"))
@@ -117,11 +117,11 @@ _SECRET_RE    = re.compile(r"\b(gw|token)=[^&\s]+")   # scrub creds from logs
 # beaten at must be droppable. The listener enforces the other half (only the
 # gateway containers may connect at all; services/earshot/.../
 # direct-dash-gate.sh). An older telemetry without the protocol answers 404,
-# and only OWNER sessions then fall back to the legacy /rtmp/live latch.
+# and only OWNER sessions then fall back to the legacy /rtmp/owner latch.
 SRT_DIRECT    = os.environ.get("SRT_DIRECT", "0") == "1"
 EARSHOT_HOST  = os.environ.get("EARSHOT_HOST", "earshot")
 DIRECT_PORTS  = {4: 9100, 1: 9101}      # by probed track count
-DIRECT_NOTIFY_S = 30                    # legacy /rtmp/live latch re-notify
+DIRECT_NOTIFY_S = 30                    # legacy /rtmp/owner latch re-notify
 DIRECT_BEAT_S   = 10                    # session-protocol beat; matches the
                                         # RTMP path's on_update cadence
 CLAIM_TIMEOUT_S = 20                    # telemetry holds a claim through the
@@ -590,7 +590,7 @@ class Gateway:
         ends the session rather than silently overflowing it.
 
         A 404 means this telemetry predates the protocol. Owner sessions then
-        fall back to the /rtmp/live alias (legacy mode in the beat loop) so a
+        fall back to the /rtmp/owner alias (legacy mode in the beat loop) so a
         gateway upgraded ahead of telemetry still works; guests do NOT - their
         admission is the thing being asked for, and assuming it would put an
         unadmitted stranger on the DASH tree."""
@@ -598,14 +598,14 @@ class Gateway:
         # the session protocol, and telemetry would refuse every claim. That
         # must not silently break a working owner route on upgrade (the box
         # ran direct-to-DASH for a day before the protocol existed), so:
-        # owner degrades to the legacy /rtmp/live latch, which is exactly what
+        # owner degrades to the legacy /rtmp/owner latch, which is exactly what
         # it used before and no weaker than yesterday; a GUEST is refused,
         # because unauthenticated admission is the one thing that must never
         # degrade open. setup.sh generates the secret, so this is the
         # upgrade-in-place path, not the supported configuration.
         if not GW_SECRET:
             if MODE == "owner":
-                log("no GUEST_GW_SECRET: using the legacy /rtmp/live latch for "
+                log("no GUEST_GW_SECRET: using the legacy /rtmp/owner latch for "
                     "this owner session (set one to use the session protocol)")
                 s["session"] = None
                 s["tracks"] = tracks
@@ -662,7 +662,7 @@ class Gateway:
                     continue
                 if e.code == 404 and MODE == "owner":
                     log("arbiter has no session protocol; using the legacy "
-                        "/rtmp/live latch for this owner session")
+                        "/rtmp/owner latch for this owner session")
                     s["session"] = None
                     s["tracks"] = tracks
                     return True
@@ -715,7 +715,7 @@ class Gateway:
         def beat():
             """Returns 'ok', 'kill', 'reclaim' or 'transient'."""
             if legacy:
-                url = (f"{ARBITER_URL}/rtmp/live/notify"
+                url = (f"{ARBITER_URL}/rtmp/owner/notify"
                        f"?name={urllib.parse.quote(s['name'])}")
             else:
                 url = (f"{ARBITER_URL}/gw/session/beat"
@@ -735,7 +735,7 @@ class Gateway:
                     # loop can start on top of it and nothing will ever end
                     # it. That is precisely what the fallback was supposed to
                     # prevent, so it is fatal, not transient.
-                    log("legacy /rtmp/live latch returned 404: this arbiter "
+                    log("legacy /rtmp/owner latch returned 404: this arbiter "
                         "does not accept it; ending the session rather than "
                         "streaming unlatched")
                     return "kill"
@@ -798,7 +798,7 @@ class Gateway:
         # and swallowed roughly one legitimate done in six. The session id
         # settles identity outright, so a single done is sufficient and exact.
         if legacy:
-            url = f"{ARBITER_URL}/rtmp/live/done?name={urllib.parse.quote(s['name'])}"
+            url = f"{ARBITER_URL}/rtmp/owner/done?name={urllib.parse.quote(s['name'])}"
         else:
             url = (f"{ARBITER_URL}/gw/session/done"
                    f"?session={urllib.parse.quote(s['session'])}"

@@ -44,10 +44,10 @@ if [ ! -f /content/demo.mp4 ]; then
 fi
 
 # Publish under a fixed, non-secret stream name (${DASH_NAME:-hoast_demo}) and
-# pass LIVE_APP_KEY as ?token= instead of using the key AS the stream name.
+# pass LOOP_SOURCE_KEY as ?token= instead of using the key AS the stream name.
 # rtmp-ingest accepts either, but a clean name keeps the secret out of the
 # RTMP publish/relay log lines (which print the stream name); the token itself
 # is suppressed by access_log off on the /auth location.
-echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo} (token auth)"
+echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/owner/${DASH_NAME:-hoast_demo} (token auth)"
 exec ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -i /content/demo.mp4 \
-    -c copy -f flv "rtmp://rtmp-ingest:1935/live/${DASH_NAME:-hoast_demo}?token=${LIVE_APP_KEY:-hoast_demo}"
+    -c copy -f flv "rtmp://rtmp-ingest:1935/owner/${DASH_NAME:-hoast_demo}?token=${LOOP_SOURCE_KEY:-hoast_demo}"

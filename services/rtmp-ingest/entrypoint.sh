@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-if [ -z "${LIVE_APP_KEY}" ]; then
-    echo "[rtmp-ingest] LIVE_APP_KEY is not set" >&2
+if [ -z "${LOOP_SOURCE_KEY}" ]; then
+    echo "[rtmp-ingest] LOOP_SOURCE_KEY is not set" >&2
     exit 1
 fi
 if [ -z "${RTMP_OWNER_KEY}" ]; then
@@ -18,7 +18,7 @@ fi
 mkdir -p /run/nginx/tmp
 
 # substitute only these two; everything else ($arg_name, ...) is nginx syntax
-envsubst '${LIVE_APP_KEY} ${RTMP_OWNER_KEY}' < /etc/nginx/nginx.conf.template > /run/nginx/nginx.conf
+envsubst '${LOOP_SOURCE_KEY} ${RTMP_OWNER_KEY}' < /etc/nginx/nginx.conf.template > /run/nginx/nginx.conf
 
 # Guest test endpoint: OFF unless GUEST_ENABLED=1. The snippets contain no
 # ${...}, so they are copied verbatim; disabled means empty includes and the

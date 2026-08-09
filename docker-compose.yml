@@ -46,7 +46,7 @@ services:
       - RTMP_AUTH_TOKEN=
       - RTMP_AUTH_URL=http://127.0.0.1:80/auth
       # Public DASH manifest filename. Fixed on purpose and decoupled from
-      # RTMP_OWNER_KEY/LIVE_APP_KEY: the publish name used to name this file,
+      # RTMP_OWNER_KEY/LOOP_SOURCE_KEY: the publish name used to name this file,
       # and any client on the public :1935 port chooses the publish name, so
       # an interpolated name was an arbitrary-path write inside earshot.
       # Defaulted to the literal the player is hardcoded to
@@ -190,8 +190,8 @@ services:
       # loop-source's own low-stakes token; never reaches the public
       # internet (see nginx.conf.template's /auth comment for why it still
       # needs one at all)
-      - LIVE_APP_KEY=${LIVE_APP_KEY:-hoast_demo}
-      # the real public-facing owner secret: gates any /live publish arriving
+      - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
+      # the real public-facing owner secret: gates any /owner publish arriving
       # by NAME (an OBS Stream Key push straight to :1935), the credential a
       # leak of which would actually matter. Rotate this in .env for any
       # deployment reachable from the internet.
@@ -238,7 +238,7 @@ services:
     image: ambi-box-earshot:local
     entrypoint: ["/bin/sh", "/opt/loop-source/entrypoint.sh"]
     environment:
-      - LIVE_APP_KEY=${LIVE_APP_KEY:-hoast_demo}
+      - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
       # the loop's publish NAME (the entrypoint reads it and defaulted to
       # hoast_demo all along; passing it keeps a custom DASH_NAME in step
       # with telemetry's copy, whose loop/owner discrimination keys on it)
@@ -354,8 +354,8 @@ services:
       # only so the dashboard knows whether to list srt-gateway among the
       # live-path services (it runs either way, idle when off)
       - SRT_ENABLED=${SRT_ENABLED:-1}
-      # the demo loop's PUBLISH NAME (it publishes /live/${DASH_NAME}), so
-      # telemetry can tell the loop's own /live publish apart from an
+      # the demo loop's PUBLISH NAME (it publishes /owner/${DASH_NAME}), so
+      # telemetry can tell the loop's own /owner publish apart from an
       # EXTERNAL owner broadcast. Drives the owner-live latch: loop stopped
       # for the owner, guests refused while the owner is live. Deliberately
       # the NAME and not the key - the key never needs to enter this

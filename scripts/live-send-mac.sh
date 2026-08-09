@@ -21,7 +21,7 @@
 # error anywhere to point at why.
 #
 # Usage:
-#   live-send-mac.sh <video-device> <audio-device> rtmp://<host>:1935/live/<key> \
+#   live-send-mac.sh <video-device> <audio-device> rtmp://<host>:1935/owner/<key> \
 #       [--channels N] [--fps N]
 #
 #   <video-device>/<audio-device>  avfoundation device names, e.g.
@@ -53,7 +53,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 set -- "${POSITIONAL[@]}"
-[ $# -eq 3 ] || { echo "usage: $0 <video-device> <audio-device> rtmp://<host>:1935/live/<key> [--channels N] [--fps N]" >&2; exit 2; }
+[ $# -eq 3 ] || { echo "usage: $0 <video-device> <audio-device> rtmp://<host>:1935/owner/<key> [--channels N] [--fps N]" >&2; exit 2; }
 VIDEO_DEV="$1" AUDIO_DEV="$2" PUSH_URL="$3"
 
 case "$CHANNELS" in

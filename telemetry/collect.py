@@ -209,7 +209,7 @@ def stream_state():
     # the DIRECT path (gateway -> earshot's mpegts listener, 2026-08-09; design
     # in the deployment repo) never appears there - the whole point is skipping
     # the RTMP/FLV hop - but the gateway latches _owner via the same
-    # /rtmp/live/notify the ingest callbacks use, and re-notifies every 30 s.
+    # /rtmp/owner/notify the ingest callbacks use, and re-notifies every 30 s.
     # So the latch IS the publishing signal for that path. A stale latch
     # (owner_tick clears it within ~2 cycles) briefly reports publishing with
     # aging segments; `live` stays false then, and auto_idle's source_stop on
@@ -807,21 +807,21 @@ _resume_flag = [False]     # a resume attempt is owed (retried from guest_tick)
 _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint updates
 
 # --- owner-live latch --------------------------------------------------
-# Set when an EXTERNAL owner (a /live publish whose name is not the demo
+# Set when an EXTERNAL owner (a /owner publish whose name is not the demo
 # loop's) goes live; cleared by its publish_done or by the owner_tick
 # backstop. While set: guests are refused for the WHOLE owner session (not
 # just preempted at takeover), and neither a visitor's start button nor a
 # guest-end resume may put the demo loop back beside the owner.
 # The discriminator is the loop's PUBLISH NAME, which is DASH_NAME - the
-# loop publishes /live/${DASH_NAME:-hoast_demo}?token=<key>, so its name is
-# never the key (comparing against LIVE_APP_KEY was the review's blocker: on
+# loop publishes /owner/${DASH_NAME:-hoast_demo}?token=<key>, so its name is
+# never the key (comparing against LOOP_SOURCE_KEY was the review's blocker: on
 # any box where the key is a real secret, the loop's own publish would read
 # as an owner and stop itself in a start/stop flap). This also means the
 # key itself never needs to reach this container. An owner must simply not
 # publish UNDER the loop's name (earshot would refuse the same-name
 # duplicate anyway); the owner gateway's streamid and the documented
 # name-as-key RTMP form both satisfy that on their own.
-# An older nginx template forwards no name at all: every /rtmp/live/notify
+# An older nginx template forwards no name at all: every /rtmp/owner/notify
 # then falls back to the legacy preempt-at-takeover behavior and the latch
 # never engages - safe in either rollout order.
 # The latch is memory-only: after a telemetry restart mid-owner-broadcast,
@@ -859,7 +859,7 @@ TEL_SRT_GW_OWNER_HOST = os.environ.get("TEL_SRT_GW_OWNER_HOST",
 # They are fail-open by contract (nginx masks failures so a telemetry blip
 # cannot kill a broadcast), which is right for a callback from a trusted
 # neighbour and wrong for anything else: unauthenticated, ANY compose-network
-# peer could latch the owner state with /rtmp/live/notify?name=x, which locks
+# peer could latch the owner state with /rtmp/owner/notify?name=x, which locks
 # every guest out and holds the demo loop down until the tick backstop
 # notices. The review classified this alias as permanent infrastructure - the
 # demo loop and the still-supported RTMP owner route both fire it - so it is
@@ -1694,7 +1694,7 @@ def gw_beat(role, session):
                 return 410, {}
             # A same-session beat is the owner keepalive: refresh the latch so
             # owner_tick's ingest probe (which would never see this session)
-            # cannot expire it, exactly as the /rtmp/live/notify re-notify does.
+            # cannot expire it, exactly as the /rtmp/owner/notify re-notify does.
             _owner["since"] = time.time()
             _owner_miss[0] = 0
         return 200, {}
@@ -1912,8 +1912,8 @@ def guest_kill():
     return {"ok": True, "state": "free"}
 
 
-def _ingest_live_publishing(stream_name=None):
-    """Does ingest's stat page show a publisher on the LIVE application -
+def _ingest_owner_publishing(stream_name=None):
+    """Does ingest's stat page show a publisher on the OWNER application -
     optionally a publisher under one specific stream name? This is where the
     owner's publisher actually lives, and unlike earshot's stat it survives
     an earshot-only restart (nginx-rtmp resolves its push target once, so
@@ -1922,7 +1922,7 @@ def _ingest_live_publishing(stream_name=None):
     an any-publisher check would let the demo loop's own publisher pin a
     stale owner latch forever."""
     x = sh(f"curl -s --max-time 4 {INGEST_STAT}")
-    seg = x.split("<name>live</name>", 1)
+    seg = x.split("<name>owner</name>", 1)
     if len(seg) != 2:
         return False
     app = seg[1].split("</application>", 1)[0]
@@ -1932,9 +1932,9 @@ def _ingest_live_publishing(stream_name=None):
     return len(s2) == 2 and "<publishing/>" in s2[1].split("</stream>", 1)[0]
 
 
-def _ingest_live_owner_name():
+def _ingest_owner_name():
     """The name of whichever non-loop publisher is currently live on
-    ingest's /live application, or None. _owner["live"] only ever gets SET
+    ingest's /owner application, or None. _owner["live"] only ever gets SET
     by the one-shot on_publish notify, so a telemetry restart mid-owner-
     session loses it permanently even though the publish itself never
     stopped - measured 2026-08-07: the dashboard read "free" for the rest of
@@ -1944,7 +1944,7 @@ def _ingest_live_owner_name():
     check below uses this to notice and repair that, the same way it already
     notices and repairs a latch that outlived its publisher."""
     x = sh(f"curl -s --max-time 4 {INGEST_STAT}")
-    seg = x.split("<name>live</name>", 1)
+    seg = x.split("<name>owner</name>", 1)
     if len(seg) != 2:
         return None
     app = seg[1].split("</application>", 1)[0]
@@ -1961,7 +1961,7 @@ def _ingest_live_owner_name():
 
 
 def owner_notify(name_arg):
-    """/rtmp/live/notify: a publish just passed the key check at rtmp-ingest.
+    """/rtmp/owner/notify: a publish just passed the key check at rtmp-ingest.
     Three cases:
       - no name forwarded (an older nginx template): the legacy behavior,
         an unconditional preempt-at-takeover
@@ -2028,7 +2028,7 @@ def owner_notify(name_arg):
 
 
 def owner_done(name_arg):
-    """/rtmp/live/done: a /live publisher left. The demo loop's own
+    """/rtmp/owner/done: a /owner publisher left. The demo loop's own
     unpublish needs nothing here (telemetry drives the loop itself); the
     LATCHED owner leaving clears the latch and hands the slot back through
     the same resume rule a guest's end uses (loop only if somebody watches).
@@ -2062,7 +2062,7 @@ def _owner_relatch_check():
     """The other direction of owner_tick's backstop: re-derive the latch
     from ingest's own publisher list when it is currently UNSET, so a
     telemetry restart mid-owner-session cannot leave it permanently wrong
-    (see _ingest_live_owner_name's docstring - this was observed live on
+    (see _ingest_owner_name's docstring - this was observed live on
     2026-08-07, not theoretical).
 
     Deliberately does NOT repeat owner_notify's takeover side effects
@@ -2074,7 +2074,7 @@ def _owner_relatch_check():
     firing (bounded by one INTERVAL) is not retroactively evicted. Narrow,
     and this whole scenario has only been observed following telemetry's
     own redeploys, never in normal operation."""
-    name = _ingest_live_owner_name()
+    name = _ingest_owner_name()
     if not name:
         return
     with _owner_lock:
@@ -2090,7 +2090,7 @@ def owner_tick():
     """Per-cycle backstop for the latch: if the owner's publish_done was
     lost (an rtmp-ingest restart is the realistic path), the latch would
     lock guests out and hold the loop down forever. Clear it once a settled
-    latch (>60 s old) has shown no live-app publisher UNDER THE LATCHED NAME
+    latch (>60 s old) has shown no owner-app publisher UNDER THE LATCHED NAME
     at ingest on two consecutive cycles - name-specific, because the demo
     loop publishes to the same application and an any-publisher probe would
     let a compose-recreated loop pin a stale latch forever (round-2 finding).
@@ -2110,7 +2110,7 @@ def owner_tick():
         return
     if time.time() - (since or 0) < 60:
         return
-    publishing = _ingest_live_publishing(oname)
+    publishing = _ingest_owner_publishing(oname)
     with _owner_lock:
         if not _owner["live"] or _owner["since"] != since:
             return                  # re-latched mid-probe; not ours to touch
@@ -2122,7 +2122,7 @@ def owner_tick():
             return
         _owner.update(live=False, name=None, since=None)
         _owner_miss[0] = 0
-    print("owner latch cleared by backstop (no live-app publisher at ingest)",
+    print("owner latch cleared by backstop (no owner-app publisher at ingest)",
           flush=True)
     _resume_after_guest()
 
@@ -3048,14 +3048,14 @@ def serve():
             # Both /rtmp/ families are rtmp-ingest's callbacks and nobody
             # else's. Refusing a stranger here is not a behaviour change for
             # the real caller, and it closes the alias's standing hole: an
-            # unauthenticated /rtmp/live/notify from any compose peer could
+            # unauthenticated /rtmp/owner/notify from any compose peer could
             # latch owner state, locking out every guest and holding the demo
             # loop down. 404, not 403, so an unauthorised prober cannot even
             # confirm the routes exist.
             # rtmp-ingest is the usual caller, but NOT the only legitimate
             # one: srt-gateway polls /rtmp/guest/precheck-snapshot directly,
             # and a gateway with no GUEST_GW_SECRET latches the owner through
-            # /rtmp/live/notify (the upgrade-in-place path). Both are
+            # /rtmp/owner/notify (the upgrade-in-place path). Both are
             # authenticated by the same socket-bound rule the session
             # protocol uses, so admit them here too.
             # Getting this wrong is not theoretical: gating on ingest alone
@@ -3094,7 +3094,7 @@ def serve():
                     if call and call != "update_publish":
                         return self._json(200, {})
                     return self._json(guest_update(name), {})
-            # A /live publish just passed the LIVE_APP_KEY check at rtmp-ingest
+            # A /owner publish just passed the LOOP_SOURCE_KEY check at rtmp-ingest
             # (the demo loop or an external owner - owner_notify tells them
             # apart by the forwarded name). nginx already fails these open,
             # so the responses here don't gate anything.
@@ -3146,11 +3146,11 @@ def serve():
                     code, body = gw_done(role, (args.get("session") or [""])[0])
                     return self._json(code, body)
                 return self._json(404, {"error": "not found"})
-            if p == "/rtmp/live/notify":
+            if p == "/rtmp/owner/notify":
                 args = urllib.parse.parse_qs(q)
                 owner_notify((args.get("name") or [None])[0])
                 return self._json(200, {})
-            if p == "/rtmp/live/done":
+            if p == "/rtmp/owner/done":
                 args = urllib.parse.parse_qs(q)
                 owner_done((args.get("name") or [None])[0])
                 return self._json(200, {})

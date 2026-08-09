@@ -31,15 +31,15 @@ rtmp {
         # (demo.mp4 peaks at ~1.2M); "too big message" kills the publisher
         max_message 10M;
 
-        application live {
+        application owner {
             live on;
             # auth against the local http block below; nginx-rtmp passes
             # ?call=publish&name=<stream>&token=<arg from the publish URL>...
             on_publish http://127.0.0.1:8080/auth;
-            # tell telemetry when a /live publisher leaves, so an external
+            # tell telemetry when a /owner publisher leaves, so an external
             # owner's departure clears the owner-live latch and hands the
             # slot back to the demo loop's normal on-demand rule
-            on_publish_done http://127.0.0.1:8080/live_done;
+            on_publish_done http://127.0.0.1:8080/owner_done;
             # relay the authenticated stream to the transcoder (internal network only)
             push rtmp://earshot:1935/live;
         }
@@ -102,13 +102,13 @@ http {
         # arrives over the PUBLIC :1935 port (a real OBS/SRT-relay owner push)
         # and is checked by NAME (OBS's plain Stream Key field) or by ?token=
         # (the srt-gateway owner relay, internal but sharing the same secret
-        # as its RTMP counterpart on purpose). LIVE_APP_KEY only ever arrives
+        # as its RTMP counterpart on purpose). LOOP_SOURCE_KEY only ever arrives
         # as ?token= from loop-source over the docker-internal network - it
         # never faces the public internet, so it stays a low-stakes internal
         # handshake rather than a second public-facing credential:
-        #   rtmp://<host>:1935/live/${RTMP_OWNER_KEY}
-        #   rtmp://<host>:1935/live/<anything>?token=${RTMP_OWNER_KEY}
-        #   rtmp://<host>:1935/live/<anything>?token=${LIVE_APP_KEY}   (loop-source only)
+        #   rtmp://<host>:1935/owner/${RTMP_OWNER_KEY}
+        #   rtmp://<host>:1935/owner/<anything>?token=${RTMP_OWNER_KEY}
+        #   rtmp://<host>:1935/owner/<anything>?token=${LOOP_SOURCE_KEY}   (loop-source only)
         location = /auth {
             # The publish credential arrives here as ?token= (or the stream
             # name); keep it out of the access log so the key is not written to
@@ -130,7 +130,7 @@ http {
             if ($arg_token = '${RTMP_OWNER_KEY}') {
                 return 418;
             }
-            if ($arg_token = '${LIVE_APP_KEY}') {
+            if ($arg_token = '${LOOP_SOURCE_KEY}') {
                 return 418;
             }
             return 401;
@@ -152,7 +152,7 @@ http {
             # the name rides along so telemetry can tell the demo loop's own
             # publish (name = the stream key) apart from an EXTERNAL owner;
             # only the name, never the token, so nothing secret leaves here
-            proxy_pass $arbiter/rtmp/live/notify?name=$arg_name;
+            proxy_pass $arbiter/rtmp/owner/notify?name=$arg_name;
             proxy_read_timeout 3s;
             proxy_intercept_errors on;
             error_page 500 502 503 504 = @owner_authed_fallback;
@@ -161,13 +161,13 @@ http {
             return 201;
         }
 
-        # on_publish_done for the live app, forwarded best-effort the same way
+        # on_publish_done for the owner app, forwarded best-effort the same way
         # as @owner_authed (nginx-rtmp ignores done-callback status anyway)
-        location = /live_done {
+        location = /owner_done {
             access_log off;
             resolver 127.0.0.11 valid=5s;
             set $arbiter http://telemetry:8090;
-            proxy_pass $arbiter/rtmp/live/done?name=$arg_name;
+            proxy_pass $arbiter/rtmp/owner/done?name=$arg_name;
             proxy_read_timeout 3s;
             proxy_intercept_errors on;
             error_page 500 502 503 504 = @owner_authed_fallback;
