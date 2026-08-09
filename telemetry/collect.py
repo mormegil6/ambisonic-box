@@ -1607,8 +1607,18 @@ def owner_notify(name_arg):
             print(f"second owner publisher ({name_arg}) while "
                   f"{_owner['name']} is latched; latch unchanged", flush=True)
             return
+        # A same-name notify while already latched is the direct path's 30 s
+        # keepalive (or an RTMP reconnect): refresh the latch and stop. The
+        # takeover side effects below (guest kill, log line, loop-stop
+        # thread) must run once per session, not once per keepalive - under
+        # the 2026-08-09 keepalive flood each notify forked a docker-stop
+        # thread and the log line alone was most of the output. Guests are
+        # already locked out and the loop already stopped by the first one.
+        rearm = _owner["live"] and _owner["name"] == name_arg
         _owner.update(live=True, name=name_arg, since=time.time())
         _owner_miss[0] = 0
+    if rearm:
+        return
     # targeted kill rather than guest_kill(): the preempted guest is
     # innocent, so it gets a reason that (a) shows on the player and (b) is
     # not in _guest_end_locked's cooldown list - no 300 s lockout for the

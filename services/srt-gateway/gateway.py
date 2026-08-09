@@ -578,12 +578,19 @@ class Gateway:
                 log(f"direct-latch {kind} failed (retrying next cycle): {e}")
                 return False
         ping("notify")
-        # 5 s ticks with a counter, NOT one long wait: end_session's notify()
-        # wakes a single waiter and the writer thread usually wins it, so a
-        # DIRECT_NOTIFY_S-long wait rode out its full 30 s after every session
-        # end and the latch unwind inherited the delay. Re-notify still fires
-        # every DIRECT_NOTIFY_S; closing is noticed within 5 s.
-        waited = 0
+        # Short waits, NOT one long wait: end_session's notify() wakes a
+        # single waiter and the writer thread usually wins it, so a
+        # DIRECT_NOTIFY_S-long wait rode out its full 30 s after every
+        # session end and the latch unwind inherited the delay.
+        # Re-notify on a WALL-CLOCK deadline, never a wakeup counter: the
+        # session cond is notified for every arriving SRT packet, so a live
+        # stream wakes this wait thousands of times a minute. The first
+        # version counted each wakeup as five elapsed seconds and re-notified
+        # at packet rate (~80 requests/s measured), which buried telemetry in
+        # handler threads to its pids limit within minutes (2026-08-09).
+        # After a failed ping the deadline is 5 s out, so an arbiter restart
+        # is healed quickly; closing is still noticed within 5 s.
+        next_ping = time.time() + DIRECT_NOTIFY_S
         while True:
             with s["cond"]:
                 s["cond"].wait(timeout=5)
@@ -592,10 +599,10 @@ class Gateway:
                 current = self.session is s
             if closing or not current:
                 break
-            waited += 5
-            if waited >= DIRECT_NOTIFY_S:
-                waited = 0
-                ping("notify")
+            now = time.time()
+            if now >= next_ping:
+                ok = ping("notify")
+                next_ping = now + (DIRECT_NOTIFY_S if ok else 5)
         # Done TWICE, six seconds apart, and the pause is load-bearing:
         # owner_done drops any done arriving within 5 s of the latch's `since`
         # as a dead predecessor's late callback - a guard built for RTMP
