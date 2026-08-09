@@ -165,13 +165,21 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 		su -s /bin/sh nginx -c '
 		while :; do
 			sleep 15
-			for spec in "9100 TCP-LISTEN:9100" "9101 TCP-LISTEN:9101"; do
-				port=${spec%% *}; pat=${spec#* }
+			for port in 9100 9101; do
 				if netstat -tn 2>/dev/null | grep ":$port" | grep -q CLOSE_WAIT; then
 					sleep 10
 					if netstat -tn 2>/dev/null | grep ":$port" | grep -q CLOSE_WAIT; then
 						echo "[direct-dash] watchdog: killing wedged :$port listener (CLOSE_WAIT persisted)" >> /tmp/nginx_rtmp_ffmpeg_log
-						pkill -9 -f "$pat"
+						# Pattern BUILT AT RUNTIME from the port number on
+						# purpose. Written as a literal it also matched this
+						# watchdog loop own command line (the old for-list
+						# held the strings TCP-LISTEN:9100 and 9101), so the
+						# first activation killed the watchdog itself and
+						# wedge recovery worked at most once per container.
+						# With the variable unexpanded in our own cmdline we
+						# cannot match ourselves. NOTE: this whole block is
+						# single-quoted for su, so no apostrophes in here.
+						pkill -9 -f "socat -u TCP-LISTEN:$port"
 					fi
 				fi
 			done

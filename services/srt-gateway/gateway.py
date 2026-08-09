@@ -617,6 +617,15 @@ class Gateway:
             return False
         deadline = time.time() + CLAIM_BUDGET_S
         while True:
+            # The caller can vanish mid-claim (dropped SRT, teardown, an owner
+            # preempting us). Registering a session for a caller that is
+            # already gone strands the slot until beat-silence notices, which
+            # is minutes of dead air on the public test point.
+            with self.lock:
+                if self.session is not s or s["closing"]:
+                    log(f"claim abandoned: session for {s['ip']} ended while "
+                        f"waiting for the arbiter")
+                    return False
             url = (f"{ARBITER_URL}/gw/session/claim"
                    f"?role={'owner' if MODE == 'owner' else 'guest'}"
                    f"&name={urllib.parse.quote(s['name'])}"
@@ -626,7 +635,25 @@ class Gateway:
             try:
                 with urllib.request.urlopen(url, timeout=CLAIM_TIMEOUT_S) as r:
                     body = json.loads(r.read() or b"{}")
-                s["session"] = body.get("session")
+                sid = body.get("session")
+                # Re-check AFTER the round trip: a 200 that arrives for a dead
+                # session must be handed straight back, or telemetry holds a
+                # slot for a caller that no longer exists.
+                with self.lock:
+                    alive = self.session is s and not s["closing"]
+                if not alive:
+                    log("claim returned after the session ended; releasing it")
+                    if sid:
+                        try:
+                            urllib.request.urlopen(
+                                f"{ARBITER_URL}/gw/session/done?session="
+                                f"{urllib.parse.quote(sid)}"
+                                f"&gw={urllib.parse.quote(GW_SECRET)}",
+                                timeout=4).read()
+                        except Exception:
+                            pass
+                    return False
+                s["session"] = sid
                 s["tracks"] = tracks
                 return True
             except urllib.error.HTTPError as e:
@@ -702,6 +729,16 @@ class Gateway:
                     return "kill"
                 if e.code == 410:
                     return "reclaim"
+                if e.code == 404 and legacy:
+                    # The legacy latch route is GONE, so this session is
+                    # writing DASH that telemetry knows nothing about - the
+                    # loop can start on top of it and nothing will ever end
+                    # it. That is precisely what the fallback was supposed to
+                    # prevent, so it is fatal, not transient.
+                    log("legacy /rtmp/live latch returned 404: this arbiter "
+                        "does not accept it; ending the session rather than "
+                        "streaming unlatched")
+                    return "kill"
                 log(f"direct-session beat got {e.code}; treating as transient")
                 return "transient"
             except Exception as e:
@@ -739,6 +776,22 @@ class Gateway:
         if verdict == "kill":
             log(f"direct-session ended by the arbiter: {s['name']} from {s['ip']}")
             self.events.put(("force_teardown", "ended by the arbiter"))
+        # WAIT FOR THE WRITER TO ACTUALLY DIE before saying done. Telemetry
+        # treats done as "the slot is free", and _resume_after_guest starts
+        # the demo loop off the back of it - so if done means only "teardown
+        # requested", the loop's transcoder can start while earshot's listener
+        # is still draining buffered bytes into the same single-writer DASH
+        # tree. _terminate_child gives the child up to 8 s before SIGKILL, and
+        # the bytes already inside socat and the kernel socket keep being
+        # muxed until it exits, so this wait is the difference between "done"
+        # being a promise and being a fact.
+        child = s.get("child")
+        if child is not None:
+            try:
+                child.wait(timeout=15)
+            except Exception:
+                log("writer still alive 15 s after teardown; sending done "
+                    "anyway so the slot cannot wedge")
         # One done, not the RTMP path's two-six-seconds-apart pair: that hack
         # existed because a name-only done could not be told from a dead
         # predecessor's late callback, so telemetry guessed with a 5 s window

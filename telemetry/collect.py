@@ -1297,6 +1297,11 @@ def _guest_end_locked(reason):
     # claiming to be a direct writer (stream_state reads that flag) and the
     # retired session id must never match a late beat from the gateway whose
     # session this was - that beat gets 410 and a clean re-claim instead.
+    # A direct session just ended. Unless the gateway told us its writer had
+    # already exited (gw_done clears this immediately after), assume it may
+    # still be draining and fence it before anything else can start writing.
+    if _guest["direct"]:
+        _direct_fence[0] = True
     _guest.update(state="free", name=None, addr=None, start=None,
                   last_seen=None, grace_started=None, kill=False,
                   terminating=None, cooldown_until=cooldown,
@@ -1306,6 +1311,36 @@ def _guest_end_locked(reason):
     _resume_flag[0] = True
     print(f"guest session ended ({reason})"
           + (f"; cooldown {GUEST_COOLDOWN_S}s" if cooldown else ""), flush=True)
+
+
+_direct_fence = [False]     # a direct session ended; its writer may still live
+
+
+def _fence_direct_writers():
+    """Force any direct writer in earshot to stop, without needing the
+    gateway to cooperate.
+
+    The beat-403 kick is COOPERATIVE: it only works if the gateway is alive,
+    reachable and honest. The case that breaks it is mundane rather than
+    malicious - a network partition between the gateway and telemetry, where
+    beats fail (correctly treated as transient, so the broadcast survives a
+    blip) while the gateway keeps feeding earshot perfectly well. Telemetry
+    meanwhile demotes the session on beat silence and eventually resumes the
+    demo loop, and that is two writers on the single-writer DASH tree with
+    nothing left to end either.
+
+    Telemetry holds the docker socket, so it has a lever the gateway cannot
+    veto: kill the socat that owns the listener socket. The transcoder behind
+    it then sees EOF and exits cleanly, and the entrypoint re-arms the port
+    within about a second - the same mechanism the CLOSE_WAIT watchdog inside
+    earshot already uses. Safe to call when nothing is connected: it kills an
+    idle listener, which immediately comes back."""
+    c = container_named(docker_ps(), "earshot")
+    if not c:
+        return
+    for port in (9100, 9101):
+        sh(f'docker exec {c} pkill -9 -f "socat -u TCP-LISTEN:{port}"', t=8)
+    print("fenced direct writers (listener sockets recycled)", flush=True)
 
 
 def _resume_after_guest():
@@ -1337,6 +1372,13 @@ def _resume_after_guest():
     # success, leaving the loop down with nothing left to retry (the exact
     # T4 failure in testing). Grace-expiry resumes never wait here: the
     # teardown finished long before the window closed.
+    # Before the loop may start, make sure no direct writer is still alive.
+    # _earshot_unwound below cannot see one - it reads earshot's RTMP stat,
+    # and a direct session appears in no stat page - so this is the only
+    # thing standing between a resumed loop and a second writer.
+    if _direct_fence[0]:
+        _direct_fence[0] = False
+        _fence_direct_writers()
     _earshot_unwound(6)
     if IDLE_STOP_MIN <= 0:
         r = source_start()
@@ -1581,9 +1623,32 @@ def gw_claim(role, name, addr, tracks):
     not a refusal."""
     if role == "owner":
         # The owner has no arbiter admission to pass - it authenticates by
-        # SRT passphrase and preempts whatever is running. owner_notify does
-        # the guest kill, the loop stop and the latch.
-        owner_notify(name)
+        # SRT passphrase and preempts whatever is running. owner_notify arms
+        # the guest kill, stops the loop and takes the latch.
+        latched = owner_notify(name)
+        if not latched:
+            # Either the name collided with LOOP_NAME (the demo loop's own
+            # branch, which latches nothing) or another owner already holds
+            # the latch. Answering 200 here would hand the caller a session
+            # id for a latch that does not exist: it would write DASH with
+            # stream_state reporting nothing published, so the public start
+            # button could put the demo loop beside it, permanently, with
+            # nothing to end either. Refuse instead.
+            print(f"owner claim refused: '{name}' did not take the latch "
+                  f"(reserved name, or another owner holds it)", flush=True)
+            return 403, {"error": "owner latch not taken"}
+        # PREEMPTION IS NOT INSTANT, and the honest answer is to make the
+        # caller wait. owner_notify only ARMS the guest's kill; the guest
+        # learns of it on its next beat (<=10 s), its child then gets up to
+        # 8 s to exit, and only then does its listener free the port. Saying
+        # 200 now would send the owner's child at a port the guest still
+        # holds - on the same port that is a refused dial, and on the OTHER
+        # port (a 1x4 owner over a 4x4 guest) it is two listener ffmpegs on
+        # one DASH tree. 409 uses the gateway's existing fixed-interval retry.
+        with _guest_lock:
+            draining = _guest["direct"] and _guest["state"] in ("live", "handover")
+        if draining:
+            return 409, {"retry_after_s": 2}
         with _owner_lock:
             sid = _owner["session"] = uuid.uuid4().hex[:16]
         return 200, {"session": sid}
@@ -1705,6 +1770,10 @@ def gw_done(role, session):
             return 200, {}
         name = _guest["name"]
     guest_done(name)
+    # The gateway waits for its child to exit before sending done, so on THIS
+    # path the writer is provably gone and the fence would only recycle an
+    # idle listener (and could catch a legitimate next session in a race).
+    _direct_fence[0] = False
     return 200, {}
 
 
@@ -1906,7 +1975,7 @@ def owner_notify(name_arg):
         stay out until the owner leaves."""
     if name_arg is None or name_arg == LOOP_NAME:
         guest_kill()
-        return
+        return False                     # the demo loop is not an owner latch
     with _owner_lock:
         # first owner wins: a SECOND token-authed publisher under a different
         # name while an owner is latched must not re-point the latch - its
@@ -1917,7 +1986,7 @@ def owner_notify(name_arg):
         if _owner["live"] and _owner["name"] != name_arg:
             print(f"second owner publisher ({name_arg}) while "
                   f"{_owner['name']} is latched; latch unchanged", flush=True)
-            return
+            return False
         # A same-name notify while already latched is the direct path's 30 s
         # keepalive (or an RTMP reconnect): refresh the latch and stop. The
         # takeover side effects below (guest kill, log line, loop-stop
@@ -1929,7 +1998,7 @@ def owner_notify(name_arg):
         _owner.update(live=True, name=name_arg, since=time.time())
         _owner_miss[0] = 0
     if rearm:
-        return
+        return True
     # targeted kill rather than guest_kill(): the preempted guest is
     # innocent, so it gets a reason that (a) shows on the player and (b) is
     # not in _guest_end_locked's cooldown list - no 300 s lockout for the
@@ -1955,6 +2024,7 @@ def owner_notify(name_arg):
         with _start_lock:
             source_stop("owner handover", kill_after_s=3)
     threading.Thread(target=_handover, daemon=True).start()
+    return True
 
 
 def owner_done(name_arg):
@@ -3055,6 +3125,14 @@ def serve():
                 if act == "beat" and not _gw_rate_ok(peer):
                     return self._json(429, {"error": "slow down"})
                 if act == "claim":
+                    # NOTE the role passed on is the AUTHENTICATED one from
+                    # _gw_session_ok (which container connected), never the
+                    # role= query parameter. That is the point: the owner
+                    # gateway can only ever create owner sessions and the
+                    # guest gateway only guest ones, so a compromised guest
+                    # gateway cannot claim the owner's standing. role= rides
+                    # along only because it makes the gateway's own logs
+                    # readable.
                     code, body = gw_claim(
                         role,
                         _guest_sanitize((args.get("name") or [""])[0]),
