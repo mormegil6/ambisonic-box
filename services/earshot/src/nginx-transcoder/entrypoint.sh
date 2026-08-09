@@ -120,7 +120,36 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
 			sleep 1
 		done ) &
-		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4)"
+		# Watchdog for a WEDGED listener: an abruptly killed feeder can leave
+		# the accepting ffmpeg holding a CLOSE_WAIT socket it never reads
+		# (observed live 2026-08-09: nine threads asleep, none in a read, an
+		# hour after the peer died), and with -listen 1 that bricks the port
+		# until the process dies - every new session then fails with
+		# "Connection refused" and the operator sees an unexplained OBS
+		# error. A read-timeout on the socket would NOT have fired there (no
+		# thread was in a read), so the detector is the socket state itself.
+		# A healthy session end also passes through CLOSE_WAIT briefly while
+		# the trailer flushes, so only a state persisting across a 10 s
+		# recheck is treated as wedged; killing during a slow flush would
+		# only cost a trailer the next session rewrites anyway. Runs as
+		# nginx, same uid as the listeners, because root in this hardened
+		# container has no CAP_KILL over another uid. The pkill patterns use
+		# the [] trick so they can never match this script's own cmdline.
+		su -s /bin/sh nginx -c '
+		while :; do
+			sleep 15
+			for spec in "9100 0\.0\.0\.0:910[0]" "9101 0\.0\.0\.0:910[1]"; do
+				port=${spec%% *}; pat=${spec#* }
+				if netstat -tn 2>/dev/null | grep ":$port" | grep -q CLOSE_WAIT; then
+					sleep 10
+					if netstat -tn 2>/dev/null | grep ":$port" | grep -q CLOSE_WAIT; then
+						echo "[direct-dash] watchdog: killing wedged :$port listener (CLOSE_WAIT persisted)" >> /tmp/nginx_rtmp_ffmpeg_log
+						pkill -9 -f "$pat"
+					fi
+				fi
+			done
+		done' &
+		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4), CLOSE_WAIT watchdog on both"
 	else
 		echo "SRT direct-DASH listeners DISABLED: no hexadecagonal layout in this ffmpeg"
 	fi

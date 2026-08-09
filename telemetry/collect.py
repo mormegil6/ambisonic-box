@@ -1496,7 +1496,13 @@ def _guest_limits_exceeded():
             _guest_strikes["temp"] = 0
 
     if GUEST_MAX_MBPS and not reason:
-        f = stream_fmt()                 # reads the MPD, no docker call
+        # stream_format, not the stream_fmt this line shipped with: the
+        # misname raised NameError on every enforcement attempt, the
+        # exception aborted the update-ping response, and ingest's 502->204
+        # fail-open masking swallowed it - the bitrate guard was inert from
+        # the day it landed until 2026-08-09, found by a code audit, not by
+        # an incident.
+        f = stream_format()              # reads the MPD, no docker call
         bps = (f.get("video_bitrate") or 0) + (f.get("audio_bitrate") or 0)
         m = bps / 1_000_000
         if m > GUEST_MAX_MBPS:
