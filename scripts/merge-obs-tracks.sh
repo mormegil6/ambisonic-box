@@ -64,7 +64,8 @@ command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null \
 
 # --- probe the track shape ------------------------------------------------
 # stream order in the container is OBS track order; channels concatenate in
-# that order (track 1 -> merged 1..8, track 2 -> merged 9..16, ...).
+# that order (with the documented 4-channel tracks: track 1 -> merged 1..4,
+# track 2 -> merged 5..8, ...).
 TRACK_CH=() ; TOTAL=0
 while IFS= read -r ch; do
     TRACK_CH+=("$ch"); TOTAL=$((TOTAL + ch))

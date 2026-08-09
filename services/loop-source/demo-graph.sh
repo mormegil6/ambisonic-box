@@ -17,8 +17,8 @@
 # 15 s with a +/-30 degree elevation wobble every 10 s seconds,
 # so turning your head (or dragging the view) audibly moves the tone. The
 # encoding coefficients are the closed-form SN3D spherical harmonics,
-# closed-form SN3D spherical harmonics, constants exact to double precision
-# to 3e-16 before being baked in here.
+# evaluated in double precision and rounded to the 7-decimal literals baked
+# in below.
 #
 # Loop seam: with DEMO_DUR a multiple of 30 s, the orbit (15 s), the wobble
 # (10 s) and the 440 Hz carrier all complete integer cycles, so -stream_loop

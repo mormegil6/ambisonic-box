@@ -19,8 +19,10 @@
 #            is auto-ended ~45 s after going live, the reason is surfaced on
 #            /api/live, and there is NO cooldown (the fix should be instantly
 #            retryable).
-#   RB       report button path: accepted report returns ok, repeat within the
-#            reporter window returns already-reported, session counter grows.
+#   RB       report button path: accepted report returns ok, the 4th report
+#            from one reporter IP inside the window is refused 429 "already
+#            reported" (REPORT_IP_MAX=3) while a second reporter is not,
+#            session counter grows.
 #   BN       ban path (enforcement blocks only rows that are active-labelled,
 #            unexpired by the clock, AND carry a non-truncated matching IP; see
 #            collect._ban_blocks). End+ban ends the live session and the banned address is
@@ -128,12 +130,31 @@ is_live() { [ "$(live_now)" = "True" ] || [ "$(live_now)" = "true" ]; }
 # T1 can kill it abruptly.
 GRAPH='testsrc2=size=640x320:rate=30[out0];sine=frequency=200:sample_rate=48000[s0];sine=frequency=300:sample_rate=48000[s1];sine=frequency=400:sample_rate=48000[s2];sine=frequency=500:sample_rate=48000[s3];sine=frequency=600:sample_rate=48000[s4];sine=frequency=700:sample_rate=48000[s5];sine=frequency=800:sample_rate=48000[s6];sine=frequency=900:sample_rate=48000[s7];sine=frequency=1000:sample_rate=48000[s8];sine=frequency=1100:sample_rate=48000[s9];sine=frequency=1200:sample_rate=48000[s10];sine=frequency=1300:sample_rate=48000[s11];sine=frequency=1400:sample_rate=48000[s12];sine=frequency=1500:sample_rate=48000[s13];sine=frequency=1600:sample_rate=48000[s14];sine=frequency=1700:sample_rate=48000[s15];[s0][s1][s2][s3][s4][s5][s6][s7][s8][s9][s10][s11][s12][s13][s14][s15]join=inputs=16:channel_layout=hexadecagonal[out1]'
 
-push_guest() {  # push_guest <name> <seconds> [sync]; sync: run in foreground, return ffmpeg rc
-    local name=$1 secs=$2 mode=${3:-bg}
+# A pusher's SOURCE ADDRESS is part of what the arbiter tests, because the grace
+# window is address-locked (collect.py's guest_publish refuses a reconnect from a
+# different addr). `docker compose run` cannot pin an address, and Docker's IPAM
+# hands out the lowest free one - which changes between two sequential pushes,
+# because admission stops loop-source and frees ITS address in between. So a
+# "reconnect" arrived from a different IP than the original and was correctly
+# refused. Passing <ip> switches that one call to plain `docker run`, which can
+# pin it. Used ONLY where the test needs two pushes to be the same caller; every
+# other call site stays on compose run, deliberately, because a shared pinned
+# address would make COEXISTING pushers (T4's tkil2/tkil3, R's ra/rb) fail at
+# container create with "address already in use" - and both of those assert a
+# NONZERO rc, so they would pass for entirely the wrong reason.
+push_guest() {  # push_guest <name> <seconds> [sync|bg] [ip]
+    local name=$1 secs=$2 mode=${3:-bg} ip=${4:-}
     docker rm -f "guestpush-$name" >/dev/null 2>&1 || true
+    local -a run
+    if [ -n "$ip" ]; then
+        run=(docker run --rm --network "$PUSH_NET" --ip "$ip"
+             --name "guestpush-$name" --entrypoint ffmpeg "$PUSH_IMG")
+    else
+        run=(docker compose run --rm --no-deps -T --name "guestpush-$name"
+             --entrypoint ffmpeg loop-source)
+    fi
     if [ "$mode" = sync ]; then
-        docker compose run --rm --no-deps -T --name "guestpush-$name" \
-            --entrypoint ffmpeg loop-source \
+        "${run[@]}" \
             -hide_banner -loglevel error \
             -re -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
             -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
@@ -142,8 +163,7 @@ push_guest() {  # push_guest <name> <seconds> [sync]; sync: run in foreground, r
             -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >/dev/null 2>&1
         return $?
     fi
-    docker compose run --rm --no-deps -T --name "guestpush-$name" \
-        --entrypoint ffmpeg loop-source \
+    "${run[@]}" \
         -hide_banner -loglevel error \
         -re -f lavfi -i "$GRAPH" -map 0:v -map 0:a \
         -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
@@ -191,7 +211,21 @@ wait_for "telemetry api" 60 sh -c "curl -s --max-time 2 $TEL/api/live | grep -q 
 wait_for "initial slot free" $((TG_GRACE + 20)) st_is free || pre "guest slot not free at start"
 wait_for "loop publishing" 90 earshot_publishing || pre "demo loop never published"
 wait_for "loop live" 60 is_live || pre "demo loop never became live"
-log "stack up, loop live; starting cycles"
+
+# Derived, not hardcoded: the compose project was renamed once already, and the
+# subnet comes from Docker's address pool, so both differ between machines.
+# PUSH_IP is a high host address, far above anything IPAM hands out on its own -
+# if it is ever taken, `docker run` fails loudly at create, which is the right
+# failure mode for a test (a silently different address is what broke T3).
+PUSH_NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' \
+    "$(docker compose ps -q telemetry)" 2>/dev/null)
+PUSH_IMG=$(docker compose config --images loop-source 2>/dev/null | head -1)
+PUSH_SUBNET=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$PUSH_NET" 2>/dev/null)
+PUSH_IP=$(printf '%s' "$PUSH_SUBNET" | sed -E 's#^([0-9]+\.[0-9]+\.[0-9]+)\..*#\1.200#')
+[ -n "$PUSH_NET" ] && [ -n "$PUSH_IMG" ] && [ "$PUSH_IP" != "$PUSH_SUBNET" ] \
+    || pre "could not derive pusher network/image/address (net='$PUSH_NET' img='$PUSH_IMG' subnet='$PUSH_SUBNET')"
+
+log "stack up, loop live; starting cycles (pinned pusher addr $PUSH_IP on $PUSH_NET)"
 
 clear_pushers() {  # best-effort: remove stray guest pushers from failed cycles
     for c in $(docker ps --format '{{.Names}}' | grep '^guestpush-' || true); do
@@ -291,16 +325,23 @@ fi
 # ------------------------------------------------- T3 reconnect in grace ----
 label="T3-reconnect"
 fails0=$FAILS
-push_guest trec1 12
+# BOTH pushes pin the same source address, because grace is address-locked and a
+# reconnect from a different addr is refused by design. Without this the two
+# containers get different IPs and this never tested a reconnect at all.
+push_guest trec1 12 bg "$PUSH_IP"
 if wait_for "$label: guest live" 30 st_is live; then
     r1=$(ep_remain)
     wait_for "$label: grace after first stop" 40 st_is grace \
         || fail "$label: no grace after first stop"
-    push_guest trec2 10        # arrives inside the grace window
+    push_guest trec2 10 bg "$PUSH_IP"    # same caller, inside the grace window
     wait_for "$label: reconnected" 20 st_is live \
         || fail "$label: reconnect inside grace not accepted"
     r2=$(ep_remain)
-    # same session: the cap clock must NOT have reset (remaining well below r1)
+    # same session: the cap clock must NOT have reset (remaining well below r1).
+    # r2 must be a real number - it was empty for as long as the reconnect was
+    # being refused, and an empty operand made this comparison vacuously true.
+    [ -n "$r2" ] && [ -n "$r1" ] \
+        || fail "$label: no cap clock to compare (r1='$r1' r2='$r2')"
     python3 -c "exit(0 if ($r2 + 8) < $r1 else 1)" 2>/dev/null \
         || fail "$label: cap clock reset on reconnect (r1=$r1 r2=$r2)"
     wait_for "$label: grace after second stop" 40 st_is grace \
@@ -357,7 +398,14 @@ if wait_for "$label: mono guest live" 30 st_is live; then
     wait_for "$label: auto-ended" 90 st_is free || fail "$label: stalled session not auto-ended"
     t1=$(now)
     reason=$(curl -s "$TEL/api/live" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("endpoint",{}).get("last_end_reason",""))')
-    echo "$reason" | grep -q "16-channel" || fail "$label: end reason not surfaced (got: '$reason')"
+    # Assert the INVARIANT prefix, not the channel-count tail. This used to grep
+    # "16-channel" and broke when 1st order became a legal layout and the message
+    # became "...(ambisonic audio required: 4 or 16 channels)". The tail is
+    # documentation that moves whenever accepted layouts change; "no playable
+    # output" is also the substring the player itself keys on to show the banner
+    # (services/hoast-player/index.html), so pinning to it couples the test to the
+    # same contract the shipped consumer depends on.
+    echo "$reason" | grep -q "no playable output" || fail "$label: end reason not surfaced (got: '$reason')"
     docker rm -f guestpush-tmono >/dev/null 2>&1 || true
     # NO cooldown after a stall: an immediate correct retry must be accepted
     push_guest tfixed 15
@@ -406,17 +454,61 @@ fi
 # ------------------------------------------------- BN ban path --------------
 label="BN-ban"
 fails0=$FAILS
-push_guest tban 60
+# Pinned, so the banned address is one we can push from AGAIN below. Without
+# that, the end-to-end re-push would come from a fresh container with a
+# different IP and would be admitted - proving nothing.
+push_guest tban 60 bg "$PUSH_IP"
 if wait_for "$label: guest live" 30 st_is live; then
     r=$(curl -s -X POST "$TEL/api/guest/ban")
     echo "$r" | grep -q '"banned"' || fail "$label: ban call did not report an address ($r)"
     wait_for "$label: session ended by ban" 30 st_is free || fail "$label: ban did not end the session"
     docker rm -f guestpush-tban >/dev/null 2>&1 || true
     ip=$(docker compose exec -T telemetry sh -c 'tail -1 /data/guest_bans.csv | cut -d, -f2' | tr -d '\r')
+    # the ban must have landed on the pinned address, or the re-push below is
+    # testing a different caller than the one that got banned
+    [ "$ip" = "$PUSH_IP" ] || fail "$label: banned addr is '$ip', expected the pinned pusher $PUSH_IP"
     # let the operator-kill cooldown lapse so a 403 below can ONLY be the ban
     sleep $((TG_COOLDOWN + 2))
-    code=$(curl -s -o /dev/null -w '%{http_code}' "$TEL/rtmp/guest/publish?call=publish&name=zzz&addr=$ip")
+    # Call from INSIDE telemetry, against its own loopback. telemetry's /rtmp/*
+    # routes are peer-authenticated (only rtmp-ingest, the gateways, or loopback),
+    # so the same request from the host arrives via the bridge gateway and is
+    # refused with 404 BEFORE the ban check ever runs - which is what this
+    # assertion used to observe. The gate is correct and stays untouched; it is
+    # the test that has to call from somewhere the real caller could call from.
+    code=$(docker compose exec -T telemetry curl -s -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:8090/rtmp/guest/publish?call=publish&name=zzz&addr=$ip" | tr -d '\r')
     [ "$code" = "403" ] || fail "$label: banned addr not refused at on_publish (got $code)"
+    # ...and prove that 403 is the BAN and not a blanket refusal: the same call
+    # from an unbanned address must be admitted. It claims the slot, so hand it
+    # straight back, and leave the section on a free slot as it found it.
+    ok=$(docker compose exec -T telemetry curl -s -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:8090/rtmp/guest/publish?call=publish&name=zzz&addr=203.0.113.42" | tr -d '\r')
+    case "$ok" in
+        20*) docker compose exec -T telemetry curl -s -o /dev/null \
+                 "http://127.0.0.1:8090/rtmp/guest/done?name=zzz" || true
+             wait_for "$label: slot released after control publish" $((TG_GRACE + 20)) st_is free \
+                 || fail "$label: control publish left the slot held" ;;
+        *)   fail "$label: unbanned addr also refused (got $ok) - the 403 above does not prove the ban" ;;
+    esac
+    # END TO END over the REAL hop, which nothing covered before: a banned
+    # address pushing actual RTMP must be refused by nginx-rtmp. The checks
+    # above only prove the arbiter DECIDES 403; this proves the 403 survives
+    # `location = /guest/publish` (which has no error_page, unlike the owner
+    # locations) and is acted on. It is the only assertion here that exercises
+    # what a real banned stranger would hit.
+    # Count the arbiter's own refusal lines before and after, rather than
+    # grepping a tail: the HTTP probe above ALREADY logged one "rejected
+    # (banned)", so a plain grep would match that and pass without the RTMP
+    # push having been refused at all. Only a NEW line proves this push was.
+    bans0=$(docker compose logs --tail 500 telemetry 2>/dev/null | grep -c "rejected (banned)" || true)
+    push_guest tbanx 6 sync "$PUSH_IP"; rc=$?
+    [ "$rc" -ne 0 ] || fail "$label: banned address was allowed to publish over RTMP (rc=0)"
+    st_is free || fail "$label: banned push claimed the slot (state=$(ep_state))"
+    # rc alone is not proof: a container that fails to CREATE also exits nonzero.
+    bans1=$(docker compose logs --tail 500 telemetry 2>/dev/null | grep -c "rejected (banned)" || true)
+    [ "${bans1:-0}" -gt "${bans0:-0}" ] \
+        || fail "$label: no new 'rejected (banned)' from the arbiter - the nonzero rc may be a container-create failure, not a refusal"
+    docker rm -f guestpush-tbanx >/dev/null 2>&1 || true
     # triple-rule edges, tested against the exact enforcement function so no
     # slot/cooldown side effects: a stale active label past its expiry and a
     # redacted-IP row must both be inert

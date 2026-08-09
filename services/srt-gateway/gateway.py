@@ -82,7 +82,8 @@ PROBE_BYTES    = 1024 * 1024
 PROBE_WAIT_S   = 8
 PROBE_TIMEOUT_S = 5    # ffprobe itself, on bytes a stranger chose
 AUDIO_BITRATE_PER_CH = 96          # kbit/s, the contribution-leg rule
-AUDIO_BITRATE = "1536k"   # 96 kbit/s x 16 ch, kept for the 3rd-order path
+AUDIO_BITRATE = "1536k"   # 96 kbit/s x 16 ch, unused: the 3rd-order path
+                          # derives the same figure from AUDIO_BITRATE_PER_CH
 PENDING_TTL_S = 5      # handshake accepted but caller-added never arrived: free
                        # the slot rather than let a half-open caller hold it
 PUBLISH_BUDGET_S = 20  # a child must become an nginx publisher within this
@@ -100,7 +101,8 @@ OWNER_MAX_S   = int(os.environ.get("SRT_OWNER_MAX_S", "86400"))
                        # overflow. 0 disables the ceiling. Guest mode never
                        # reads this (telemetry's 3 h cap fires first).
 _SECRET_RE    = re.compile(r"\b(gw|token)=[^&\s]+")   # scrub creds from logs
-# --- direct-to-DASH handoff (owner mode only; design in the deployment repo's
+# --- direct-to-DASH handoff (the owner route by default, and guests too when
+# GUEST_SRT_DIRECT=1; design in the deployment repo's
 # docs/srt-direct-dash-design.md). Instead of the FLV republish - whose forced
 # 4x4-AAC -> 16-ch-AAC re-encode measured 59 % of a core at 20 Mbps and costs a
 # lossy audio generation - pipe the caller's mpegts to earshot's fixed-layout
@@ -367,7 +369,7 @@ class Gateway:
                 ok, reason = self.snapshot.verdict(ip)
                 reason = "" if ok else reason
             else:
-                reason = ""     # owner: single-slot only, token gate is nginx's
+                reason = ""     # owner: single-slot only, passphrase-gated
             if not reason:
                 name = sanitize(parse_streamid(streamid))
                 self.slot_busy = True
@@ -1096,8 +1098,10 @@ def main():
         log("FATAL: owner mode requires RTMP_OWNER_KEY")
         sys.exit(1)
     if MODE == "owner" and not PASSPHRASE:
-        # owner mode does no per-caller auth (any completed handshake is
-        # republished with the real RTMP_OWNER_KEY), so the SRT passphrase is the
+        # owner mode does no per-caller auth (any completed handshake becomes an
+        # owner broadcast: remuxed straight into earshot under the default
+        # SRT_DIRECT=1, republished with the real RTMP_OWNER_KEY under
+        # SRT_DIRECT=0), so the SRT passphrase is the
         # only thing standing between a public caller and an owner-broadcast
         # takeover. Required, not optional, in this mode.
         log("FATAL: owner mode requires SRT_PASSPHRASE (it is the caller gate; "

@@ -159,7 +159,7 @@ These are the settings for your OWN stream (the `owner` application, authenticat
 | Setting | Value |
 |---|---|
 | Server | `rtmp://<host>:1935/owner` |
-| Stream key | `hoast_demo_owner` (or your `RTMP_OWNER_KEY`) |
+| Stream key | your `RTMP_OWNER_KEY` (the one `scripts/setup.sh` generated into `.env`) |
 | Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `RTMP_OWNER_KEY`: a custom stream key does not move the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
@@ -184,7 +184,7 @@ Anyone with an ambisonic microphone rig and OBS can test their stream against th
 The four rules that decide whether a session works:
 
 - **One publisher at a time, first come first served.** A second concurrent push is rejected outright, not queued.
-- **Reconnect grace** of `GUEST_GRACE_S` (default 120 s): reconnect inside it and the session continues.
+- **Reconnect grace** of `GUEST_GRACE_S` (default 120 s): reconnect inside it and the session continues, **from the same IP address**. The slot stays locked to the original caller for the whole window, so a different address is refused rather than allowed to inherit the session's remaining time. An encoder reconnecting normally keeps its address (only the source port changes), so this is invisible in practice; it matters if you switch networks mid-session, which reads as a new guest and has to wait for the grace to lapse.
 - **Session cap** of `GUEST_MAX_S` (default 3 h), then a `GUEST_COOLDOWN_S` cooldown (default 300 s) after any forced end, so an auto-reconnecting encoder cannot re-claim the slot instantly.
 - **Optional resource guard** (`GUEST_MAX_TEMP_C`, `GUEST_MAX_MBPS`, both off by default): temperature is the one to trust, bitrate is a coarse pre-filter. Set both from a measurement of your own host.
 
@@ -208,7 +208,8 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RTMP_OWNER_KEY` | `hoast_demo_owner` | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Rotate this before any deployment reachable from the internet; also gates the SRT owner route's relay into `live` |
+| `RTMP_OWNER_KEY` | none; **`scripts/setup.sh` generates one** | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Also gates the SRT owner route's relay into `owner`. The placeholder that ships in `.env.example` is committed to a public repository, so **rtmp-ingest refuses to start while it is still in place** rather than coming up reachable on `:1935` with a key anyone can read. This is the only credential treated that way |
+| `ALLOW_DEFAULT_OWNER_KEY` | `0` | Start anyway with the placeholder owner key, warning on every boot. For a host where `:1935` reaches nobody (offline demo, laptop on no network). Never set it on anything reachable |
 | `LOOP_SOURCE_KEY` | `hoast_demo` | Publish auth for loop-source only. Checked the same way as `RTMP_OWNER_KEY` but never crosses the public internet (loop-source publishes over the docker-internal network); safe to leave at the default |
 | `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `RTMP_OWNER_KEY`/`LOOP_SOURCE_KEY` so either key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
 | `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |

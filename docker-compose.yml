@@ -193,14 +193,20 @@ services:
       - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
       # the real public-facing owner secret: gates any /owner publish arriving
       # by NAME (an OBS Stream Key push straight to :1935), the credential a
-      # leak of which would actually matter. Rotate this in .env for any
-      # deployment reachable from the internet.
+      # leak of which would actually matter. The fallback below is a PLACEHOLDER
+      # that is committed to a public repo, so rtmp-ingest REFUSES TO START on
+      # it: this is the one credential where a working default would mean a
+      # clone comes up reachable with a key everyone already has. Generate a
+      # real one with scripts/setup.sh.
       - RTMP_OWNER_KEY=${RTMP_OWNER_KEY:-hoast_demo_owner}
+      # accept the placeholder anyway, for a host where :1935 reaches nobody
+      # (an offline demo, a laptop on no network). Warns loudly at every start.
+      - ALLOW_DEFAULT_OWNER_KEY=${ALLOW_DEFAULT_OWNER_KEY:-0}
       # keyless guest test endpoint (rtmp://<host>:1935/guest); OFF by default,
       # see the README's guest section before enabling
       - GUEST_ENABLED=${GUEST_ENABLED:-0}
     ports:
-      - "1935:1935"   # the only public ingest; OBS ME pushes here
+      - "1935:1935"   # the public RTMP ingest; OBS ME pushes here (SRT contribution binds 8890/udp below)
     depends_on:
       earshot:
         condition: service_started   # push relay retries until earshot is up
@@ -317,8 +323,10 @@ services:
   # alerts + a curated public status.json for the player's status panel. Reads
   # container health/logs via the mounted docker socket; stream liveness from the
   # dash-output volume + earshot's /stat. Ships with the stack so any reuser gets
-  # monitoring for free. CPU-temp/disk (Linux host) come from optional mounts in
-  # docker-compose.override.yml; without them those fields simply read null.
+  # monitoring for free. Disk usage (Linux host) comes from an optional mount in
+  # docker-compose.override.yml; without it that field simply reads null. CPU
+  # temp needs no mount: the container already sees the host sysfs, which is
+  # where the collector reads it (/sys/class/thermal/thermal_zone0/temp).
   telemetry:
     build:
       context: ./telemetry

@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HOAST360 lip-sync comparison - DASH segment duration variants</title>
 <!--
-  Four-variant lip-sync comparison page.
+  Five-variant lip-sync comparison page: four segment durations plus the
+  1h06 scene excerpt built by scripts/make-lipsync-scene.sh.
 
   Generate the variants and local player assets first:
       scripts/package-dash-variants.sh content/<master>.webm
   then serve THIS folder (plain HTTP is fine, no COOP/COEP needed):
       cd lip-sync-test && python3 -m http.server 9000
 
-  HOAST360 is a singleton (one element id, one AudioContext), so the four
+  HOAST360 is a singleton (one element id, one AudioContext), so the five
   tabs drive ONE player instance via reset()/initialize() - which also keeps
   the comparison fair: identical audio graph for every variant.
 -->

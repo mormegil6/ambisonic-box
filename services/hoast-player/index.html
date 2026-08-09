@@ -224,8 +224,9 @@
       </div>
       <p class="hint" id="hint">Drag to look around; use headphones for the spatial audio.</p>
 
-      <!-- Guest-stream notice: filled from brand.json (guestDisclaimer
-           wording pending; affiliationNotice reserved) and shown only while a
+      <!-- Guest-stream notice: filled from brand.json (guestDisclaimer, or the
+           built-in GN_DEFAULT wording when a deployment provides none;
+           affiliationNotice reserved) and shown only while a
            guest session holds the endpoint. Right under the player on purpose:
            this is where someone actually encounters unexpected content, not a
            footer. All insertion is textContent. -->
@@ -302,8 +303,9 @@
       // stays the single source and cannot drift. A deployment mounts /brand.json
       // (see docker-compose.override.yml.example); without it the page is generic.
       // Keys: lead (About paragraph HTML), reference (Reference section body),
-      // copyright (a footer row HTML), vodDownloads (a VOD-page HTML block, e.g.
-      // clip download links; this generic image ships none).
+      // copyright (a footer row HTML), vodDownloads (a VOD-page HTML block of
+      // clip download links; it overrides VOD_DL_DEFAULT, the pinned-release
+      // links this generic image already ships).
       fetch('/brand.json', { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (b) {
@@ -398,8 +400,12 @@
         // exotic). Recovery then goes through a reload rather than straight
         // back into beginPlayback: hoast360.initialize() is not re-entrant.
         var gateRearmed = false;
-        // Consecutive /api/live failures tolerated before the page acts on them.
-        // A rolling restart of telemetry produces a 502 window of a few seconds.
+        // /api/live failures are counted in window.gateProbeFails (pollGate's
+        // catch) and acted on from the second one, so one dropped poll is
+        // tolerated; the counter is never reset, so the count is cumulative
+        // over the page's life rather than strictly consecutive. A rolling
+        // restart of telemetry produces a 502 window of a few seconds. The two
+        // names on the next line are left over and are read nowhere.
         var probeFails = 0, PROBE_FALLBACK = 3;
 
         // The badge and dot are driven from this probe rather than the 60 s

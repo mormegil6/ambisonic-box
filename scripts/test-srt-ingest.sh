@@ -5,8 +5,13 @@
 # 16-ch DASH Opus with every channel in its slot - and that a second
 # concurrent caller is refused at the SRT handshake itself.
 #
-# Needs the compose stack already running with GUEST_ENABLED=1, SRT_ENABLED=1
-# and GUEST_GW_SECRET set (see .env.example). The SRT caller runs inside the
+# Needs the compose stack already running with GUEST_ENABLED=1 and
+# SRT_ENABLED=1 (see .env.example). GUEST_GW_SECRET is optional on this route:
+# the guest gateway takes the RTMP republish hop by default
+# (GUEST_SRT_DIRECT=0), which is exactly the route this test asserts, and
+# telemetry honours the gateway's ?realip= attribution without a secret. It is
+# NOT optional for the direct path - an unauthenticated gateway refuses guests
+# there. The SRT caller runs inside the
 # compose network using the gateway's own image, so the host needs no
 # libsrt-enabled ffmpeg.
 #

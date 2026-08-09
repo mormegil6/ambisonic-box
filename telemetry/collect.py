@@ -208,8 +208,10 @@ def stream_state():
     # The RTMP stat is the source of truth for RTMP publishers. An SRT owner on
     # the DIRECT path (gateway -> earshot's mpegts listener, 2026-08-09; design
     # in the deployment repo) never appears there - the whole point is skipping
-    # the RTMP/FLV hop - but the gateway latches _owner via the same
-    # /rtmp/owner/notify the ingest callbacks use, and re-notifies every 30 s.
+    # the RTMP/FLV hop - but the gateway latches _owner all the same: through
+    # /gw/session/claim (which calls owner_notify) when GUEST_GW_SECRET is set,
+    # refreshed by a beat every 10 s, or through the legacy /rtmp/owner/notify
+    # alias the ingest callbacks use, re-notified every 30 s, when it is not.
     # So the latch IS the publishing signal for that path. A stale latch
     # (owner_tick clears it within ~2 cycles) briefly reports publishing with
     # aging segments; `live` stays false then, and auto_idle's source_stop on
@@ -272,7 +274,8 @@ def encoder(ps, publishing):
     return {"speed": sp, "speed_now": rate,
             "behind": rate is not None and rate < ENCODER_MIN}
 
-# A viewer is somebody FETCHING SEGMENTS, not somebody holding a connection.
+# HISTORY, not the current rule: until 2026-08-09 a viewer was somebody
+# FETCHING SEGMENTS, not somebody holding a connection.
 # dash.js re-reads the manifest on a timer whether or not anything is playing,
 # so matching any /dash/ path counted an abandoned browser tab as an audience
 # forever. Measured 2026-08-07: one VPS-hosted client played 15 s, then polled
@@ -570,7 +573,8 @@ def source_start():
 def source_stop(reason="manual", kill_after_s=None):
     """kill_after_s bounds docker's SIGTERM grace (-t). The guest handover
     passes a small value because it answers a held RTMP callback with a hard
-    ~10 s patience; everywhere else the default (10 s) is fine."""
+    ~10 s patience, and the owner handover passes the same 3 s; the idle stop
+    and /api/stop use the default (10 s), which is fine there."""
     name = source_container(running_only=True)
     if not name:
         return {"ok": True, "state": "already_stopped"}
@@ -583,8 +587,9 @@ def source_stop(reason="manual", kill_after_s=None):
 
 def live_probe():
     """Cheap liveness, safe to poll every couple of seconds while a visitor waits
-    for a cold start. Segment freshness only: no docker calls, no curl, just a
-    stat of the dash directory, because the 60 s collect cycle is far too slow to
+    for a cold start. Segment freshness plus one cached `docker ps` for
+    source_running, no curl, mostly just a stat of the dash directory, because
+    the 60 s collect cycle is far too slow to
     drive a 30 s progress indicator."""
     seg_age = segment_age()
     # source_running distinguishes "idle, press start" from "running but broken",
@@ -707,9 +712,10 @@ def auto_idle(strm, watchers):
 # the publisher). No keys, no queue, first come first served, by design.
 #
 # These routes are reachable on TEL_PORT: host-side that is localhost/VPN
-# only, but INSIDE the compose network every sibling container can reach it
-# unauthenticated (that is how ingest's proxy calls arrive). Like /api/stop,
-# they are trusted surface; the trust boundary is the compose network plus
+# only, and INSIDE the compose network the /rtmp/ family is gated on the HTTP
+# peer address since 2026-08-09 (see do_GET): only rtmp-ingest and the two srt
+# gateways get an answer, every other sibling container gets 404. Like
+# /api/stop, they are trusted surface; the trust boundary is those peers plus
 # whatever the operator binds 8090 to, and the public player proxies only
 # /api/live, /api/start and /api/guest/report, never these.
 # Master switch, OFF by default: most deployments are a single private
@@ -730,8 +736,10 @@ GUEST_COOLDOWN_S = int(os.environ.get("GUEST_COOLDOWN_S", "300"))
 # guest app from inside the compose network, so nginx-rtmp reports the
 # gateway's container address for every SRT guest. It smuggles the CALLER's
 # real address as a ?realip= publish arg; the substitution is honored only
-# with this shared secret AND from the gateway's own resolved address (see
-# _gw_realip_ok). Empty secret = substitution off entirely.
+# from the gateway's own resolved address, and this shared secret is optional
+# defence in depth on top of that (see _gw_realip_ok). Empty secret =
+# attribution still works, but the /gw/session/* direct-path routes fail
+# closed (see _gw_session_ok).
 GUEST_GW_SECRET = os.environ.get("GUEST_GW_SECRET", "")
 TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
 # only for deciding whether srt-gateway belongs in the dashboard's service row;
@@ -824,10 +832,15 @@ _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint up
 # An older nginx template forwards no name at all: every /rtmp/owner/notify
 # then falls back to the legacy preempt-at-takeover behavior and the latch
 # never engages - safe in either rollout order.
-# The latch is memory-only: after a telemetry restart mid-owner-broadcast,
-# guests are still kept out by the handover's _earshot_unwound check (earshot
-# never goes quiet under a live owner), just with a clumsier 503, and the
-# loop stays down because source_start sees "already_publishing".
+# The latch is memory-only, but it does not stay lost: after a telemetry
+# restart mid-owner-broadcast an RTMP owner is re-derived from ingest's own
+# publisher list on the next collect cycle (_owner_relatch_check), and a
+# DIRECT owner's next beat is answered 410, so the gateway re-claims and
+# re-arms it within one beat. Until that lands, an RTMP owner still keeps
+# guests out through the handover's _earshot_unwound check (earshot never
+# goes quiet under a live owner), just with a clumsier 503, and the loop
+# stays down because source_start sees "already_publishing" - neither of
+# which covers a DIRECT owner, whose writer reaches no stat page.
 LOOP_NAME = os.environ.get("DASH_NAME", "hoast_demo")
 _owner_lock = threading.Lock()
 _owner = {"live": False, "name": None, "since": None, "session": None}
@@ -1170,7 +1183,8 @@ def _guest_log_expire_ips():
         out, changed = [], 0
         for r in rows:
             p = r.split(",")
-            # rows are ts,name,addr,cc,dur,reason (legacy rows lack cc)
+            # rows are ts,name,addr,cc,dur,reason,peak,mean (legacy rows lack
+            # cc, and rows written before viewer attribution lack peak/mean)
             if len(p) >= 5 and p[2] not in ("-", "") and not p[2].endswith((".x", "::x")):
                 try:
                     if datetime.fromisoformat(p[0]).timestamp() < cutoff:
@@ -1618,9 +1632,10 @@ def gw_claim(role, name, addr, tracks):
     the LOOP, which is the thing being waited on. Reusing guest_publish means
     the correct check was never at risk.)
 
-    Returns (http_status, body). 409 asks the gateway to retry: the slot could
-    not be cleared inside the handover budget, which is a transient condition,
-    not a refusal."""
+    Returns (http_status, body). 409 asks the gateway to retry a transient
+    condition, not a refusal: for a guest, the slot could not be cleared
+    inside the handover budget, or was taken during it; for an owner, a
+    preempted direct guest is still draining."""
     if role == "owner":
         # The owner has no arbiter admission to pass - it authenticates by
         # SRT passphrase and preempts whatever is running. owner_notify arms
@@ -2315,7 +2330,8 @@ def _bans_lists():
 def _guest_stall_arm():
     """One-shot check GUEST_STALL_S after a session goes live: if no playable
     segment has appeared, the transcoder is stalled (in practice: the pusher
-    sent stereo/mono where 16-channel audio is required) and the session would
+    sent a layout the chain cannot carry - stereo or mono, where an ambisonic
+    4 or 16 channels is required) and the session would
     otherwise squat the slot for the full cap with nothing playing. End it and
     surface the reason (drill finding: the commonest real failure was also the
     most confusing, because OBS reports a successful connection)."""
@@ -2941,13 +2957,16 @@ def collect_once():
     ca = cf_vod_analytics()
     if ca is not None:
         s["vod_analytics"] = ca
-    bk = backup_check()
-    if bk is not None:
-        s["backup"] = bk
         # persist for future analysis: one gauge row per FRESH poll (the
         # 5-min cache returns the same 'checked' between polls; stale rows
         # are skipped). Aggregate counts only, no personal data, keep forever
         # like viewers.csv. Columns: checked_ts, views_24h, visits_24h, cc:n;...
+        # This belongs to `ca`, not to the backup block below. It was written
+        # here (d557688), then df7682d inserted the backup check ABOVE it and
+        # captured it into that block, which made the write depend on an
+        # unrelated env var: no VOD row was persisted at all unless
+        # BACKUP_MARKER happened to be set, and where it WAS set a Cloudflare
+        # outage turned ca into None and raised AttributeError on every cycle.
         if not ca.get("stale"):
             try:
                 last = ""
@@ -2959,6 +2978,9 @@ def collect_once():
                         f.write(f'{ca["checked"]},{ca["views"]},{ca["visits"]},{cs}\n')
             except Exception:
                 pass
+    bk = backup_check()
+    if bk is not None:
+        s["backup"] = bk
     s["alerts_active"] = evaluate_alerts(s)
     guest_tick()                        # backstop for the grace/cap timers
     owner_tick()                        # backstop for the owner-live latch
@@ -3094,10 +3116,11 @@ def serve():
                     if call and call != "update_publish":
                         return self._json(200, {})
                     return self._json(guest_update(name), {})
-            # A /owner publish just passed the LOOP_SOURCE_KEY check at rtmp-ingest
-            # (the demo loop or an external owner - owner_notify tells them
-            # apart by the forwarded name). nginx already fails these open,
-            # so the responses here don't gate anything.
+            # A /owner publish just passed the key check at rtmp-ingest: an
+            # external owner's RTMP_OWNER_KEY (as the stream name or ?token=)
+            # or the demo loop's LOOP_SOURCE_KEY token - owner_notify tells
+            # them apart by the forwarded name. nginx already fails these
+            # open, so the responses here don't gate anything.
             # The DIRECT path's session protocol (guest-direct-dash design).
             # Authenticated by the HTTP PEER ADDRESS plus a mandatory shared
             # secret - never by a request field, which is the whole point:
@@ -3183,13 +3206,13 @@ def serve():
                     self.headers.get("X-Viewer-IP", self.client_address[0]),
                     self.headers.get("X-Viewer-CC", ""))
                 return self._json(code, body)
-            # Dashboard service restarts (private port only). earshot ships
-            # only as the earshot-ingest pair; see RESTARTABLE.
             # on-demand reachability re-check (dashboard button): runs both
             # probes now and returns fresh results without waiting a cycle
             if p == "/api/probe":
                 return self._json(200, {"tunnel": tunnel_probe(),
                                         "vod_origin": vod_origin_probe()})
+            # Dashboard service restarts (private port only). earshot ships
+            # only as the earshot-ingest pair; see RESTARTABLE.
             if p == "/api/restart":
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 return self._json(200, restart_services((q.get("svc") or [""])[0]))
@@ -3213,7 +3236,7 @@ def serve():
 def main():
     DATA.mkdir(parents=True, exist_ok=True)
     csv_provenance_marker()     # one-off; stamps where the viewer definition changed
-    # dashboard.html is baked into the image at /app/web/index.html; expose it in DATA
+    # The dashboard page is baked into the image at /app/web/index.html; expose it in DATA
     src = Path("/app/web/index.html")
     if src.exists():
         html = src.read_text()

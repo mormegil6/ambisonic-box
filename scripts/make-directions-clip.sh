@@ -47,7 +47,7 @@
 #   python AmbisonicEnergyRenderer.py -i voice_16ch.wav --fps 30 \
 #          --encoder h264_videotoolbox --bitrate 12M
 #   ffmpeg -i energy.mp4 -i voice_16ch.wav -map 0:v -map 1:a \
-#          -c:v copy -c:a pcm_s24le directions-source_energy+voice16ch.mov
+#          -c:v copy -c:a pcm_s24le directions-source_energy_voice16ch.mov
 #
 # Usage: scripts/make-directions-clip.sh SOURCE.mov BED_16CH.wav [OUT] [CARD] [W] [H]
 #   env: BED_FIT=tempo|trim|native  LOOP_PERIOD=<s>  TOTAL=120  OFFSET=1.0

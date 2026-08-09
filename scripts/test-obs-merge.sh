@@ -3,13 +3,17 @@
 # recording merges into a single multichannel stream with CHANNEL ORDER
 # preserved, offline always, and through the real pipeline with --e2e.
 #
-# Stage 1  synthesises the OBS shape: two 8-channel tracks tagged 7.1 (the
-#          tag OBS writes) + H.264 video. Audio is PCM, deliberately: the
+# Stage 1  synthesises two 8-channel tracks tagged 7.1 + H.264 video. That is
+#          the SUPERSEDED OBS shape, kept because it still exercises both
+#          merge paths; the documented recipe is now four 4-channel tracks
+#          tagged 4.0 (docs/obs-macos.md, merge-obs-tracks.sh's header),
+#          because a 7.1 layout mutes the LFE slot and so erases ACN 3. Audio is PCM, deliberately: the
 #          synthetic exists to test the MERGE, and ffmpeg's AAC encoders are
-#          not faithful stand-ins for OBS's CoreAudio one (native aac
-#          lowpasses the LFE slot; aac_at negotiates 8ch down to 7 - both
-#          measured 2026-07-31, neither happens in real OBS output, which
-#          was verified channel-discrete on 2026-07-27). Each channel
+#          not faithful stand-ins at 8 channels (native aac lowpasses the LFE
+#          slot; aac_at negotiates 8ch down to 7 - both measured 2026-07-31).
+#          OBS is not on CoreAudio here anyway: the documented recipe picks
+#          the plain ffmpeg `aac` encoder and never aac_at, whose 4-channel
+#          output reads back scrambled (docs/obs-macos.md). Each channel
 #          carries its own tone: 200..1700 Hz, 100 Hz steps, the same ladder
 #          as test-pipeline.sh.
 # Stage 2  merges to the 16-channel hexadecagonal master and asserts every

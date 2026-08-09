@@ -8,8 +8,10 @@
 #         passthrough is impossible. Both streams are PASSED THROUGH here
 #         (no transcode), so codecs and GOP come from the master.
 #
-# Output: ./lip-sync-test/dash_{0.5s,1s,2s,4s}/manifest.mpd  (+ video.webm,
-#         audio.webm - WebM on-demand profile, same as HOAST360's demo media)
+# Output: ./lip-sync-test/dash_{0.5s,1s,2s,4s}/manifest.mpd  (+ video_init.webm,
+#         video_<N>.webm, audio_init.webm, audio_<N>.webm - discrete WebM
+#         segments under a static SegmentTemplate MPD, NOT the on-demand
+#         profile; the packaging step below says why)
 #
 # GOP rule: subsegments must start on keyframes, so the master's keyframe
 # interval must divide every segment duration. A 0.5 s GOP satisfies all four

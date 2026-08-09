@@ -43,11 +43,29 @@ if [ ! -f /content/demo.mp4 ]; then
     exec sleep 2147483647
 fi
 
+# Refuse to start without the key rather than falling back to a default. compose
+# ALWAYS injects LOOP_SOURCE_KEY (docker-compose.yml carries its own
+# ${LOOP_SOURCE_KEY:-hoast_demo} fallback), so an absent variable here does not
+# mean "fresh install", it means this container was built against a DIFFERENT
+# environment than the one now in .env - in practice a stale container that
+# telemetry `docker start`ed instead of recreating, after the key was renamed or
+# rotated. A `:-hoast_demo` fallback turns that into a silent publish with the
+# public placeholder key, which rtmp-ingest then rejects, and the operator sees
+# only "I/O error" with nothing pointing at the cause. That has now cost two
+# debugging sessions (2026-07-22 on the STREAM_KEY split, 2026-08-09 on the
+# LIVE_APP_KEY -> LOOP_SOURCE_KEY rename), so it fails loudly instead. The fix
+# when this fires is `docker compose up -d --force-recreate loop-source`.
+: "${LOOP_SOURCE_KEY:?[loop-source] LOOP_SOURCE_KEY is not set. compose always
+    passes it, so this container predates the current .env - recreate it with:
+    docker compose up -d --force-recreate loop-source}"
+
 # Publish under a fixed, non-secret stream name (${DASH_NAME:-hoast_demo}) and
 # pass LOOP_SOURCE_KEY as ?token= instead of using the key AS the stream name.
-# rtmp-ingest accepts either, but a clean name keeps the secret out of the
+# rtmp-ingest matches LOOP_SOURCE_KEY only as ?token= (the stream-name form
+# checks RTMP_OWNER_KEY), and a clean name keeps the secret out of the
 # RTMP publish/relay log lines (which print the stream name); the token itself
-# is suppressed by access_log off on the /auth location.
+# never reaches the /auth access log: that location logs with the token-free
+# rtmpauth format and only when the publish is rejected.
 echo "[loop-source] streaming /content/demo.mp4 -> rtmp://rtmp-ingest:1935/owner/${DASH_NAME:-hoast_demo} (token auth)"
 exec ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -i /content/demo.mp4 \
-    -c copy -f flv "rtmp://rtmp-ingest:1935/owner/${DASH_NAME:-hoast_demo}?token=${LOOP_SOURCE_KEY:-hoast_demo}"
+    -c copy -f flv "rtmp://rtmp-ingest:1935/owner/${DASH_NAME:-hoast_demo}?token=${LOOP_SOURCE_KEY}"

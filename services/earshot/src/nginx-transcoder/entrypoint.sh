@@ -83,8 +83,9 @@ fi
 # probed track count and two dumb listeners beat a smart handshake:
 #   9100 - 4x4ch tracks (3rd order), joined to hexadecagonal
 #   9101 - 1x4ch track  (1st order), passthrough map
-# Ports are compose-internal only; nothing publishes them. -listen 1 accepts
-# one connection, transcodes until EOF, exits; the loop re-arms it. Idle
+# Ports are compose-internal only; nothing publishes them. socat accepts one
+# connection, hands it to the peer-IP gate, and the ffmpeg that gate execs
+# transcodes until EOF and exits; the loop re-arms it. Idle
 # listeners cost nothing. Audio bitrates follow the gateway's 96 kbit/s per
 # channel rule (16 ch matches the RTMP relay's 1024k closely enough for A/B).
 # The join map is derived from THIS ffmpeg's own layout table, exactly as the
@@ -99,7 +100,7 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 	# BOTH root (this script, before nginx starts and drops privilege) and
 	# nginx (every su-wrapped write below) append to this log, and root here
 	# has no CAP_DAC_OVERRIDE (cap_add omits it, same reason the DASH
-	# directory below needs its own chmod 777) - so whichever uid creates the
+	# directory above needs its own chmod 777) - so whichever uid creates the
 	# file first locks the OTHER one out with "Permission denied" (found live
 	# testing this listener's gate, 2026-08-09: chown'ing it to nginx just
 	# moved the failure onto this script's own first echo). chmod 666, not

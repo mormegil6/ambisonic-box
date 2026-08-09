@@ -54,11 +54,12 @@ rtmp {
 http {
 
     # FAILED PUBLISH AUTH, and only that, gets its own line. Without this a
-    # brute-force attempt against the stream key leaves no trace at all: /auth
-    # runs with access_log off, deliberately, because the credential arrives as
-    # ?token= and would otherwise be written to docker logs on every successful
-    # publish. So the rule is not "log /auth" but "log only the rejections, and
-    # only the fields that are not the secret".
+    # brute-force attempt against the stream key leaves no trace at all: the
+    # inherited `combined` format must never apply to /auth, because the
+    # credential arrives as ?token= and combined logs $request, which would
+    # write the key to docker logs on every successful publish. So the rule is
+    # not "log /auth" but "log only the rejections, and only the fields that
+    # are not the secret".
     #
     # $status is evaluated at log time, so mapping it here picks out rejections
     # without needing a second location block.
@@ -150,7 +151,7 @@ http {
             resolver 127.0.0.11 valid=5s;
             set $arbiter http://telemetry:8090;
             # the name rides along so telemetry can tell the demo loop's own
-            # publish (name = the stream key) apart from an EXTERNAL owner;
+            # publish (name = DASH_NAME) apart from an EXTERNAL owner;
             # only the name, never the token, so nothing secret leaves here
             proxy_pass $arbiter/rtmp/owner/notify?name=$arg_name;
             proxy_read_timeout 3s;
