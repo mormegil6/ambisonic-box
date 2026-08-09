@@ -97,21 +97,27 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 		# exactly one ffmpeg exit and then died silently, leaving no listener
 		# and no log line. Each re-arm logs itself so a dead loop can never be
 		# silent again.
+		# AS NGINX, not root, and it is load-bearing: the hardened container
+		# drops capabilities, so root has no CAP_DAC_OVERRIDE and CANNOT
+		# overwrite the nginx-owned 644 files the RTMP relay's children write
+		# into the same tree - found live as "Could not write header ...
+		# Permission denied" whenever the relay had written first. One uid for
+		# every dash writer makes takeover symmetric in both directions.
 		( while :; do
 			echo "[direct-dash] 9100 (4x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
-			ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
-			  -f mpegts -i "tcp://0.0.0.0:9100?listen=1" \
-			  -filter_complex "[0:a:0][0:a:1][0:a:2][0:a:3]join=inputs=4:channel_layout=hexadecagonal:map=${JOIN_MAP}[a]" \
-			  -map 0:v:0 -map "[a]" -tag:v avc1 -strict -2 -c:a libopus -mapping_family 255 -b:a 1536k \
-			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			su -s /bin/sh nginx -c "ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
+			  -f mpegts -i \"tcp://0.0.0.0:9100?listen=1\" \
+			  -filter_complex \"[0:a:0][0:a:1][0:a:2][0:a:3]join=inputs=4:channel_layout=hexadecagonal:map=${JOIN_MAP}[a]\" \
+			  -map 0:v:0 -map \"[a]\" -tag:v avc1 -strict -2 -c:a libopus -mapping_family 255 -b:a 1536k \
+			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
 			sleep 1
 		done ) &
 		( while :; do
 			echo "[direct-dash] 9101 (1x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
-			ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
-			  -f mpegts -i "tcp://0.0.0.0:9101?listen=1" \
+			su -s /bin/sh nginx -c "ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
+			  -f mpegts -i \"tcp://0.0.0.0:9101?listen=1\" \
 			  -map 0:v:0 -map 0:a:0 -tag:v avc1 -strict -2 -c:a libopus -mapping_family 255 -b:a 384k \
-			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
 			sleep 1
 		done ) &
 		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4)"
