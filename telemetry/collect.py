@@ -855,6 +855,16 @@ def _guest_sanitize(name):
 # guest gateway claim owner sessions.
 TEL_SRT_GW_OWNER_HOST = os.environ.get("TEL_SRT_GW_OWNER_HOST",
                                        "srt-gateway-owner")
+# rtmp-ingest is the only legitimate caller of the /rtmp/* callback routes.
+# They are fail-open by contract (nginx masks failures so a telemetry blip
+# cannot kill a broadcast), which is right for a callback from a trusted
+# neighbour and wrong for anything else: unauthenticated, ANY compose-network
+# peer could latch the owner state with /rtmp/live/notify?name=x, which locks
+# every guest out and holds the demo loop down until the tick backstop
+# notices. The review classified this alias as permanent infrastructure - the
+# demo loop and the still-supported RTMP owner route both fire it - so it is
+# authenticated rather than retired.
+TEL_INGEST_HOST = os.environ.get("TEL_INGEST_HOST", "rtmp-ingest")
 _gw_role_cache = [0.0, {}]
 
 
@@ -911,6 +921,39 @@ def _gw_rate_ok(peer):
             for k in [k for k, v in _gw_rate.items() if now - v > 300]:
                 _gw_rate.pop(k, None)
     return True
+
+
+def _ingest_peer_ok(peer):
+    """Is this HTTP peer rtmp-ingest itself?
+
+    Same socket-bound reasoning as _gw_peer_role: the address of the
+    connection is the one identity its own claimant cannot forge, and
+    rtmp-ingest runs cap_drop:[ALL] like everything else here, so it cannot
+    spoof a neighbour either. Loopback is allowed because the operator's own
+    curl from inside the telemetry container is a legitimate debugging path
+    and cannot come from the network."""
+    if peer in ("127.0.0.1", "::1"):
+        return True
+    now = time.time()
+    if now - _ingest_ip_cache[0] > 5:
+        try:
+            _ingest_ip_cache[1] = socket.gethostbyname(TEL_INGEST_HOST)
+        except OSError:
+            _ingest_ip_cache[1] = None
+        _ingest_ip_cache[0] = now
+    if peer == _ingest_ip_cache[1]:
+        return True
+    # one forced re-resolve: a recreated ingest changes IP, and a stale cache
+    # must not start refusing real callbacks
+    try:
+        fresh = socket.gethostbyname(TEL_INGEST_HOST)
+    except OSError:
+        return False
+    _ingest_ip_cache[0], _ingest_ip_cache[1] = now, fresh
+    return peer == fresh
+
+
+_ingest_ip_cache = [0.0, None]
 
 
 def _gw_session_ok(peer, token):
@@ -2932,6 +2975,15 @@ def serve():
             # rtmp-ingest (notify_method get). The status code IS the answer:
             # 2xx allows the publish / keeps the stream, anything else rejects
             # or drops it.
+            # Both /rtmp/ families are rtmp-ingest's callbacks and nobody
+            # else's. Refusing a stranger here is not a behaviour change for
+            # the real caller, and it closes the alias's standing hole: an
+            # unauthenticated /rtmp/live/notify from any compose peer could
+            # latch owner state, locking out every guest and holding the demo
+            # loop down. 404, not 403, so an unauthorised prober cannot even
+            # confirm the routes exist.
+            if p.startswith("/rtmp/") and not _ingest_peer_ok(self.client_address[0]):
+                return self._json(404, {"error": "not found"})
             if p.startswith("/rtmp/guest/"):
                 args = urllib.parse.parse_qs(q)
                 name = (args.get("name") or [""])[0]
