@@ -250,9 +250,13 @@ def set_label(eid, lx, ly):
 #    owner instance, :8890 the guest one - so a single "SRT" arrow hid the one
 #    thing a sender has to get right. The box already stands for both
 #    instances (see this directory's README); now its input side says so.
-SRT_SEP = 30.0
+# ARROW_SEP is the ONE spacing both parallel pairs use, so the SRT pair and the
+# RTMP pair read as the same gesture rather than two different ones. It is the
+# gap BETWEEN the two lines; the SRT pair straddles the gateway row, so each of
+# its lines sits half that from the centre.
+ARROW_SEP = 30.0
 sr_sx, sr_ex = SX + shw, GX - ghw - 6.0
-SRT_OWNER_Y, SRT_GUEST_Y = GY - SRT_SEP, GY + SRT_SEP
+SRT_OWNER_Y, SRT_GUEST_Y = GY - ARROW_SEP / 2.0, GY + ARROW_SEP / 2.0
 set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{SRT_OWNER_Y}L{sr_ex},{SRT_OWNER_Y}")
 set_edge('L_SRTOBS_GATEWAY_2', f"M{sr_sx},{SRT_GUEST_Y}L{sr_ex},{SRT_GUEST_Y}")
 # All three port labels share one x so they line up vertically. It is the
@@ -279,7 +283,6 @@ set_label('L_SRTOBS_GATEWAY_2', PORT_LX, SRT_GUEST_Y + 15.0)
 # guest exists only where the operator turned it on. Order therefore comes
 # from the source file - the first edge of each pair takes the top slot - so
 # swapping the two lines in architecture.mmd swaps them in the drawing.
-ARROW_SEP = 30.0
 g_sx, g_ex = GX + ghw, ix - ihw - 6.0
 OWNER_Y, GUEST_Y = iy - ARROW_SEP, iy
 set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{OWNER_Y}L{g_ex},{OWNER_Y}")
@@ -382,11 +385,15 @@ s = re.sub(r'(<g class="cluster-label ?" transform="translate\()[-\d.]+,\s*[-\d.
 #     Written as plain SVG <text> rather than a mermaid node: dagre would lay
 #     a node out inside the graph, and this belongs beside the drawing, not in
 #     it. Sits under the box's bottom-left corner; the viewBox grows to fit.
+#     Right-aligned under the box's right wall: the left end of that strip sits
+#     directly below the viewer/OBS gutter, where a reader's eye is still
+#     tracking the data path, whereas the right end is past the last node and
+#     genuinely empty.
 LEGEND_TEXT = "* off by default; set GUEST_ENABLED=1"
 LEGEND_GAP  = 26.0
 legend_y = box_bottom + LEGEND_GAP
 s = s.replace('</svg>',
-              f'<text x="{box_left:.2f}" y="{legend_y:.2f}" '
+              f'<text x="{box_right:.2f}" y="{legend_y:.2f}" text-anchor="end" '
               f'style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,'
               f'Helvetica,Arial,sans-serif;font-size:15px;fill:#8b9bb4">{LEGEND_TEXT}</text></svg>', 1)
 
