@@ -193,14 +193,18 @@ def child_command(name, ip, tracks):
         # parameters", found on the first live test). THIS ffmpeg reconstructs
         # the SPS/PPS extradata at demux, and mkv carries it explicitly, so
         # the listener's mp4 muxer gets exactly what FLV used to hand it.
-        # aac_adtstoasc converts the TS's ADTS AAC to the extradata form mkv
-        # needs - the same conversion the FLV muxer auto-inserted, which is why
-        # the legacy path never saw this. Without it the mux fails at header
-        # time: "Error parsing AAC extradata, unable to determine samplerate".
+        # MPEGTS on the wire, deliberately: TS is built for joining mid-stream
+        # (fixed 188-byte packets, PAT/PMT repeated continuously), which is
+        # exactly what an SRT session's first bytes look like. A matroska wire
+        # was tried first and abandoned: mkv needs global extradata at header
+        # time, real SRT heads can start mid-ADTS-frame, and the resulting
+        # "Error parsing AAC extradata" killed sessions that TS shrugs off.
+        # The one cost of TS - the mp4 muxer rejecting the copied stream-type
+        # codec tag - is paid on the LISTENER side with -tag:v avc1.
         return ["ffmpeg", "-hide_banner", "-loglevel", "warning",
                 "-f", "mpegts", "-i", "pipe:0",
-                "-map", "0", "-c", "copy", "-bsf:a", "aac_adtstoasc",
-                "-f", "matroska", f"tcp://{EARSHOT_HOST}:{DIRECT_PORTS[tracks]}"]
+                "-map", "0", "-c", "copy",
+                "-f", "mpegts", f"tcp://{EARSHOT_HOST}:{DIRECT_PORTS[tracks]}"]
     if MODE == "guest":
         target = f"{INGEST_URL}/{name}?realip={ip}&gw={GW_SECRET}"
     else:
