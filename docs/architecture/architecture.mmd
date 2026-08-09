@@ -8,7 +8,7 @@ flowchart TD
     OBS["OBS Music Edition ({{LOGO_WINDOWS}})<br/>live A/V, in sync<br/>H.264 + 16-ch AAC (PCE)"]
 
     subgraph COMPOSE["DOCKER COMPOSE"]
-        GATEWAY["srt-gateway<br/>SRT terminator<br/>guest: join to 16-ch<br/>owner: pass through"]
+        GATEWAY["srt-gateway<br/>SRT terminator<br/>routes guests & owner"]
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>demo.mp4"]
         EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
@@ -22,7 +22,7 @@ flowchart TD
 
     SRTOBS -- "SRT :8890" --> GATEWAY
     GATEWAY -- "RTMP /guest" --> INGEST
-    GATEWAY -- "MPEG-TS, direct (owner)" --> EARSHOT
+    GATEWAY -- "MPEG-TS /owner, direct" --> EARSHOT
     OBS -- "RTMP :1935" --> INGEST
     LOOP -- "RTMP (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT
