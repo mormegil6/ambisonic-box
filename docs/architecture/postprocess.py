@@ -46,6 +46,18 @@ box_left = min(box_left,
                (_ix - node_halfwidth('INGEST')) - GW_INSET
                - 2 * node_halfwidth('GATEWAY') - GW_GAP)
 
+# The same problem on the right wall, and it appeared when the owner's direct
+# edge was added: giving earshot a second parent makes dagre re-rank the top
+# row, ingest grows rightward, and the gap it leaves for loop-source is no
+# longer wide enough for that edge's label ("RTMP (internal)" clipped to a
+# couple of characters). Push the right wall out so the run always fits, the
+# mirror of the GW_INSET/GW_GAP treatment above.
+LOOP_INSET = 18.0
+LOOP_GAP   = 150.0               # ingest -> loop-source run; fits the label
+box_right = max(box_right,
+                (_ix + node_halfwidth('INGEST')) + LOOP_GAP
+                + 2 * node_halfwidth('LOOP') + LOOP_INSET)
+
 # === lower half: restore the two-column grid dagre gave up when the gateway
 #     was added. hoast-player sits under earshot, telemetry under shaka, and
 #     the dash-output volume is centred between those two columns, which is
@@ -200,6 +212,22 @@ set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
 g_sx, g_ex = GX + ghw, ix - ihw - 6.0
 set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{iy}L{g_ex},{iy}")
 set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, iy - 22.0)
+
+# 2b) srt-gateway -> earshot, the OWNER route: leaves the gateway's underside
+#     and lands on earshot's left face, deliberately below and clear of the
+#     guest run above it. Dagre draws this edge for its own pre-move layout,
+#     so like every other rerouted edge it has to be redrawn here or it points
+#     at coordinates nothing occupies any more.
+ehw_ = node_halfwidth('EARSHOT')
+d_sx, d_sy = GX + ghw * 0.35, GY + ghh
+d_ex, d_ey = ex_ - ehw_ - 6.0, ey_
+set_edge('L_GATEWAY_EARSHOT_0',
+         f"M{d_sx},{d_sy}C{d_sx},{d_sy + (d_ey - d_sy) * 0.62} "
+         f"{d_sx + (d_ex - d_sx) * 0.55},{d_ey} {d_ex},{d_ey}")
+# Label under the gateway rather than at the curve's midpoint: the midpoint is
+# where this edge passes closest to the guest run's own label, and two labels
+# that near each other read as one.
+set_label('L_GATEWAY_EARSHOT_0', d_sx - 30.0, d_sy + 26.0)
 
 # 3) OBS Music Edition -> ingest: a symmetric S-curve in the style of the
 #    dash-output volume edges - horizontal at both ends, sweeping up into

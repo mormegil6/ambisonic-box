@@ -187,12 +187,6 @@ def child_command(name, ip, tracks):
     if MODE == "owner" and SRT_DIRECT:
         # Bare remux to earshot's listener: no filter, no audio codec, no FLV.
         # The listener's ffmpeg owns the join and the opus encode.
-        # MATROSKA on the wire, not raw TS, and it is load-bearing: TS carries
-        # h264 as Annex-B with no global extradata, and earshot's older ffmpeg
-        # fork cannot then write the mp4/DASH header ("incorrect codec
-        # parameters", found on the first live test). THIS ffmpeg reconstructs
-        # the SPS/PPS extradata at demux, and mkv carries it explicitly, so
-        # the listener's mp4 muxer gets exactly what FLV used to hand it.
         # MPEGTS on the wire, deliberately: TS is built for joining mid-stream
         # (fixed 188-byte packets, PAT/PMT repeated continuously), which is
         # exactly what an SRT session's first bytes look like. A matroska wire
