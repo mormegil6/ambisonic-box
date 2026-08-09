@@ -594,6 +594,27 @@ class Gateway:
         gateway upgraded ahead of telemetry still works; guests do NOT - their
         admission is the thing being asked for, and assuming it would put an
         unadmitted stranger on the DASH tree."""
+        # No secret configured here means this gateway CANNOT authenticate to
+        # the session protocol, and telemetry would refuse every claim. That
+        # must not silently break a working owner route on upgrade (the box
+        # ran direct-to-DASH for a day before the protocol existed), so:
+        # owner degrades to the legacy /rtmp/live latch, which is exactly what
+        # it used before and no weaker than yesterday; a GUEST is refused,
+        # because unauthenticated admission is the one thing that must never
+        # degrade open. setup.sh generates the secret, so this is the
+        # upgrade-in-place path, not the supported configuration.
+        if not GW_SECRET:
+            if MODE == "owner":
+                log("no GUEST_GW_SECRET: using the legacy /rtmp/live latch for "
+                    "this owner session (set one to use the session protocol)")
+                s["session"] = None
+                s["tracks"] = tracks
+                return True
+            log(f"no GUEST_GW_SECRET: refusing the direct path for guest "
+                f"{s['name']} from {s['ip']} (cannot authenticate to the arbiter)")
+            self._memoize(s["ip"])
+            self.events.put(("force_teardown", "gateway cannot authenticate"))
+            return False
         deadline = time.time() + CLAIM_BUDGET_S
         while True:
             url = (f"{ARBITER_URL}/gw/session/claim"
