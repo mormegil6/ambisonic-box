@@ -8,9 +8,9 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 |---|---|---|---|
 | 1935/tcp | `rtmp-ingest` | RTMP contribution `rtmp://<host>:1935/live/<key>` | public only if you run open ingest; else LAN/VPN |
 | 8890/udp | `srt-gateway` | SRT contribution `srt://<host>:8890?streamid=<name>` (native OBS multitrack; one 4-channel track for 1st order, four for 3rd, detected from the stream), the recommended ingest; bound by default, but admits nobody unless `GUEST_ENABLED=1` (`SRT_ENABLED=0` unbinds it) | public if you run the SRT guest endpoint. The gateway is privilege-separated (no docker socket, no volumes, no `RTMP_OWNER_KEY`/`LIVE_APP_KEY`, read-only rootfs) because it terminates hostile pre-auth internet bytes. Only the separate owner instance below carries `RTMP_OWNER_KEY` |
-| 8891/udp | `srt-gateway-owner` | SRT contribution for the OPERATOR's own stream: `srt://<box-address>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>`. Republishes into the token-authed `live` application and bypasses the guest arbiter, so it needs no `GUEST_ENABLED`. Not in the base compose: `scripts/setup.sh` writes it into `docker-compose.override.yml` | as public as you bind it. `setup.sh` binds all interfaces, matching 1935 and 8890; the mandatory `SRT_PASSPHRASE` is the gate (SRT uses it as the connection's AES key, so a caller without it is refused at the handshake). Narrow the bind to loopback or a VPN address for less exposure. Unlike the guest gateway this instance DOES carry `RTMP_OWNER_KEY`, which is why it is a separate service |
+| 8891/udp | `srt-gateway-owner` | SRT contribution for the OPERATOR's own stream: `srt://<box-address>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>`. By default (`SRT_DIRECT=1`) remuxes straight into earshot's direct-DASH listener, bypassing rtmp-ingest and the guest arbiter; with `SRT_DIRECT=0` it republishes into the token-authed `live` application instead. Needs no `GUEST_ENABLED` either way. Not in the base compose: `scripts/setup.sh` writes it into `docker-compose.override.yml` | as public as you bind it. `setup.sh` binds all interfaces, matching 1935 and 8890; the mandatory `SRT_PASSPHRASE` is the gate (SRT uses it as the connection's AES key, so a caller without it is refused at the handshake). Narrow the bind to loopback or a VPN address for less exposure. Unlike the guest gateway this instance DOES carry `RTMP_OWNER_KEY`, which is why it is a separate service |
 | 8080/tcp | `hoast-player` | player `/`, DASH `/dash/<DASH_NAME>.mpd`, public status `/status/status.json`, telemetry proxy `/api/live` (GET), `/api/start` (POST, rate-limited 6r/m burst 3) and `/api/guest/report` (POST, 1r/m burst 3) | **public** (front with TLS / a tunnel) |
-| 8081/tcp | `earshot` | dev monitor `/webtools`, `/stat`, `/dash` | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so a plain override list can widen but not narrow a base mapping (narrowing needs `!override`/`!reset` on the key). Firewall the port or edit the base file |
+| 8081/tcp | `earshot` | dev monitor `/webtools`, `/stat`, `/dash`. On an owner-direct stream the panel discovers the stream from the DASH manifest rather than the RTMP stat page, and labels the resulting `Num Clients 0` as expected rather than a fault | **private**: debug only. `docker-compose.yml` binds `127.0.0.1:8081:80` (loopback only). Note Compose appends port entries, so a plain override list can widen but not narrow a base mapping (narrowing needs `!override`/`!reset` on the key). Firewall the port or edit the base file |
 | 8090/tcp | `telemetry` | dashboard `/`, `/stats.json`, `/viewers.csv` | **private**: bind localhost/VPN only, never `0.0.0.0` |
 
 ### If you bind a private port to a VPN or floating address
@@ -28,7 +28,7 @@ Order matters on the way back up: `rtmp-ingest`'s nginx resolves `earshot` once 
 
 The failure mode that makes this worth automating is not the downtime, it is the silence: **`telemetry` is the alerting path**, so if it is one of the services that failed to bind, nothing can report the outage - including the outage of the alerter itself. Any boot-recovery script should send its own notification, independently of telemetry, on success as well as failure.
 
-Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), the `srt-gateway` status/health port (8091 internal; discloses the active caller IP, so same loopback-only reasoning as earshot's `/stat`), and the `dash-output` / `status-public` volumes.
+Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), the `srt-gateway` status/health port (8091 internal; discloses the active caller IP, so same loopback-only reasoning as earshot's `/stat`), earshot's direct-DASH listeners (9100 4x4 / 9101 1x4, fed only by the owner SRT gateway, armed by `SRT_DIRECT_LISTENERS`), and the `dash-output` / `status-public` volumes.
 
 ### Control routes proxied on 8080
 
@@ -55,7 +55,7 @@ The docker socket telemetry mounts is read-write, because starting and stopping 
 
 ## What telemetry itself polls (the monitoring inputs)
 
-- `earshot /stat` → `<publishing/>`, `<nclients>`: is a stream live?
+- `earshot /stat` → `<publishing/>`, `<nclients>`: is an RTMP publisher live? An owner SRT session on the direct route does NOT appear here (it bypasses nginx-rtmp entirely); telemetry ORs in the gateway's own owner latch, so judge that route by segment freshness and the dashboard, not by `/stat`.
 - newest `chunk-stream*` segment (`.webm`/`.m4s`/`.mp4`) mtime in the dash volume: segment freshness
 - docker container health + the hoast-player access log: viewers + countries
 - `/sys/class/thermal/thermal_zone0/temp`, `df /`, uptime, load: host health
