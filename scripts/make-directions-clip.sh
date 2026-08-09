@@ -33,6 +33,13 @@
 #      that names it). MOV with PCM rather than MP4, since MP4 has no portable
 #      way to carry multichannel PCM and the stem should not be recompressed.
 #   2. BED - a 16-channel musical loop whose LENGTH defines the loop period.
+#      NOT distributed in this project's release (decision 2026-08-09): it is
+#      Earshot's own GPL-2.0 test asset, tester/resources/16chambixloop.wav,
+#      byte for byte - confirmed independently by Earshot's LFS pointer, whose
+#      oid sha256 matches this script's pin exactly. Redistributing a GPL file
+#      verbatim inside a CC BY 4.0 release was wrong, so the release asset was
+#      removed and this script fetches it from Earshot instead: pass the
+#      literal `fetch` as the BED argument.
 #
 # To rebuild SOURCE from a new recording: render the energy map from the DRY
 # VOICE stem (not the mix, or a diffuse bed washes out the direction blobs)
@@ -57,7 +64,31 @@
 set -euo pipefail
 
 SOURCE="${1:?directions source asset: energy-map video + 16-ch voice audio}"
-BED="${2:?16-channel ACN/SN3D musical bed (defines the loop period)}"
+BED="${2:?16-channel ACN/SN3D musical bed, or the literal `fetch` (defines the loop period)}"
+
+# `fetch` pulls the bed from Earshot's repository rather than from this
+# project's release, which deliberately no longer carries it (see INPUTS).
+# The commit and hash are PINNED: the media URL goes through GitHub's LFS
+# storage (the raw URL serves a 133-byte pointer, not audio), and the sha256
+# below is simultaneously our local file's hash and the oid in Earshot's own
+# LFS pointer, so a mismatch means the download is damaged or the upstream
+# file genuinely changed - either way, refuse.
+BED_SHA256=de5ad25f743da9c19463f23da1bc9b4de2bff5da2da090c661a6e2ac1fcfe9ef
+BED_URL="https://media.githubusercontent.com/media/EnvelopSound/Earshot/29e855e05d821b8bfb7223d54ec3eb3658350f49/tester/resources/16chambixloop.wav"
+if [ "$BED" = "fetch" ]; then
+    BED="content/vod-sources/directions-bed_16ch.wav"
+    if [ -f "$BED" ] && printf '%s  %s\n' "$BED_SHA256" "$BED" | shasum -a256 -c - >/dev/null 2>&1; then
+        echo "bed: already present and hash-verified ($BED)"
+    else
+        echo "bed: fetching from Earshot (GPL-2.0 test asset, pinned commit)"
+        mkdir -p "$(dirname "$BED")"
+        curl -fsSL "$BED_URL" -o "$BED.part"
+        printf '%s  %s\n' "$BED_SHA256" "$BED.part" | shasum -a256 -c - >/dev/null \
+            || { echo "bed: sha256 MISMATCH - refusing to use the download" >&2; rm -f "$BED.part"; exit 1; }
+        mv "$BED.part" "$BED"
+        echo "bed: fetched and verified ($BED)"
+    fi
+fi
 OUT="${3:-content/vod/masters/directions_8k360_16ch.webm}"
 CARD="${4:-content/vod/masters/testcard-360_8k.png}"
 W="${5:-7680}"; H="${6:-3840}"
