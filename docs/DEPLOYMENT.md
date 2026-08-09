@@ -40,6 +40,16 @@ For one-off events. The constraint is raw L4 ingress for the contribution leg, a
 
 Treat this as a direction rather than a documented path: this section grows real instructions when a real deployment produces them.
 
+## Optional: caching live segments at a CDN edge
+
+If you front the player with a CDN, its default rules probably do NOT cache the live DASH segments, and the reason is a single detail that costs a day to find: a CDN's default cacheable-extension list is built for the web, so `.mp4` is on it but `.m4s` is not. Under the committed `-c:v copy` default the video segments are `.m4s` and the audio is `.webm`, and neither extension is cached by default. So without a rule every viewer's every segment request travels all the way to the box: N viewers cost N times the origin egress through your tunnel, on a home uplink, for bytes that are identical across all of them.
+
+A single cache rule fixes it. On Cloudflare, a Cache Rule matching the segment paths - `URI Path starts with /dash/chunk-` and `URI Path starts with /dash/init-` - set to Eligible for cache with an Edge TTL of ~120 s that ignores the origin's cache-control, makes the edge serve every viewer after the first from cache. Matching on the path prefix rather than the extension covers `.m4s` and `.webm` together and survives a switch to the all-WebM VP9 path. Verified off-box: an init segment returns `cf-cache-status: MISS` once, then `HIT` for everyone after.
+
+**Two things the rule must never grow to cover.** The manifest (`*.mpd`) MUST stay dynamic and uncached: this stack counts viewers by manifest polls reaching the origin, and the same polls are the heartbeat that keeps the on-demand loop awake, so an edge-cached manifest blinds the dashboard and can let the demo idle out under a live audience. And there is nothing to gain from caching `/vod-dash/` this way - the on-demand path has its own object-storage answer below.
+
+**Check your CDN's terms first, same as for VOD.** Serving the segments from your box origin through a CDN edge is closer to "delivering large non-Cloudflare-hosted video through the proxy" than uncached passthrough was - the pattern [Cloudflare's terms](https://blog.cloudflare.com/updated-tos) restrict. A research demo with a handful of viewers is not what that enforcement is for, but the profile scales with your audience, and unlike VOD there is no free Cloudflare-hosted origin for a live stream the way R2 is for VOD. Worth knowing before an announcement, not a reason to avoid the rule at demo scale.
+
 ## Per-host overrides
 
 Deployment-specific settings live in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](../docker-compose.override.yml.example) and adjust. The base stack runs without it.
