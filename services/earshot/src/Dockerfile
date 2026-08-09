@@ -181,7 +181,8 @@ RUN apk add --update \
   x265-dev \
   inotify-tools \
   certbot \
-  sudo
+  sudo \
+  socat
 
 COPY --from=1 /opt/ffmpeg/bin/ffmpeg /usr/local/bin
 COPY --from=1 /usr/local/nginx /usr/local/nginx
@@ -214,9 +215,11 @@ RUN set -x ; \
 
 COPY nginx-transcoder/entrypoint.sh nginx-letsencrypt
 COPY nginx-transcoder/certbot.sh certbot.sh
+COPY nginx-transcoder/direct-dash-gate.sh /usr/local/bin/direct-dash-gate.sh
 COPY nginx-transcoder/ssl-options/ /etc/ssl-options
 RUN chmod +x nginx-letsencrypt && \
-    chmod +x certbot.sh
+    chmod +x certbot.sh && \
+    chmod +x /usr/local/bin/direct-dash-gate.sh
 
 #CMD rm -rf /opt/data && mkdir -p /opt/data/dash && chown nginx /opt/data/dash && chmod 777 /opt/data/dash && mkdir -p /www && \
 #  envsubst "$(env | sed -e 's/=.*//' -e 's/^/\$/g')" < \

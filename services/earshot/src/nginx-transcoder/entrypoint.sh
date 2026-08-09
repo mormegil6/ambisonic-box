@@ -91,6 +91,20 @@ fi
 # gateway's build_join_map() does: merged channel g IS track g/4's channel g%4.
 if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 	JOIN_MAP=$(ffmpeg -hide_banner -layouts 2>/dev/null | awk '$1=="hexadecagonal"{n=split($2,a,"+");s="";for(i=0;i<16;i++){t=int(i/4);o=i%4;s=s sprintf("%s%d.%d-%s",(i?"|":""),t,o,a[i+1])};print s}')
+	# Needed by direct-dash-gate.sh, a SEPARATE process this script only
+	# execs (via socat's SYSTEM: address) - a plain shell variable would not
+	# reach it. FFMPEG_FLAGS is already a real container env var (compose
+	# `environment:`), so it needs no export here.
+	export JOIN_MAP
+	# BOTH root (this script, before nginx starts and drops privilege) and
+	# nginx (every su-wrapped write below) append to this log, and root here
+	# has no CAP_DAC_OVERRIDE (cap_add omits it, same reason the DASH
+	# directory below needs its own chmod 777) - so whichever uid creates the
+	# file first locks the OTHER one out with "Permission denied" (found live
+	# testing this listener's gate, 2026-08-09: chown'ing it to nginx just
+	# moved the failure onto this script's own first echo). chmod 666, not
+	# chown: permission bits sidestep the ownership question entirely.
+	touch /tmp/nginx_rtmp_ffmpeg_log && chmod 666 /tmp/nginx_rtmp_ffmpeg_log
 	if [ -n "$JOIN_MAP" ]; then
 		# Plain ( ... ) & subshells, NOT the $( ... ) & idiom the certbot lines
 		# above use: on this image's shell the substitution variant survived
@@ -103,42 +117,55 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 		# into the same tree - found live as "Could not write header ...
 		# Permission denied" whenever the relay had written first. One uid for
 		# every dash writer makes takeover symmetric in both directions.
+		# socat fronts each port and gates on the connecting peer's real IP
+		# (direct-dash-gate.sh) before any byte reaches ffmpeg - closes the
+		# "compose-network reachability is the entire gate" hole found in the
+		# guest-direct-dash design review (BLOCKER 2, 2026-08-09): an admitted
+		# caller's slot could otherwise be stolen by whichever TCP connection
+		# to the port happened to land first, with child_exit then memoizing
+		# the INNOCENT admitted caller while the squatter's un-probed bytes
+		# flow under its identity. The gate script, once it confirms the
+		# peer, execs directly into the same ffmpeg this port always ran (one
+		# script serves both ports, keyed on the argument) - no relay, no
+		# extra hop in the media path. socat exits after exactly one
+		# connection (matching ffmpeg's former -listen 1), so the existing
+		# re-arm loop below is unchanged; a rejected connection also ends the
+		# socat process (the gate script exits without exec'ing ffmpeg), so a
+		# hostile prober cannot wedge the port by connecting and going silent
+		# - it is indistinguishable from one failed accept cycle.
 		( while :; do
 			echo "[direct-dash] 9100 (4x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
-			su -s /bin/sh nginx -c "ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
-			  -f mpegts -i \"tcp://0.0.0.0:9100?listen=1\" \
-			  -filter_complex \"[0:a:0][0:a:1][0:a:2][0:a:3]join=inputs=4:channel_layout=hexadecagonal:map=${JOIN_MAP}[a]\" \
-			  -map 0:v:0 -map \"[a]\" -tag:v avc1 -strict -2 -c:a libopus -mapping_family 255 -b:a 1536k \
-			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			su -s /bin/sh nginx -c "socat -u TCP-LISTEN:9100,reuseaddr SYSTEM:'/usr/local/bin/direct-dash-gate.sh 9100'" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
 			sleep 1
 		done ) &
 		( while :; do
 			echo "[direct-dash] 9101 (1x4) listening" >> /tmp/nginx_rtmp_ffmpeg_log
-			su -s /bin/sh nginx -c "ffmpeg -hide_banner -loglevel warning -analyzeduration 10M -probesize 20M \
-			  -f mpegts -i \"tcp://0.0.0.0:9101?listen=1\" \
-			  -map 0:v:0 -map 0:a:0 -tag:v avc1 -strict -2 -c:a libopus -mapping_family 255 -b:a 384k \
-			  ${FFMPEG_FLAGS} -f dash /opt/data/dash/${DASH_NAME:-hoast_demo}.mpd" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
+			su -s /bin/sh nginx -c "socat -u TCP-LISTEN:9101,reuseaddr SYSTEM:'/usr/local/bin/direct-dash-gate.sh 9101'" >> /tmp/nginx_rtmp_ffmpeg_log 2>&1
 			sleep 1
 		done ) &
 		# Watchdog for a WEDGED listener: an abruptly killed feeder can leave
-		# the accepting ffmpeg holding a CLOSE_WAIT socket it never reads
-		# (observed live 2026-08-09: nine threads asleep, none in a read, an
-		# hour after the peer died), and with -listen 1 that bricks the port
-		# until the process dies - every new session then fails with
-		# "Connection refused" and the operator sees an unexplained OBS
-		# error. A read-timeout on the socket would NOT have fired there (no
-		# thread was in a read), so the detector is the socket state itself.
+		# the accepting process holding a CLOSE_WAIT socket it never reads
+		# (observed live 2026-08-09 against the former direct ffmpeg listener:
+		# nine threads asleep, none in a read, an hour after the peer died),
+		# and with single-accept semantics that bricks the port until the
+		# process dies - every new session then fails with "Connection
+		# refused" and the operator sees an unexplained OBS error. socat now
+		# holds the raw socket instead of ffmpeg (see the gate above), so this
+		# watchdog targets socat's own cmdline (`TCP-LISTEN:910N`, unique per
+		# port and present nowhere else); killing it closes the pipe, and
+		# ffmpeg on the far end exits cleanly on EOF. A read-timeout on the
+		# socket would NOT have fired on the original wedge (no thread was in
+		# a read), so the detector is the socket state itself, not a timeout.
 		# A healthy session end also passes through CLOSE_WAIT briefly while
 		# the trailer flushes, so only a state persisting across a 10 s
 		# recheck is treated as wedged; killing during a slow flush would
 		# only cost a trailer the next session rewrites anyway. Runs as
 		# nginx, same uid as the listeners, because root in this hardened
-		# container has no CAP_KILL over another uid. The pkill patterns use
-		# the [] trick so they can never match this script's own cmdline.
+		# container has no CAP_KILL over another uid.
 		su -s /bin/sh nginx -c '
 		while :; do
 			sleep 15
-			for spec in "9100 0\.0\.0\.0:910[0]" "9101 0\.0\.0\.0:910[1]"; do
+			for spec in "9100 TCP-LISTEN:9100" "9101 TCP-LISTEN:9101"; do
 				port=${spec%% *}; pat=${spec#* }
 				if netstat -tn 2>/dev/null | grep ":$port" | grep -q CLOSE_WAIT; then
 					sleep 10
@@ -149,7 +176,7 @@ if [ "${SRT_DIRECT_LISTENERS:-1}" = "1" ]; then
 				fi
 			done
 		done' &
-		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4), CLOSE_WAIT watchdog on both"
+		echo "SRT direct-DASH listeners armed on :9100 (4x4) and :9101 (1x4), peer-IP gated, CLOSE_WAIT watchdog on both"
 	else
 		echo "SRT direct-DASH listeners DISABLED: no hexadecagonal layout in this ffmpeg"
 	fi
