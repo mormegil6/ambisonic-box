@@ -40,7 +40,11 @@ box_bottom = float(bm.group(2)) + float(bm.group(4))
 # far enough to seat the gateway plus a gap wide enough for its edge label. The
 # space this opens is the box's lower-left, which is empty in this layout.
 GW_INSET = 18.0                  # gateway's inset from the wall (mirrors loop-source)
-GW_GAP   = 130.0                 # gateway -> ingest run; must fit "RTMP /guest"
+GW_GAP   = 175.0                 # gateway -> ingest run; sized for the old
+                                  # mechanism-named labels ("RTMP, arbiter-gated"
+                                  # at 146px) and left wide since role-named ones
+                                  # ("RTMP, guest" / "RTMP, owner", ~95px) fit
+                                  # with room to spare rather than exactly
 _ix, _iy = node_pos('INGEST')
 box_left = min(box_left,
                (_ix - node_halfwidth('INGEST')) - GW_INSET
@@ -49,8 +53,8 @@ box_left = min(box_left,
 # The same problem on the right wall, and it appeared when the owner's direct
 # edge was added: giving earshot a second parent makes dagre re-rank the top
 # row, ingest grows rightward, and the gap it leaves for loop-source is no
-# longer wide enough for that edge's label ("RTMP (internal)" clipped to a
-# couple of characters). Push the right wall out so the run always fits, the
+# longer wide enough for that edge's label ("RTMP, owner (internal)", ~165px)
+# to avoid clipping. Push the right wall out so the run always fits, the
 # mirror of the GW_INSET/GW_GAP treatment above.
 LOOP_INSET = 18.0
 LOOP_GAP   = 150.0               # ingest -> loop-source run; fits the label
@@ -100,6 +104,16 @@ VLX = (ex_ + sx_) / 2.0        # volume centred between the columns
 _move('PLAYER', PLX, ppy)
 _move('TELEM',  TLX, tty)
 _move('VOL',    VLX, vy_)
+
+# telemetry's own label ("telemetry dashboard :8090 + alerts") is wider than
+# shaka's, so it can reach past the wall the LOOP_GAP formula sized further
+# down (that formula only knows about loop-source, not this column). Widen to
+# clear whichever of shaka/telemetry actually reaches furthest right, same
+# 18px inset convention as loop-source gets below.
+RCOL_INSET = 18.0
+box_right = max(box_right,
+                 TLX + node_halfwidth('TELEM') + RCOL_INSET,
+                 sx_ + node_halfwidth('SHAKA') + RCOL_INSET)
 
 def _edge_curve(eid, p0, p1, out_dir, in_dir):
     """One cubic in dagre's own idiom for these edges: it leaves a box face
@@ -220,10 +234,32 @@ set_edge('L_SRTOBS_GATEWAY_0', f"M{sr_sx},{GY}L{sr_ex},{GY}")
 PORT_LX = (max(SX + shw, OX + ohw) + (GX - ghw)) / 2.0
 set_label('L_SRTOBS_GATEWAY_0', PORT_LX, GY - 22.0)
 
-# 2) srt-gateway -> ingest: straight horizontal, completing the SRT run
+# 2) srt-gateway -> ingest: TWO parallel lines, not one. The gateway can land
+#    a stream in either of ingest's applications - guests through the one that
+#    is admission-controlled, owners (and a gateway with no session-protocol
+#    secret) through the one that is only key-checked - and drawing them as
+#    two lines between the same two boxes is the point: same wire, two
+#    different security models, exactly as real as each other. mermaid gives
+#    the second GATEWAY->INGEST edge in source order the id _2, not _1 (its
+#    own global edge counter, confirmed empirically, not a typo here).
+# Three arrows land on ingest's left face in total (this pair, plus OBS Music
+# Edition's curve below) and are spaced evenly by ARROW_SEP: guest (arbiter-
+# gated) on top, owner (key-authed) dead centre on the shared gateway/ingest
+# row (iy == GY - "the middle of the vertical edge of srt-gateway/rtmp-
+# ingest"), OBS Music Edition below (its own landing point, o_ey further
+# down, mirrors this).
+ARROW_SEP = 30.0
 g_sx, g_ex = GX + ghw, ix - ihw - 6.0
-set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{iy}L{g_ex},{iy}")
-set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, iy - 22.0)
+GATED_Y, KEYED_Y = iy - ARROW_SEP, iy
+set_edge('L_GATEWAY_INGEST_0', f"M{g_sx},{GATED_Y}L{g_ex},{GATED_Y}")
+set_edge('L_GATEWAY_INGEST_2', f"M{g_sx},{KEYED_Y}L{g_ex},{KEYED_Y}")
+# Labels sit close to their own line, not the ±22 used elsewhere: owner's
+# only has ~31px before the OBS Music Edition curve passes beneath it (that
+# curve's closest approach to this label is y=iy+31, at the label's own right
+# edge), so anything looser would ride onto the curve.
+ROUTE_LABEL_OFF = 15.0
+set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, GATED_Y - ROUTE_LABEL_OFF)
+set_label('L_GATEWAY_INGEST_2', (g_sx + (ix - ihw)) / 2.0, KEYED_Y + ROUTE_LABEL_OFF)
 
 # 2b) srt-gateway -> earshot, the OWNER route: leaves the gateway's underside
 #     and lands on earshot's left face, deliberately below and clear of the
@@ -253,7 +289,7 @@ set_label('L_INGEST_EARSHOT_0', ix, (iy + ihh + ey_ - ehh) / 2.0 - 8.0)
 #    rather than underneath keeps it clear of the earshot relay arrow and its
 #    label, which both occupy ingest's underside.
 o_sx, o_sy = OX + ohw, OY
-o_ex, o_ey = ix - ihw - 6.0, iy + ihh * 0.62
+o_ex, o_ey = ix - ihw - 6.0, iy + ARROW_SEP
 # Both control points share one x, placed late (0.78) so the curve stays flat
 # beneath srt-gateway and only lifts once past it: the legacy path visibly
 # runs UNDER the gateway to reach ingest directly, without grazing its corner.

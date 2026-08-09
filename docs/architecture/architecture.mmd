@@ -21,10 +21,11 @@ flowchart TD
     VIEWER["viewer browser<br/>HOAST360<br/>binaural HOA"]
 
     SRTOBS -- "SRT :8890" --> GATEWAY
-    GATEWAY -- "RTMP /guest" --> INGEST
+    GATEWAY -- "RTMP, guest" --> INGEST
+    GATEWAY -- "RTMP, owner" --> INGEST
     GATEWAY -- "MPEG-TS, direct" --> EARSHOT
     OBS -- "RTMP :1935" --> INGEST
-    LOOP -- "RTMP (internal)" --> INGEST
+    LOOP -- "RTMP, owner (internal)" --> INGEST
     INGEST -- "RTMP relay, authenticated" --> EARSHOT
     EARSHOT -- "live DASH: 16-ch Opus<br/>+ video (copy or VP9)" --> VOL
     SHAKA -. "VOD packaging (offline)" .-> VOL
