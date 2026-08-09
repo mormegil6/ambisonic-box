@@ -94,6 +94,9 @@ services:
   #     # SRT_DIRECT=0 in .env for the legacy RTMP republish. Guests always
   #     # take the RTMP hop; that is where guest admission lives.
   #     - SRT_DIRECT=${SRT_DIRECT:-1}
+  #     # Authenticates this gateway to telemetry's /gw/session/* routes; the
+  #     # owner is a different container from srt-gateway and needs its own copy.
+  #     - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
   #     - RTMP_OWNER_KEY=${RTMP_OWNER_KEY}
   #     - SRT_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # MANDATORY in owner mode
   #     - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}

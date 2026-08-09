@@ -13,7 +13,7 @@
 # A tiny threaded HTTP server serves the dashboard on TEL_PORT. stdlib only + the
 # docker CLI (installed in the image; the socket is mounted read-write, because
 # on-demand idling starts and stops the loop-source container).
-import hashlib, hmac, json, os, re, socket, subprocess, time, ipaddress, threading
+import hashlib, hmac, json, os, re, socket, subprocess, time, ipaddress, threading, uuid
 import http.server, socketserver, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -214,7 +214,17 @@ def stream_state():
     # (owner_tick clears it within ~2 cycles) briefly reports publishing with
     # aging segments; `live` stays false then, and auto_idle's source_stop on
     # an already-stopped loop is a no-op, so the residue is cosmetic.
-    publishing = "<publishing/>" in x or _owner["live"]
+    # A direct GUEST is invisible to the stat page for the same reason, and
+    # has no _owner latch to ride: without this term the badge reads OFFLINE
+    # while its segments flow, the stall alert can never fire, and - the hole
+    # the 2026-08-09 spike demonstrated from the public internet - source_start
+    # sees a free slot and starts the demo loop beside it on the single-writer
+    # DASH tree. Only "live" counts, never "handover": guest_publish sets
+    # handover BEFORE _earshot_unwound runs, and this same flag is what that
+    # unwind waits on, so counting handover would deadlock admission against
+    # itself.
+    publishing = ("<publishing/>" in x or _owner["live"]
+                  or (_guest["direct"] and _guest["state"] == "live"))
     m = re.search(r"<nclients>(\d+)</nclients>", x)
     nclients = int(m.group(1)) if m else 0
     seg_age = segment_age()
@@ -774,11 +784,18 @@ GUEST_LIMIT_STRIKES = int(os.environ.get("GUEST_LIMIT_STRIKES", "3"))
 _guest_strikes = {"temp": 0, "rate": 0}
 
 _guest_lock = threading.Lock()
+# `direct` and `session` carry the DIRECT path (guest-direct-dash design).
+# A direct guest reuses this whole state machine - admission, cap, kick,
+# grace, cooldown, bans, the dashboard - and differs in exactly two ways:
+# there is no RTMP publisher behind it, so every stat-based probe must skip
+# it (guard on `direct`), and its liveness arrives as gateway beats keyed on
+# `session` rather than as nginx on_update pings.
 _guest = {"state": "free", "name": None, "addr": None, "start": None,
           "last_seen": None, "grace_started": None, "kill": False,
           "terminating": None, "cooldown_until": None,
           "reports": 0, "last_report_alert": None,
-          "last_end": None, "last_end_reason": None}
+          "last_end": None, "last_end_reason": None,
+          "direct": False, "session": None}
 _reporters = {}              # reporter ip -> [accepted-report epochs]
 _stall_timer = [None]
 # viewer attribution for the CURRENT guest session (guest sessions ARE the
@@ -813,7 +830,7 @@ _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint up
 # loop stays down because source_start sees "already_publishing".
 LOOP_NAME = os.environ.get("DASH_NAME", "hoast_demo")
 _owner_lock = threading.Lock()
-_owner = {"live": False, "name": None, "since": None}
+_owner = {"live": False, "name": None, "since": None, "session": None}
 _owner_miss = [0]          # consecutive owner_tick probes with no publisher
 OWNER_END_REASON = "ended for an owner broadcast"   # NOT in _guest_end_locked's
                            # cooldown list on purpose: a guest preempted for an
@@ -822,6 +839,95 @@ OWNER_END_REASON = "ended for an owner broadcast"   # NOT in _guest_end_locked's
 
 def _guest_sanitize(name):
     return (re.sub(r"[^A-Za-z0-9_-]", "", name or "")[:32]) or "guest"
+
+
+# The DIRECT-path trust anchor (guest-direct-dash design, BLOCKER 1 and
+# BLOCKER-owner). Deliberately NOT _gw_realip_ok: that one checks an address
+# carried in a QUERY FIELD, which is unforgeable only because nginx-rtmp fills
+# it in from the real publisher socket. The /gw/ routes have no nginx in front
+# - the gateways call telemetry directly - so the only trustworthy identity
+# there is the HTTP peer address of the connection itself, which is what
+# _gw_peer_role() checks and what the routes must use.
+#
+# Two hosts, because there are two gateway containers and they are NOT
+# interchangeable: srt-gateway admits arbitrary guests, srt-gateway-owner
+# carries the owner's credentials. A single anchor would let a compromised
+# guest gateway claim owner sessions.
+TEL_SRT_GW_OWNER_HOST = os.environ.get("TEL_SRT_GW_OWNER_HOST",
+                                       "srt-gateway-owner")
+_gw_role_cache = [0.0, {}]
+
+
+def _gw_peer_role(peer, force=False):
+    """Which gateway, if any, is this HTTP peer address? Returns 'guest',
+    'owner' or None.
+
+    Resolved through docker's DNS with the same short cache _gw_ip uses, and
+    re-resolved once on a miss, so a recreated gateway (new container IP) is
+    picked up immediately rather than being refused for up to the cache TTL.
+    srt-gateway-owner lives only in the deployment override and is absent on a
+    default install; an unresolvable name simply matches nothing."""
+    if not peer:
+        return None
+    now = time.time()
+    if force or now - _gw_role_cache[0] > 5:
+        table = {}
+        for role, host in (("guest", TEL_SRT_GW_HOST),
+                           ("owner", TEL_SRT_GW_OWNER_HOST)):
+            try:
+                table[socket.gethostbyname(host)] = role
+            except OSError:
+                pass
+        _gw_role_cache[0], _gw_role_cache[1] = now, table
+    role = _gw_role_cache[1].get(peer)
+    if role is None and not force:
+        return _gw_peer_role(peer, force=True)
+    return role
+
+
+_gw_rate = {}
+_gw_rate_lock = threading.Lock()
+GW_RATE_MIN_GAP_S = 1.0     # a beat every 10 s, a claim retry every 2 s
+
+
+def _gw_rate_ok(peer):
+    """Per-peer floor on /gw/ call spacing.
+
+    The 2026-08-09 incident is the specification here: a keepalive whose
+    cadence was accidentally event-driven called telemetry ~80 times a second,
+    each call taking a thread from an unbounded ThreadingTCPServer, until the
+    container hit its pids limit and the arbiter died - repeatedly. Wall-clock
+    cadence on the client fixes the honest case; this fixes the dishonest and
+    the buggy ones, and makes that whole class of regression locally testable
+    without needing SRT at all. The floor is far below any legitimate rate, so
+    a well-behaved gateway never sees a 429."""
+    now = time.time()
+    with _gw_rate_lock:
+        last = _gw_rate.get(peer, 0.0)
+        if now - last < GW_RATE_MIN_GAP_S:
+            return False
+        _gw_rate[peer] = now
+        if len(_gw_rate) > 64:              # bounded: only gateways reach here
+            for k in [k for k, v in _gw_rate.items() if now - v > 300]:
+                _gw_rate.pop(k, None)
+    return True
+
+
+def _gw_session_ok(peer, token):
+    """Authenticate a /gw/session/* call: the peer must BE one of the gateway
+    containers, and the shared secret must match.
+
+    The secret is MANDATORY here, unlike on the RTMP path where it is optional
+    defence-in-depth. Without it any compose-network peer that could reach
+    telemetry could self-admit, kick a live session, or frame an arbitrary IP
+    for a ban; the address check alone would still be sound, but the two
+    together mean an attacker needs both a specific container identity AND a
+    secret. Returns the role on success, None otherwise."""
+    if not GUEST_GW_SECRET:
+        return None
+    if not (token and hmac.compare_digest(token, GUEST_GW_SECRET)):
+        return None
+    return _gw_peer_role(peer)
 
 
 _gw_ip_cache = [0.0, None]
@@ -1144,10 +1250,14 @@ def _guest_end_locked(reason):
     # strikes belong to the session that earned them: a guest ended for heat
     # must not hand its counters to the innocent next one
     _guest_strikes["temp"] = _guest_strikes["rate"] = 0
+    # direct/session cleared with everything else: a freed slot must not keep
+    # claiming to be a direct writer (stream_state reads that flag) and the
+    # retired session id must never match a late beat from the gateway whose
+    # session this was - that beat gets 410 and a clean re-claim instead.
     _guest.update(state="free", name=None, addr=None, start=None,
                   last_seen=None, grace_started=None, kill=False,
                   terminating=None, cooldown_until=cooldown,
-                  reports=0, last_report_alert=None,
+                  reports=0, last_report_alert=None, direct=False, session=None,
                   last_end=time.time(), last_end_reason=reason)
     _guest_save()
     _resume_flag[0] = True
@@ -1408,6 +1518,153 @@ def guest_done(name):
     return 200
 
 
+def gw_claim(role, name, addr, tracks):
+    """/gw/session/claim - the DIRECT path's on_publish. Called by the gateway
+    after its probe succeeds and BEFORE it dials earshot, so a refusal here
+    means no bytes ever reach the listener.
+
+    Deliberately delegates to guest_publish rather than reimplementing
+    admission: ban list, owner lockout, single slot, cooldown, grace-address
+    ownership, the loop handover AND its stat-based unwind all come along for
+    free, and can never drift from the RTMP path's behaviour because it IS the
+    RTMP path's code. (The design doc proposed replacing that unwind with a
+    docker-level 'loop container stopped' check; its own review then caught
+    that as BLOCKER 3, since the stat is blind to the direct guest but not to
+    the LOOP, which is the thing being waited on. Reusing guest_publish means
+    the correct check was never at risk.)
+
+    Returns (http_status, body). 409 asks the gateway to retry: the slot could
+    not be cleared inside the handover budget, which is a transient condition,
+    not a refusal."""
+    if role == "owner":
+        # The owner has no arbiter admission to pass - it authenticates by
+        # SRT passphrase and preempts whatever is running. owner_notify does
+        # the guest kill, the loop stop and the latch.
+        owner_notify(name)
+        with _owner_lock:
+            sid = _owner["session"] = uuid.uuid4().hex[:16]
+        return 200, {"session": sid}
+    if not GUEST_ENABLED:
+        return 403, {"error": "guest endpoint disabled"}
+    code = guest_publish(name, addr)
+    if code == 201:
+        with _guest_lock:
+            # Mark AFTER guest_publish: it is the RTMP path's own function and
+            # knows nothing about direct sessions. Re-check the slot is still
+            # ours - a preempt could have landed during the handover.
+            if _guest["state"] == "live" and _guest["name"] == name:
+                sid = uuid.uuid4().hex[:16]
+                _guest.update(direct=True, session=sid, tracks=tracks)
+                _guest_save()
+                print(f"guest claimed the DIRECT path: {name} from {addr} "
+                      f"({tracks} track(s))", flush=True)
+                return 200, {"session": sid}
+        return 409, {"retry_after_s": 2}
+    if code == 503:
+        return 409, {"retry_after_s": 2}
+    return 403, {"error": "refused"}
+
+
+def gw_beat(role, session):
+    """/gw/session/beat - the DIRECT path's on_update, and the kick lever.
+
+    200 continue, 403 the gateway must terminate the session, 410 the session
+    is unknown here and the gateway should re-claim from scratch.
+
+    410 rather than 403 for unknown is BLOCKER 4 from the review: a telemetry
+    redeploy loses in-memory state, and answering 403 there would execute every
+    live direct session within one beat interval, while answering 200 would
+    keep zombies alive forever. 410 says 'I do not know you, re-introduce
+    yourself', which the gateway answers with an idempotent re-claim - the
+    direct analogue of the RTMP path's stat-backed adoption, which cannot work
+    here because a direct session appears in no stat page."""
+    if role == "owner":
+        with _owner_lock:
+            if not _owner["live"]:
+                return 410, {}
+            if session and _owner["session"] and session != _owner["session"]:
+                return 410, {}
+            # A same-session beat is the owner keepalive: refresh the latch so
+            # owner_tick's ingest probe (which would never see this session)
+            # cannot expire it, exactly as the /rtmp/live/notify re-notify does.
+            _owner["since"] = time.time()
+            _owner_miss[0] = 0
+        return 200, {}
+    if not GUEST_ENABLED:
+        return 403, {"error": "guest endpoint disabled"}
+    with _guest_lock:
+        if not _guest["direct"] or not session or _guest["session"] != session:
+            return 410, {}
+        if _guest["state"] not in ("live", "handover"):
+            # demoted to grace by beat silence, or ended outright; the gateway
+            # re-claims rather than assuming its slot survived
+            return 410, {}
+        # Same verdict ladder the RTMP on_update ping enforces, in the same
+        # order, so both paths kick for identical reasons: operator kill and
+        # End+ban, then the session cap, then the temperature/bitrate guard.
+        if _guest["kill"]:
+            _guest["terminating"] = _guest["terminating"] or "operator kill"
+            _guest_save()
+            return 403, {"reason": _guest["terminating"]}
+        if _guest["start"] and time.time() - _guest["start"] > GUEST_MAX_S:
+            _guest["terminating"] = "session cap"
+            _guest_save()
+            return 403, {"reason": "session cap"}
+        hit = _guest_limits_exceeded()
+        if hit:
+            _guest["terminating"] = hit
+            _guest_save()
+            return 403, {"reason": hit}
+        _guest["last_seen"] = time.time()
+        _guest_save()
+        remaining = None
+        if _guest["start"] and GUEST_MAX_S:
+            remaining = max(0, round(GUEST_MAX_S - (time.time() - _guest["start"])))
+    return 200, {"remaining_s": remaining}
+
+
+def gw_done(role, session):
+    """/gw/session/done - the DIRECT path's on_publish_done. Opens the same
+    address-locked reconnect grace a dropped RTMP guest gets, or ends the
+    session outright if it was already terminating.
+
+    The session id is what makes this safe to send more than once, and is why
+    the owner path's double-done timing hack is not needed here: a done for a
+    session that is no longer current is simply ignored, rather than being
+    guessed at from how recently the latch was refreshed."""
+    if role == "owner":
+        # Deliberately NOT owner_done(): that path guards against a dead
+        # predecessor's late callback by IGNORING any done within 5 s of the
+        # latch being (re-)armed, because on the RTMP path a done carries only
+        # a name and nothing else can tell the two apart. Here the session id
+        # already proves which session is ending, so applying the time
+        # heuristic on top would silently drop a legitimate short session's
+        # done and strand the latch until owner_tick expired it - which is
+        # exactly what testing this route caught (a done 3.6 s after the claim
+        # was swallowed, and the next beat answered 200 for a session that had
+        # ended). Clear it directly instead; the id IS the identity check.
+        resume = False
+        with _owner_lock:
+            if not _owner["live"]:
+                return 200, {}
+            if session and _owner["session"] and session != _owner["session"]:
+                return 200, {}                  # a dead predecessor's done
+            name = _owner["name"]
+            _owner.update(live=False, name=None, since=None, session=None)
+            _owner_miss[0] = 0
+            resume = True
+        if resume:
+            print(f"owner left (direct session done): {name}", flush=True)
+            _resume_after_guest()
+        return 200, {}
+    with _guest_lock:
+        if not _guest["direct"] or not session or _guest["session"] != session:
+            return 200, {}
+        name = _guest["name"]
+    guest_done(name)
+    return 200, {}
+
+
 def guest_update(name):
     """on_update liveness ping. Non-2xx here makes nginx-rtmp drop the
     publisher: the enforcement point for the cap and the kill button."""
@@ -1439,6 +1696,11 @@ def guest_update(name):
                 _guest_save()
                 return 403
             _guest_save()
+            return 200
+        if _guest["direct"]:
+            # a DIRECT session is driven by beats, not by this ping; an RTMP
+            # on_update arriving for it (same name, different transport) must
+            # not adopt it, re-clock it, or resurrect it from grace
             return 200
         if _guest["state"] == "free":
             # an update with no session: either telemetry lost its state (wiped
@@ -2068,7 +2330,20 @@ def _guest_boot():
         return
     with _guest_lock:
         if _guest["state"] in ("live", "handover"):
-            if not _ingest_guest_publishing():
+            if _guest["direct"]:
+                # A DIRECT session appears in no stat page, so this probe would
+                # demote every one of them on every restart. Its own liveness
+                # check is the beat: guest_tick's 60 s silence rule ends it if
+                # the gateway is really gone, and if the gateway is still there
+                # the next beat re-confirms the session (or, when the state was
+                # lost entirely, is answered 410 and the gateway re-claims).
+                # Stamp last_seen so the silence rule measures from the restart
+                # rather than from a possibly-ancient persisted value.
+                _guest["last_seen"] = time.time()
+                _guest_save()
+                print("direct guest session restored after restart; "
+                      "awaiting beat", flush=True)
+            elif not _ingest_guest_publishing():
                 _guest.update(state="grace", grace_started=time.time())
                 _guest_save()
                 _grace_timer_arm(GUEST_GRACE_S)
@@ -2688,6 +2963,40 @@ def serve():
             # (the demo loop or an external owner - owner_notify tells them
             # apart by the forwarded name). nginx already fails these open,
             # so the responses here don't gate anything.
+            # The DIRECT path's session protocol (guest-direct-dash design).
+            # Authenticated by the HTTP PEER ADDRESS plus a mandatory shared
+            # secret - never by a request field, which is the whole point:
+            # these routes have no nginx in front to vouch for anyone, so the
+            # connection itself is the only identity that cannot be forged by
+            # its own claimant. Must not be proxied; hoast-player forwards only
+            # the three /api routes, so nothing does.
+            if p.startswith("/gw/session/"):
+                args = urllib.parse.parse_qs(q)
+                peer = self.client_address[0]
+                role = _gw_session_ok(peer, (args.get("gw") or [""])[0])
+                if not role:
+                    return self._json(403, {"error": "not a known gateway"})
+                if not _gw_rate_ok(peer):
+                    # A misbehaving or hostile beat loop must not be able to do
+                    # what the 2026-08-09 latch flood did: bury this server in
+                    # handler threads until it hits the container pids limit.
+                    # Cheap, before any lock is taken or any state is touched.
+                    return self._json(429, {"error": "slow down"})
+                act = p.rsplit("/", 1)[-1]
+                if act == "claim":
+                    code, body = gw_claim(
+                        role,
+                        _guest_sanitize((args.get("name") or [""])[0]),
+                        (args.get("ip") or [""])[0],
+                        (args.get("tracks") or [""])[0])
+                    return self._json(code, body)
+                if act == "beat":
+                    code, body = gw_beat(role, (args.get("session") or [""])[0])
+                    return self._json(code, body)
+                if act == "done":
+                    code, body = gw_done(role, (args.get("session") or [""])[0])
+                    return self._json(code, body)
+                return self._json(404, {"error": "not found"})
             if p == "/rtmp/live/notify":
                 args = urllib.parse.parse_qs(q)
                 owner_notify((args.get("name") or [None])[0])
@@ -2737,8 +3046,19 @@ def serve():
                 return self._json(200, restart_services((q.get("svc") or [""])[0]))
             return self._json(404, {"ok": False, "error": "not found"})
 
-    with socketserver.ThreadingTCPServer(("", PORT), H) as srv:
-        srv.allow_reuse_address = True
+    # daemon_threads: a handler thread must never hold the process open at
+    # shutdown. The 2026-08-09 flood proved the other half matters more - this
+    # server forks one thread per connection with no ceiling, and the
+    # container's pids_limit is 256, so a fast enough caller turns "slow" into
+    # "telemetry is dead and the alerter with it". request_queue_size lets the
+    # kernel hold a burst as backlog instead of spawning threads for it, and
+    # _gw_rate_ok refuses the repeat offenders before they take a lock.
+    class BoundedServer(socketserver.ThreadingTCPServer):
+        daemon_threads = True
+        allow_reuse_address = True
+        request_queue_size = 64
+
+    with BoundedServer(("", PORT), H) as srv:
         srv.serve_forever()
 
 def main():
