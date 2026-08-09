@@ -315,7 +315,23 @@ def viewers(ps):
             waiting_ips.add(ip)     # loose: manifest polls count, see "waiting"
         if ir and served and not internal:
             ir_ips.add(ip)
-        if not seg or not served:
+        # Segment fetches OR served manifest polls both count as watching.
+        # Until 2026-08-09 only segments counted, and the block comment below
+        # explains why that was right THEN: a manifest poll against a dead
+        # stream proves waiting, not watching. What changed is the Cloudflare
+        # cache rule on /dash/chunk-* and /dash/init-*: segment requests are
+        # now answered at the edge and never reach this log, so a
+        # segments-only count collapses to roughly one viewer per PoP
+        # (whoever MISSes each fresh segment first). The manifest is
+        # deliberately left DYNAMIC and every player polls it every ~2 s, so
+        # a SERVED manifest poll is the same per-viewer heartbeat the segment
+        # rule used to be. The dead-stream case stays correct because served
+        # filters out the 404s a dead manifest returns. Honest residue: a
+        # paused live player keeps polling the manifest, so a parked tab now
+        # counts as a viewer for as long as it sits there; pre-rule it aged
+        # out after 90 s. That overcount is bounded by the number of parked
+        # tabs; the undercount it replaces was unbounded.
+        if not dash or not served:
             continue
         any_ips.add(ip)     # counted before the public filter: see "any" below
         if internal:
