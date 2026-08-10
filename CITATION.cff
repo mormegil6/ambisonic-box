@@ -12,9 +12,15 @@ authors:
     orcid: "https://orcid.org/0000-0002-8983-9050"
     email: "bartlomiej.mroz@pg.edu.pl"
     affiliation: "Department of Multimedia Systems, Gdańsk University of Technology"
-repository-code: "https://git.pg.edu.pl/p829296/ambisonic-box"
+repository-code: "https://github.com/mormegil6/ambisonic-box"
+repository: "https://git.pg.edu.pl/p829296/ambisonic-box"
 url: "https://bmroz.eu/projects/360-livestream/"
 license: "Apache-2.0"
+# Keep these two in step with telemetry/VERSION and with the tag being cut.
+# Without them a citation describes an unversioned snapshot, which for a
+# toolchain paper is the difference between reproducible and not.
+version: "0.9.9-dev"
+date-released: "2026-08-10"
 keywords:
   - "Higher-Order Ambisonics"
   - "spatial audio"
@@ -42,3 +48,15 @@ preferred-citation:
   year: 2023
   month: 8
   url: "https://www.aes.org/e-lib/browse.cfm?elib=22204"
+
+# TODO, publication roadmap: this file currently offers ONE citable work, the
+# 2023 AES paper, which is the right reference for the toolchain's ORIGIN but
+# not for what this repository has become - the containerisation itself, the
+# browser interop findings, and the Phase 5 A/V-sync measurements all postdate
+# it. While it is the only entry, someone citing "the interop finding" will
+# cite the 2023 paper by default, because there is nothing else to point at.
+#   - add the IEEE MultiMedia paper once accepted
+#   - add the toolchain paper (Huddersfield) once it exists
+# CFF allows only one `preferred-citation`, so additional works belong under a
+# `references:` list, with preferred-citation reassigned to whichever paper
+# best matches what the repository is by then.

@@ -339,6 +339,11 @@ services:
       # also covers `docker compose -p <name>` (no env var involved).
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-ambi-box}
       - TEL_HOST=${TEL_HOST:-ambisonic-box}
+      # Overrides the VERSION file baked into the telemetry image, so CI and a
+      # developer can report an exact `git describe` rather than the release
+      # string. Unset is the normal case and falls back to that file, which is
+      # why a plain `docker compose up` still reports something truthful.
+      - AMBI_VERSION=${AMBI_VERSION:-}
       - FFMPEG_FLAGS=${FFMPEG_FLAGS:-}   # so it can report resolution/bitrate
       - BOT_TOKEN=${BOT_TOKEN:-}         # optional: Telegram alerts (unset = disabled)
       - CHAT_ID=${CHAT_ID:-}

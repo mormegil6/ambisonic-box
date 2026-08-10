@@ -619,6 +619,10 @@ def live_probe():
     except Exception:
         pass
     return {"live": live,
+            # Which build is answering. Cheap to include and it is the only way
+            # a user who did not clone the repo can tell what they are running,
+            # which is what the bug report form has to ask for.
+            "version": AMBI_VERSION,
             "ready": ready,                          # safe to initialise a player
             "timeline_s": round(depth),
             # The manifest grows one audio segment at a time, so this decreases in
@@ -749,6 +753,21 @@ TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
 # stack this reads True unless the operator sets 0.
 SRT_ENABLED = os.environ.get("SRT_ENABLED", "0") == "1"
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
+# What version is actually running. AMBI_VERSION wins so CI and a developer can
+# inject an exact `git describe`; the shipped VERSION file is the fallback so a
+# plain `docker compose up` still reports something truthful rather than
+# nothing. Surfaced on /api/live, which the player already polls, so the
+# dashboard and the public page both get it for free.
+def _read_version():
+    v = os.environ.get("AMBI_VERSION", "").strip()
+    if v:
+        return v
+    try:
+        return (Path("/app/VERSION").read_text().strip() or "unknown")
+    except Exception:
+        return "unknown"
+
+AMBI_VERSION = _read_version()
 # Max hold on the on_publish callback while the loop unwinds. nginx-rtmp's
 # netcall gives up after netcall_timeout (default 10 s, an undocumented
 # rtmp-level directive left at its default here), and the docker stop before

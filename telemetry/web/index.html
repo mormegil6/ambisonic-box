@@ -89,6 +89,7 @@
     <span class="dot" id="statusDot" style="background:var(--dim)"></span>
     <h1>HOA stream dashboard</h1>
     <span class="host" id="host">—</span>
+    <span class="host" id="version" title="build this dashboard is served by">—</span>
     <span class="updated" id="updated">connecting…</span>
   </header>
 
@@ -427,6 +428,8 @@ async function tick(){
     const ld = await (await fetch("api/live?_="+Date.now(), {cache:"no-store"})).json();
     if (ld && ld.endpoint) s.endpoint = { ...(s.endpoint||{}), ...ld.endpoint };
     else if (ld && !ld.endpoint) delete s.endpoint;
+    // which build is answering; /api/live is already polled, so this is free
+    if (ld && ld.version) $('version').textContent = ld.version;
   } catch(e) {}
 
   window.__LAST_STATS__ = s;

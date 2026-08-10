@@ -15,6 +15,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# Shipped so a RUNNING stack can say what it is. Without this the only answer
+# to "which version am I on?" is a git checkout the user may not have - and the
+# bug report form asks for exactly that.
+COPY VERSION /app/VERSION
 COPY collect.py /app/collect.py
 COPY web/ /app/web/
 

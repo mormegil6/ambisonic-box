@@ -296,6 +296,11 @@
            and <a href="https://github.com/shaka-project/shaka-packager" target="_blank" rel="noopener">Shaka&nbsp;Packager</a> for VOD.
            Orchestrated as a containerised <a href="https://www.docker.com/" target="_blank" rel="noopener">Docker</a> stack.</div>
       <div class="row" id="brandCopyright" hidden></div>
+      <!-- Which build is serving this page. Filled from /api/live, which the
+           readiness gate already polls, so it costs no extra request. Stays
+           hidden if telemetry is unreachable rather than showing a blank or a
+           guess. -->
+      <div class="row" id="buildVersion" hidden></div>
     </div></footer>
 
     <script>
@@ -608,6 +613,13 @@
                 .then(function (r) { return r.json(); })
                 .then(function (p) {
                     setBadge(p);
+                    if (p.version) {
+                        var bv = document.getElementById('buildVersion');
+                        if (bv && bv.hidden) {
+                            bv.textContent = 'Ambisonic Box ' + p.version;
+                            bv.hidden = false;
+                        }
+                    }
                     // The source can stop under a session that already started:
                     // on-demand idling does exactly that once nobody has been
                     // fetching segments for TEL_IDLE_STOP_MIN. Without this the
