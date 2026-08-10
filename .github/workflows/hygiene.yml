@@ -178,3 +178,33 @@ jobs:
             exit 1
           fi
           echo "placeholder owner key is only referenced where it must be"
+
+  arm64-bases:
+    name: base images support arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: every FROM must publish a linux/arm64 variant
+        run: |
+          # CLAUDE.md's hard constraint: this stack deploys on a Raspberry Pi 4
+          # as well as amd64, so "DO NOT use ARM-only base images" has an
+          # equally important inverse - an amd64-only base silently breaks the
+          # Pi. Actually BUILDING arm64 here means QEMU-emulating an ffmpeg
+          # compile (hours), so this checks the manifests instead: seconds, and
+          # it catches the regression at the only moment it is cheap to fix.
+          # It does NOT prove the images build on arm64; that is what the Pi is
+          # for. It proves the bases have not become amd64-only.
+          fail=0
+          bases=$(grep -hoE '^FROM [^ ]+'                     services/*/Dockerfile telemetry/Dockerfile                     services/earshot/src/Dockerfile 2>/dev/null                   | awk '{print $2}' | grep -v '^scratch$' | sort -u)
+          for img in $bases; do
+            case "$img" in *'$'*) echo "  skipping templated base: $img"; continue ;; esac
+            arches=$(docker buildx imagetools inspect "$img" 2>/dev/null \
+                       | grep -oE 'linux/(amd64|arm64)' | sort -u | tr '\n' ' ')
+            case "$arches" in
+              *arm64*) printf '  ok      %-30s %s\n' "$img" "$arches" ;;
+              '')      echo "::error::could not inspect $img (network, or the tag is gone)"; fail=1 ;;
+              *)       echo "::error::$img has no linux/arm64 variant - this would break the Pi 4 deployment"; fail=1 ;;
+            esac
+          done
+          exit $fail
