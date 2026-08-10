@@ -1,0 +1,121 @@
+name: release to gitlab
+
+# Copies a GitHub release's METADATA (tag, title, notes) to git.pg.edu.pl.
+#
+# Deliberately NOT the assets. The vod-clips release alone is ~200 MB, the
+# university instance has already needed two storage-limit increases this
+# semester, and the assets are already published there by hand into the
+# generic package registry (project uploads serve empty via the API, which is
+# why the registry is used). Re-uploading them on every publish would duplicate
+# what exists and spend quota to do it.
+#
+# So: this keeps the two release LISTS in step, and asset publishing stays a
+# deliberate manual act. If a release has assets on GitHub that GitLab lacks,
+# the job says so in its summary rather than silently pretending otherwise.
+#
+# Auth is a GitLab PROJECT access token (scope: api, this project only), not a
+# personal token - creating a release needs api, and there is no narrower
+# scope. Deploy keys cannot do it; they are git transport only.
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag of an existing GitHub release to copy'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: copy the release to GitLab
+        env:
+          GL_TOKEN: ${{ secrets.GITLAB_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          PROJECT=p829296%2Fambisonic-box
+          API=https://git.pg.edu.pl/api/v4/projects/$PROJECT
+
+          # Read the release from GitHub rather than trusting the event
+          # payload, so a manual dispatch behaves identically to a publish.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,name,body,assets > rel.json
+          python3 - <<'PY' > payload.json
+          import json, os
+          r = json.load(open('rel.json'))
+          notes = r.get('body') or ''
+          # A mirror should say it is one, and point at the canonical copy.
+          notes += (
+              "\n\n---\n"
+              "Mirrored from GitHub, which is this project's source of truth: "
+              f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/{r['tagName']}\n"
+              "Release assets are published separately into this project's "
+              "generic package registry and are not copied by this job."
+          )
+          json.dump({"name": r.get('name') or r['tagName'],
+                     "tag_name": r['tagName'],
+                     "description": notes}, open('payload.json','w'))
+          PY
+
+          # The tag must exist on GitLab first: the mirror workflow pushes tags,
+          # but a release published seconds after a tag push can outrun it.
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+                     --header "PRIVATE-TOKEN: $GL_TOKEN" \
+                     "$API/repository/tags/$TAG")
+            [ "$code" = "200" ] && break
+            echo "  tag $TAG not on GitLab yet (HTTP $code), waiting..."
+            sleep 12
+          done
+          [ "$code" = "200" ] || { echo "::error::tag $TAG never appeared on GitLab; is the mirror workflow healthy?"; exit 1; }
+
+          # Create, or update if it is already there (the `edited` trigger).
+          code=$(curl -s -o resp.json -w '%{http_code}' -X POST \
+                   --header "PRIVATE-TOKEN: $GL_TOKEN" \
+                   --header 'Content-Type: application/json' \
+                   --data @payload.json "$API/releases")
+          if [ "$code" = "409" ]; then
+            echo "  release exists, updating instead"
+            code=$(curl -s -o resp.json -w '%{http_code}' -X PUT \
+                     --header "PRIVATE-TOKEN: $GL_TOKEN" \
+                     --header 'Content-Type: application/json' \
+                     --data @payload.json "$API/releases/$TAG")
+          fi
+          case "$code" in
+            200|201) echo "  GitLab release $TAG is in step (HTTP $code)" ;;
+            *) echo "::error::GitLab refused the release (HTTP $code)"; cat resp.json; exit 1 ;;
+          esac
+
+      - name: note any assets GitLab does not have
+        if: always()
+        env:
+          GL_TOKEN: ${{ secrets.GITLAB_API_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          # Assets are intentionally not synced, so make the gap visible rather
+          # than leaving someone to assume the two are identical.
+          gh_n=$(python3 -c "import json;print(len(json.load(open('rel.json'))['assets']))" 2>/dev/null || echo 0)
+          gl_n=$(curl -s --header "PRIVATE-TOKEN: $GL_TOKEN" \
+                   "https://git.pg.edu.pl/api/v4/projects/p829296%2Fambisonic-box/releases/$TAG" \
+                 | python3 -c "import json,sys;print(len((json.load(sys.stdin).get('assets') or {}).get('links') or []))" 2>/dev/null || echo 0)
+          {
+            echo "### Release $TAG"
+            echo ""
+            echo "- GitHub assets: $gh_n"
+            echo "- GitLab asset links: $gl_n"
+            if [ "$gh_n" -gt "$gl_n" ]; then
+              echo ""
+              echo "GitLab has fewer assets. That is expected - assets are published by hand into the generic package registry (see docs/CI.md). Upload them there if this release needs them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
