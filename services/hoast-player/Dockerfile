@@ -1,7 +1,7 @@
 # Serves the patched HOAST360 player  and the live DASH output.
 # Build context must be the repo root (needs the hoast360/ submodule):
 #   docker build -f services/hoast-player/Dockerfile .
-FROM nginx:1.30.2-alpine
+FROM nginx:1.31.3-alpine
 
 # Patch the base image's OS packages. This image is unusual among the stack's:
 # every other one runs `apk add` or `apt-get install`, which refreshes the

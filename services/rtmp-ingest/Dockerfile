@@ -1,6 +1,6 @@
 # Edge RTMP ingest: stream-key auth + relay to earshot.
 # alpine's nginx + nginx-mod-rtmp packages are published for x86_64 and aarch64.
-FROM alpine:3.22
+FROM alpine:3.24
 
 RUN apk add --no-cache nginx nginx-mod-rtmp gettext
 
