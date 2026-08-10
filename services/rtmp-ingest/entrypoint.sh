@@ -24,6 +24,28 @@ fi
 # telemetry bound to 127.0.0.1, SRT admitting nobody until asked - rather than
 # introducing a new one. The list is the same one scripts/setup.sh treats as
 # "still needs generating", so the two cannot drift.
+# LOOP_SOURCE_KEY is the same class of credential, which is NOT what this file
+# used to assume. nginx checks it in the `owner` application, so the committed
+# default was a working owner-publish credential for anyone who had read the
+# repository - reproduced on 2026-08-10 with a plain ffmpeg push. It is scoped
+# to the loop's own stream name now, but a stranger publishing under that name
+# still becomes the stream, so the key itself has to be real too.
+case "${LOOP_SOURCE_KEY}" in
+    hoast_demo|CHANGE_ME_this_default_is_public)
+        if [ "${ALLOW_DEFAULT_OWNER_KEY:-0}" != "1" ]; then
+            echo "[rtmp-ingest] REFUSING TO START: LOOP_SOURCE_KEY is still the public default." >&2
+            echo "[rtmp-ingest] It is checked inside the owner application, which is published on" >&2
+            echo "[rtmp-ingest] all interfaces, so anyone who has read the repository could publish" >&2
+            echo "[rtmp-ingest] as the demo loop and become the live stream." >&2
+            echo "[rtmp-ingest]   fix:  ./scripts/setup.sh        (generates one into .env)" >&2
+            echo "[rtmp-ingest]   or:   set LOOP_SOURCE_KEY yourself in .env" >&2
+            echo "[rtmp-ingest]   or:   ALLOW_DEFAULT_OWNER_KEY=1 to accept this on a private host" >&2
+            exit 1
+        fi
+        echo "[rtmp-ingest] WARNING: serving with the PUBLIC default LOOP_SOURCE_KEY" >&2
+        ;;
+esac
+
 case "${RTMP_OWNER_KEY}" in
     CHANGE_ME_this_default_is_public|hoast_demo_owner)
         if [ "${ALLOW_DEFAULT_OWNER_KEY:-0}" != "1" ]; then
@@ -48,8 +70,18 @@ esac
 # at /run/nginx for the same reason.
 mkdir -p /run/nginx/tmp
 
-# substitute only these two; everything else ($arg_name, ...) is nginx syntax
-envsubst '${LOOP_SOURCE_KEY} ${RTMP_OWNER_KEY}' < /etc/nginx/nginx.conf.template > /run/nginx/nginx.conf
+# substitute only these three; everything else ($arg_name, $loop_auth, ...) is
+# nginx syntax and MUST survive. The explicit list is what protects it: a bare
+# envsubst would eat $loop_auth and silently break the loop-token scope check.
+if [ -z "${DASH_NAME}" ]; then
+    echo "[rtmp-ingest] DASH_NAME is not set. It scopes LOOP_SOURCE_KEY to the" >&2
+    echo "[rtmp-ingest] loop's own stream name, so without it the token would be" >&2
+    echo "[rtmp-ingest] accepted for no name at all. compose always passes it, so" >&2
+    echo "[rtmp-ingest] this container predates that change. Recreate it with:" >&2
+    echo "[rtmp-ingest]   docker compose up -d --force-recreate rtmp-ingest" >&2
+    exit 1
+fi
+envsubst '${LOOP_SOURCE_KEY} ${RTMP_OWNER_KEY} ${DASH_NAME}' < /etc/nginx/nginx.conf.template > /run/nginx/nginx.conf
 
 # Guest test endpoint: OFF unless GUEST_ENABLED=1. The snippets contain no
 # ${...}, so they are copied verbatim; disabled means empty includes and the

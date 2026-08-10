@@ -87,7 +87,10 @@ env_get() {
     sed -n "s/^$1=//p" .env 2>/dev/null | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
-LOOP_SOURCE_KEY="${LOOP_SOURCE_KEY:-$(env_get LOOP_SOURCE_KEY)}"; LOOP_SOURCE_KEY="${LOOP_SOURCE_KEY:-hoast_demo}"
+# RTMP_OWNER_KEY, not LOOP_SOURCE_KEY: this pushes under its own stream name,
+# and since 2026-08-10 the loop token is scoped to the loop's own name only.
+RTMP_OWNER_KEY="${RTMP_OWNER_KEY:-$(env_get RTMP_OWNER_KEY)}"
+[ -n "$RTMP_OWNER_KEY" ] || fail "RTMP_OWNER_KEY is not set and .env has none - run ./scripts/setup.sh"
 DASH_NAME="${DASH_NAME:-$(env_get DASH_NAME)}";   DASH_NAME="${DASH_NAME:-hoast_demo}"
 
 LOOP_WAS_RUNNING=0
@@ -105,7 +108,7 @@ restore() {
 trap restore EXIT
 
 ./scripts/merge-obs-tracks.sh "$WORK/obs-shaped.mov" \
-    --push "rtmp://localhost:1935/owner/obs-merge-test?token=${LOOP_SOURCE_KEY}" \
+    --push "rtmp://localhost:1935/owner/obs-merge-test?token=${RTMP_OWNER_KEY}" \
     --channels 16 >/dev/null 2>&1 \
     || fail "push through the ingest failed"
 

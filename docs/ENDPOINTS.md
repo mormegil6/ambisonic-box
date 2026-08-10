@@ -28,7 +28,7 @@ Order matters on the way back up: `rtmp-ingest`'s nginx resolves `earshot` once 
 
 The failure mode that makes this worth automating is not the downtime, it is the silence: **`telemetry` is the alerting path**, so if it is one of the services that failed to bind, nothing can report the outage - including the outage of the alerter itself. Any boot-recovery script should send its own notification, independently of telemetry, on success as well as failure.
 
-Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), the `srt-gateway` status/health port (8091 internal; discloses the active caller IP, so same loopback-only reasoning as earshot's `/stat`), earshot's direct-DASH listeners (9100 4x4 / 9101 1x4, fed only by the owner SRT gateway, armed by `SRT_DIRECT_LISTENERS`), and the `dash-output` / `status-public` volumes.
+Internal-only, never published: earshot's RTMP relay + `on_publish` callback (1935 / 80 inside the network), rtmp-ingest's health port (8080 internal), the `srt-gateway` status/health port (8091 internal; discloses the active caller IP, so same loopback-only reasoning as earshot's `/stat`), earshot's direct-DASH listeners (9100 4x4 / 9101 1x4, armed by `SRT_DIRECT_LISTENERS`, fed by the owner SRT gateway and, where the operator has set `GUEST_SRT_DIRECT=1`, by the guest one; either way the listener refuses any connection that is not a gateway holding a claimed session), and the `dash-output` / `status-public` volumes.
 
 ### Control routes proxied on 8080
 

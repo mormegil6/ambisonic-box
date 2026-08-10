@@ -100,3 +100,38 @@ jobs:
           echo "$out2" | grep -q 'WARNING: serving with the PUBLIC default' \
             || { echo "::error::ALLOW_DEFAULT_OWNER_KEY=1 no longer warns"; exit 1; }
           echo "guard refuses by default and warns when opted out"
+
+      - name: the loop-source key is guarded the same way, and is scoped to one name
+        run: |
+          # Regression test for 2026-08-10. LOOP_SOURCE_KEY is checked inside
+          # the OWNER application, so its committed default was a working
+          # owner-publish credential for anyone who had read this repository:
+          # `ffmpeg ... rtmp://host:1935/owner/<any-name>?token=hoast_demo` was
+          # admitted, which preempts a guest and takes over the stream. Two
+          # things fix it and both are asserted here, because either alone
+          # leaves a hole: the key must be real, AND it must only work together
+          # with the loop's own stream name.
+          set +e
+          out=$(docker run --rm --entrypoint /entrypoint.sh \
+                  -e LOOP_SOURCE_KEY=hoast_demo -e RTMP_OWNER_KEY=real -e DASH_NAME=hoast_demo \
+                  ambi-box-rtmp-ingest:latest 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          [ "$rc" -eq 1 ] || { echo "::error::rtmp-ingest started with the public default LOOP_SOURCE_KEY (rc=$rc)"; exit 1; }
+          echo "$out" | grep -q 'REFUSING TO START: LOOP_SOURCE_KEY' \
+            || { echo "::error::refused, but not for the loop key"; exit 1; }
+
+          # The rendered config must bind the token to the name. Checking the
+          # generated nginx.conf rather than the template proves envsubst kept
+          # $loop_auth intact - a bare envsubst would eat it and silently turn
+          # the scope check into an always-false comparison.
+          conf=$(docker run --rm --entrypoint sh \
+                   -e LOOP_SOURCE_KEY=loopsecret -e RTMP_OWNER_KEY=ownersecret -e DASH_NAME=thestream \
+                   ambi-box-rtmp-ingest:latest -c \
+                   'mkdir -p /run/nginx && envsubst "\${LOOP_SOURCE_KEY} \${RTMP_OWNER_KEY} \${DASH_NAME}" < /etc/nginx/nginx.conf.template')
+          echo "$conf" | grep -q '\$arg_name != .thestream.' \
+            || { echo "::error::the loop token is no longer scoped to DASH_NAME"; exit 1; }
+          echo "$conf" | grep -q 'set \$loop_auth' \
+            || { echo "::error::envsubst ate \$loop_auth; the scope check would never match"; exit 1; }
+          echo "loop key refused at its default, and scoped to the loop's own stream name"

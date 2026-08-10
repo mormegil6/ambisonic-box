@@ -16,7 +16,7 @@
 # earshot transcode (always 16-ch Opus; video per FFMPEG_FLAGS) is what this
 # test verifies.
 #
-# The test publishes as "pipeline-test?token=$LOOP_SOURCE_KEY" (exercising the
+# The test publishes as "pipeline-test?token=$RTMP_OWNER_KEY" (exercising the
 # token-auth path). earshot writes every stream's chunks into the same
 # directory with identical default names, so the test refuses to run while
 # another publisher is active; if that publisher is loop-source, it is
@@ -45,16 +45,25 @@ STOP_PUBLISH_DEADLINE=20
 MIN_CHUNKS=5             # >=10 s of content at 2 s segments
 OUTPUT_DIR=./output
 
-# Read LOOP_SOURCE_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
+# Read RTMP_OWNER_KEY / FFMPEG_FLAGS the way compose resolves them: shell env
 # first, then .env. Never shell-source .env - the compose dialect allows
 # unquoted values with spaces (see FFMPEG_FLAGS in .env.example).
 env_get() {
     sed -n "s/^$1=//p" .env | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
-if [ -z "${LOOP_SOURCE_KEY:-}" ] && [ -f .env ]; then LOOP_SOURCE_KEY=$(env_get LOOP_SOURCE_KEY); fi
+# This test publishes under a name that is NOT the loop's, on purpose (see the
+# TEST_STREAM comment below), and since 2026-08-10 that is exactly what
+# LOOP_SOURCE_KEY may no longer do: it is scoped to the loop's own stream name,
+# because it was otherwise a general owner-publish credential with a committed
+# public default. RTMP_OWNER_KEY is the credential that legitimately publishes
+# under any name, which is also what this test is simulating.
+if [ -z "${RTMP_OWNER_KEY:-}" ] && [ -f .env ]; then RTMP_OWNER_KEY=$(env_get RTMP_OWNER_KEY); fi
 if [ -z "${FFMPEG_FLAGS:-}" ] && [ -f .env ]; then FFMPEG_FLAGS=$(env_get FFMPEG_FLAGS); fi
-LOOP_SOURCE_KEY="${LOOP_SOURCE_KEY:-hoast_demo}"
+if [ -z "${RTMP_OWNER_KEY:-}" ]; then
+    echo "[test-pipeline] RTMP_OWNER_KEY is not set and .env has none - run ./scripts/setup.sh" >&2
+    exit 2
+fi
 FFMPEG_FLAGS="${FFMPEG_FLAGS:-}"
 if [ -z "${DASH_NAME:-}" ] && [ -f .env ]; then DASH_NAME=$(env_get DASH_NAME); fi
 DASH_NAME="${DASH_NAME:-hoast_demo}"
@@ -208,8 +217,38 @@ log "all services healthy ($(( $(date +%s) - t0 ))s)"
 # exclusive use of the transcoder for the duration of the test. A failed stat
 # fetch is an error, not "idle" - proceeding blind risks the collision.
 stat_xml=$(fetch_stat) || pre "cannot reach earshot's stat endpoint (http://localhost:8081/stat)"
+
+loop_alive=0
+if docker compose exec -T loop-source pidof ffmpeg >/dev/null 2>&1; then loop_alive=1; fi
+
+# A live loop-source ffmpeg with NOTHING publishing is not idleness, it is the
+# loop's own publish being refused, and it has to be an assertion rather than a
+# silent skip.
+#
+# Since 2026-08-10 this test authenticates with RTMP_OWNER_KEY, because it
+# publishes under a name that is deliberately not the manifest name and
+# LOOP_SOURCE_KEY is now scoped to the loop's own name. That closed a real hole
+# but left the loop's own credential path covered by nothing: a broken DASH_NAME
+# hand-off to rtmp-ingest, or an inverted scope check, would leave every
+# container healthy, every test green, and the demo loop silently off the air.
+# This is that coverage. Polling rather than asserting once, since ffmpeg can be
+# alive a second or two before earshot reports the stream.
+if [ "$loop_alive" -eq 1 ] && ! printf '%s' "$stat_xml" | grep -q '<publishing/>'; then
+    t0=$(date +%s)
+    while :; do
+        stat_xml=$(fetch_stat) || pre "stat endpoint went away while checking the demo loop"
+        printf '%s' "$stat_xml" | grep -q '<publishing/>' && break
+        if [ $(( $(date +%s) - t0 )) -ge 20 ]; then
+            docker compose logs --tail 20 rtmp-ingest 2>&1 | grep 'rtmp-auth-denied' >&2 || true
+            pre "loop-source has a live ffmpeg but nothing is publishing after 20s - its own token/name auth is being refused. Check that DASH_NAME reaches rtmp-ingest and matches what loop-source publishes under"
+        fi
+        sleep 1
+    done
+    log "demo loop authenticates: its scoped token and stream name are still accepted"
+fi
+
 if printf '%s' "$stat_xml" | grep -q '<publishing/>'; then
-    if docker compose exec -T loop-source pidof ffmpeg >/dev/null 2>&1; then
+    if [ "$loop_alive" -eq 1 ]; then
         log "loop-source is streaming - stopping it for the test"
         restart_loop_source=1   # set BEFORE stop: a failed stop must still restore it
         docker compose stop loop-source >/dev/null
@@ -253,7 +292,7 @@ docker compose run --rm --no-deps -T --name "$PUSH_CONTAINER" \
     -b:v 4M -g 60 -keyint_min 60 \
     -c:a aac -b:a 512k -ar 48000 \
     -t "$PUSH_SECONDS" \
-    -f flv "rtmp://rtmp-ingest:1935/owner/${TEST_STREAM}?token=${LOOP_SOURCE_KEY}" &
+    -f flv "rtmp://rtmp-ingest:1935/owner/${TEST_STREAM}?token=${RTMP_OWNER_KEY}" &
 push_pid=$!
 
 # ------------------------------------------- first-segment deadline ---------

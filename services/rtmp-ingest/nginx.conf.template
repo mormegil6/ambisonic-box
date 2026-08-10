@@ -131,7 +131,25 @@ http {
             if ($arg_token = '${RTMP_OWNER_KEY}') {
                 return 418;
             }
+            # loop-source's token is accepted ONLY together with the loop's own
+            # stream name. It used to be accepted with any name, which made it
+            # a general owner-publish credential rather than the narrow internal
+            # one every comment described it as - and since it also had a
+            # committed public default, a stranger could use it to take over the
+            # stream (reproduced 2026-08-10). The key is a real secret now; this
+            # scope is what makes the description true regardless.
+            #
+            # nginx `if` has no AND, and nesting is not allowed. The two-step
+            # set is the standard idiom: mark on the token, then unmark unless
+            # the name matches too, so only both together survive as "T".
+            set $loop_auth "";
             if ($arg_token = '${LOOP_SOURCE_KEY}') {
+                set $loop_auth "T";
+            }
+            if ($arg_name != '${DASH_NAME}') {
+                set $loop_auth "wrong-name";
+            }
+            if ($loop_auth = "T") {
                 return 418;
             }
             return 401;

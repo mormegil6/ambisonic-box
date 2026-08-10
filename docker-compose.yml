@@ -187,10 +187,18 @@ services:
     build:
       context: ./services/rtmp-ingest
     environment:
-      # loop-source's own low-stakes token; never reaches the public
-      # internet (see nginx.conf.template's /auth comment for why it still
-      # needs one at all)
+      # loop-source's own token. NOT low-stakes, though this comment used to
+      # say so: nginx checks it in the `owner` application, which is published
+      # on all interfaces, so until 2026-08-10 the committed default below was
+      # a working owner-publish credential for anyone who had read the repo.
+      # It is now scoped to the loop's own stream name (DASH_NAME, below) and
+      # rtmp-ingest refuses the default, the same way it does for the owner key.
       - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
+      # The stream name loop-source publishes under. rtmp-ingest needs it to
+      # scope LOOP_SOURCE_KEY: the token is accepted only together with this
+      # name, so it grants the one publish loop-source makes and nothing else.
+      # Must match the value loop-source uses, which is this same variable.
+      - DASH_NAME=${DASH_NAME:-hoast_demo}
       # the real public-facing owner secret: gates any /owner publish arriving
       # by NAME (an OBS Stream Key push straight to :1935), the credential a
       # leak of which would actually matter. The fallback below is a PLACEHOLDER
