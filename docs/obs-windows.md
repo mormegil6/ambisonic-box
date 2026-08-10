@@ -150,7 +150,7 @@ Everything except the passphrase is literal, including the word `owner` in `stre
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
-| Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
+| Bitrates | see [Contribution bitrate](BITRATE.md) - audio 384 kbit/s per track, video against your uplink |
 
 <div align="center"><img src="images/obs-windows/13_OBS-recording-settings.png" width="92%" alt="OBS Settings, Output, Recording tab on Windows: Custom Output (FFmpeg), Output to URL with srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 6000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder libx264, Audio Bitrate 384 Kbps, Audio Track 1 2 3 4 ticked, Audio Encoder aac."></div>
 

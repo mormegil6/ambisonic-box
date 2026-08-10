@@ -1,6 +1,6 @@
 # Contribution bitrate: what to send, and why
 
-Applies to whatever pushes into this stack (stock OBS over SRT, OBS Music Edition over RTMP, a script). The [main README](../README.md#bitrate) links here from the sender settings; the per-OS guides ([docs/obs-macos.md](obs-macos.md), [docs/obs-windows.md](obs-windows.md)) link here from their bitrate rows.
+Applies to whatever pushes into this stack (stock OBS over SRT, OBS Music Edition over RTMP, a script). The [main README](../README.md#stream-your-own-content) links here from its sender section; the per-OS guides ([docs/obs-macos.md](obs-macos.md), [docs/obs-windows.md](obs-windows.md)) link here from their bitrate rows.
 
 ## Audio: 384 kbit/s per track
 

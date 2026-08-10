@@ -120,7 +120,7 @@ Everything except the passphrase is literal, including the word `owner` in `stre
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
 | Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
-| Bitrates | see [Bitrate](../README.md#bitrate) - audio 384 kbit/s per track, video against your uplink |
+| Bitrates | see [Contribution bitrate](BITRATE.md) - audio 384 kbit/s per track, video against your uplink |
 
 <div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="92%" alt="OBS Settings, Output, Recording tab on macOS: Output Mode Advanced, Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Track 1 to 4 ticked and 5 to 6 clear, Audio Encoder aac."></div>
 

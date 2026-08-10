@@ -236,6 +236,52 @@ jobs:
           fi
           echo "placeholder owner key is only referenced where it must be"
 
+      - name: every internal markdown link resolves, anchors included
+        run: |
+          # Restructuring README on 2026-08-10 deleted a `#### Bitrate` heading
+          # and silently broke three `../README.md#bitrate` links from the two
+          # OBS guides and BITRATE.md. A file-existence check passed the whole
+          # time, because the FILE was still there - only the anchor was gone.
+          # That is the failure mode this gate exists for: a heading is a public
+          # interface as soon as anything links to it, and nothing else notices
+          # when one is renamed away.
+          python3 - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          files = [pathlib.Path(f) for f in subprocess.run(
+              ["git", "ls-files", "*.md"], capture_output=True, text=True, check=True
+          ).stdout.split() if not f.startswith("hoast360/")]
+
+          def anchors(p):
+              """GitHub's slugs: strip markup and punctuation, lowercase, spaces to hyphens."""
+              out = set()
+              for line in p.read_text().split("\n"):
+                  m = re.match(r"^#{1,6}\s+(.*)", line)
+                  if not m:
+                      continue
+                  h = re.sub(r"`|\*", "", m.group(1).strip())
+                  h = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", h)
+                  out.add(re.sub(r"[^\w\s-]", "", h).strip().lower().replace(" ", "-"))
+              return out
+
+          known = {p.resolve(): anchors(p) for p in files}
+          fail = 0
+          for p in files:
+              for _, target in re.findall(r"\[([^\]]*)\]\(([^)]+)\)", p.read_text()):
+                  if target.startswith(("http://", "https://", "mailto:")):
+                      continue
+                  path, _, frag = target.partition("#")
+                  tgt = (p.parent / path).resolve() if path else p.resolve()
+                  if path and not tgt.exists():
+                      print(f"::error file={p}::link target does not exist: {target}")
+                      fail = 1
+                  elif frag and tgt in known and frag not in known[tgt]:
+                      print(f"::error file={p}::no such anchor: {target}")
+                      fail = 1
+          print("all internal markdown links resolve" if not fail else "")
+          sys.exit(fail)
+          PY
+
   version-agrees:
     name: version metadata agrees
     runs-on: ubuntu-latest
