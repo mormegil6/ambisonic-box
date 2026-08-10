@@ -121,6 +121,24 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 This is the route you want for your own broadcasts: every caller is authenticated by your key, which SRT uses as the connection's AES key, so anyone without it is refused at the handshake. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you are after.
 
+### Getting your passphrase
+
+Re-running setup prints the whole URL with your passphrase already in it, and that is the one to paste. If you have closed that window, ask the running stack what it is actually using:
+
+```
+docker compose exec srt-gateway-owner printenv SRT_PASSPHRASE
+```
+
+Identical on every platform, and authoritative: it reports the value the gateway is running with rather than what a file says it should be. (The variable is `SRT_OWNER_PASSPHRASE` in `.env` and `SRT_PASSPHRASE` inside the container. The names differ on purpose, since the same gateway image also runs as the guest listener; a difference in *name* is not a fault.) Reading the file works too, if the stack is not up: `findstr SRT_OWNER_PASSPHRASE .env` on Windows, `grep SRT_OWNER_PASSPHRASE .env` elsewhere.
+
+Filled in, the URL looks like this. **The passphrase below is an example - yours will be different**, and pasting this one will be refused at the handshake:
+
+```
+srt://127.0.0.1:8891?streamid=owner&passphrase=0d08a82788aee6f676ee10ec715381561ac7dd7a4cd0ccd8&latency=2000000&pkt_size=1128
+```
+
+Everything except the passphrase is literal, including the word `owner` in `streamid=owner`. `127.0.0.1` is right when OBS runs on the box itself. Anywhere else, replace only that part with the address you reach the box on, and leave the rest exactly as it is.
+
 **Then, in OBS: Settings > Output > Output Mode: `Advanced`**, then the **Recording** tab:
 
 | Setting | Value |
