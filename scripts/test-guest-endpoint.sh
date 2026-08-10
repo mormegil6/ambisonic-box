@@ -640,6 +640,69 @@ if [ "$FAILS" -eq "$fails0" ]; then
     log "$label ok"
 fi
 
+# ------------------------------------------- IN hostile stream name --------
+label="IN-input"
+fails0=$FAILS
+# The stream name is the ONE value a guest fully controls, and it travels
+# further than anything else they supply: into /api/live, which hoast-player
+# proxies to the PUBLIC port, into the operator dashboard, and into
+# guest_sessions.csv. Every other case in this suite tests a DECISION the box
+# makes. This tests DATA the box accepts and then shows to other people.
+#
+# Written 2026-08-10, after a literal "<any-name>" was pasted into an OBS
+# streamid by accident and the allowlist silently stripped it. That was the
+# correct behaviour, and nothing in the suite asserted it, which is exactly the
+# shape of a gap: a defence nobody would notice losing.
+#
+# The name goes through shared_push on purpose. push_guest interpolates the name
+# into a CONTAINER name, and docker rejects most of these characters, so the
+# test would fail on its own harness rather than on the thing under test.
+# No space and no ampersand, and that is a finding rather than a compromise:
+# probed 2026-08-10, an RTMP publish URL carrying either is rejected by ffmpeg
+# before a byte leaves the client, so a name containing them is not something a
+# guest can actually send down this path and testing it would only test ffmpeg.
+# Everything an RTMP client CAN transmit is here: angle brackets, both quote
+# kinds, a semicolon, a backtick, a dollar-substitution and a 100-character run
+# against the 32-char cap. The SRT streamid is a protocol field rather than a
+# URL and accepts more; test-srt-ingest.sh covers that side.
+HOSTILE='<script>alert(1)</script>";DROP--`$(id)`'"'"'x'"$(printf 'A%.0s' $(seq 1 100))"
+shared_up || fail "$label: shared pusher would not start"
+shared_push "$HOSTILE" 25
+if wait_for "$label: hostile-named guest goes live" 45 st_is live; then
+    got=$(ep_name)
+    log "$label: name as published had $(printf '%s' "$HOSTILE" | wc -c | tr -d ' ') chars; arbiter reports '$got'"
+    # 1. allowlist held: nothing outside [A-Za-z0-9_-] survived anywhere it is shown
+    case "$got" in
+        *[!A-Za-z0-9_-]*) fail "$label: /api/live name carries characters outside the allowlist: '$got'" ;;
+    esac
+    # 2. length cap held, so a name cannot flood a log line, a CSV column or a UI
+    [ "${#got}" -le 32 ] || fail "$label: /api/live name is ${#got} chars, cap is 32"
+    # 3. and it is not empty, because an empty name would make sessions
+    #    indistinguishable in the CSV and the dashboard
+    [ -n "$got" ] || fail "$label: name sanitised away to nothing (telemetry should fall back to 'guest')"
+else
+    fail "$label: hostile-named guest never went live (a legal name must survive sanitising)"
+fi
+shared_stop_push
+# 4. the persisted row must be clean too: /api/live is rendered with
+#    textContent, but the CSV is read by whatever anyone points at it later
+st_not_live() { [ "$(ep_state)" != "live" ]; }
+wait_for "$label: slot leaves live" 60 st_not_live || true
+csv_name=$(docker compose exec -T telemetry sh -c 'tail -1 /data/guest_sessions.csv 2>/dev/null' 2>/dev/null | cut -d, -f2)
+if [ -n "$csv_name" ]; then
+    case "$csv_name" in
+        *[!A-Za-z0-9_-]*) fail "$label: guest_sessions.csv name carries characters outside the allowlist: '$csv_name'" ;;
+        *) log "$label: CSV row records '$csv_name'" ;;
+    esac
+else
+    log "$label: no CSV row yet (session may still be draining); /api/live assertions stand"
+fi
+shared_down
+if [ "$FAILS" -eq "$fails0" ]; then
+    row "$label: hostile stream name sanitised to '$got' - allowlist and 32-char cap held at /api/live and in the CSV"
+    log "$label ok"
+fi
+
 # --------------------------------------------------------------- report -----
 echo
 echo "================ guest endpoint test report ================"
