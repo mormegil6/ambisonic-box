@@ -30,7 +30,7 @@ git submodule update --init
 docker compose up -d --build
 ```
 
-`content/demo.mp4` is optional: without it loop-source synthesises a spherical placeholder on first start, a test pattern with a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works. Preparing a real master, and every variable named above, is in [`.env.example`](.env.example).
+`content/demo.mp4` is optional: without it, and with the default `DEMO_CONTENT=1`, loop-source synthesises a spherical placeholder on first start, a test pattern with a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works. Set `DEMO_CONTENT=0` to skip the synthesis; preparing a real master, and every variable the stack reads, is in [`.env.example`](.env.example).
 
 **A playing loop proves the delivery half only.** loop-source publishes from inside the compose network with a token the stack gave itself, so your encoder, your channel layout, your network path and your credentials are all still untested: see [Stream your own content](#stream-your-own-content).
 
@@ -195,7 +195,7 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `docker compose up` refuses with `required variable RTMP_OWNER_KEY is missing a value` | Setup has not run: there is no `.env`, or it has no value for that key | Run `./scripts/setup.sh` (`.\setup.cmd` on Windows) and try again. The check happens before anything is pulled, built or created, so there is nothing to clean up first |
+| `docker compose up` refuses with `required variable LOOP_SOURCE_KEY is missing a value`, or the same message naming `RTMP_OWNER_KEY` | Setup has not run: there is no `.env`, or it has no value for that key | Run `./scripts/setup.sh` (`.\setup.cmd` on Windows) and try again. The check happens before anything is pulled, built or created, so there is nothing to clean up first |
 | `dependency failed to start: container ambi-box-rtmp-ingest-1 is unhealthy` | An `.env` that exists but still carries a placeholder key committed to this repository. `rtmp-ingest` refuses to serve it, because port 1935 is published on all interfaces and both values are public. Compose swallows the reason; `docker compose logs rtmp-ingest` prints it | Re-run setup: it repairs an existing `.env` in place, without touching a key you chose yourself |
 | On Windows, `bash scripts/setup.sh` hangs, opens an unfamiliar Linux shell, or reports no WSL distro | Git for Windows puts `cmd\` on PATH and not `bin\`, so `bash` there is the WSL launcher in `System32` rather than Git Bash | Run `.\setup.cmd` instead. It is a launcher for the same `scripts/setup.sh`: it looks for Git Bash in the usual places, then in the registry, then follows `git` on your PATH, and failing all of those runs the script in a container |
 | On Windows, setup fails with `set: -: invalid option` or `bash\r: No such file or directory` | The clone predates the `.gitattributes` that pins line endings, so the shell scripts are checked out with CRLF | `git add --renormalize .` then `git checkout -- .`, as two separate commands (`&&` is not valid in Windows PowerShell), or clone again |
