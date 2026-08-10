@@ -37,7 +37,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: build every compose target
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           # keep the images in the local docker daemon so later steps can

@@ -53,7 +53,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: build images
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true

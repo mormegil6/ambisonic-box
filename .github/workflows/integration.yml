@@ -51,7 +51,7 @@ jobs:
           echo "setup.sh generated a real owner key"
 
       - name: build images (warm cache from the build workflow)
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
@@ -96,7 +96,7 @@ jobs:
         run: ./scripts/setup.sh
 
       - name: build images
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
