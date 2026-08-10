@@ -1,7 +1,7 @@
 # ambisonic-box telemetry: collector + alerter + private dashboard server.
 # Multi-arch (amd64 + arm64). Needs only the docker *CLI* (talks to the mounted
 # socket) plus curl; no docker engine, no extra python deps (stdlib only).
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
