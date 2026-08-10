@@ -1,0 +1,180 @@
+name: hygiene
+
+# Fast checks, no image builds. Every one of these guards a mistake this
+# project has actually made - see the CI section of the deployment repo's
+# PLAN.md for which incident each traces back to.
+
+on:
+  push:
+    branches: [main, 'ci-**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: shell, python, yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: shell syntax (every script must at least parse)
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            head -1 "$f" | grep -qE '^#!.*\b(bash)\b' && sh="bash -n" || sh="sh -n"
+            $sh "$f" || { echo "::error file=$f::syntax error"; fail=1; }
+          done < <(git ls-files '*.sh')
+          exit $fail
+
+      - name: shellcheck (errors only for now; tighten later)
+        run: |
+          shellcheck --version
+          # services/earshot/src is a VENDORED UPSTREAM fork - its scripts are
+          # not this project's to restyle, and they carry `exit -1` (SC2242)
+          # and shebang-less fragments that would permanently red this job.
+          # Same scoping rule the 2026-08-09 comment sweep used.
+          mapfile -t files < <(git ls-files '*.sh' | grep -v '^services/earshot/src/')
+          printf '  linting %d scripts (vendored earshot excluded)\n' "${#files[@]}"
+          # -S error keeps this a gate rather than a wall of style notes. The
+          # migration-script incident that motivated it (`[ -e X ] && mv X Y`
+          # under set -e) is SC2015-class, which is a warning, so warnings are
+          # printed for visibility but only errors fail the job.
+          shellcheck -S warning "${files[@]}" || true
+          shellcheck -S error "${files[@]}"
+
+      - name: python syntax
+        run: |
+          python3 -m compileall -q telemetry services/srt-gateway
+          echo "ok"
+
+      - name: yaml parses
+        run: |
+          python3 - <<'PY'
+          import sys, yaml, pathlib
+          bad = 0
+          for p in list(pathlib.Path('.').rglob('*.yml')) + list(pathlib.Path('.').rglob('*.yaml')):
+              if '.git' in p.parts or 'hoast360' in p.parts:
+                  continue
+              try:
+                  yaml.safe_load(p.read_text())
+              except Exception as e:
+                  print(f"::error file={p}::{e}")
+                  bad = 1
+          sys.exit(bad)
+          PY
+
+  compose:
+    name: compose resolves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: docker compose config is valid
+        run: docker compose config --quiet
+
+      - name: every image reference resolves to something buildable or pullable
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          cfg = json.loads(subprocess.check_output(
+              ["docker", "compose", "config", "--format", "json"]))
+          bad = 0
+          for name, svc in cfg["services"].items():
+              if not svc.get("build") and not svc.get("image"):
+                  print(f"::error::service {name} has neither build nor image")
+                  bad = 1
+          print(f"checked {len(cfg['services'])} services")
+          sys.exit(bad)
+          PY
+
+  vocabulary:
+    name: no retired identifiers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: retired names must not come back
+        run: |
+          # The 2026-08-09 rename took three sweeps by hand and still left
+          # references behind, which is exactly why this is automated.
+          # earshot's OWN `live` application is untouched and legitimate, so
+          # every rule here excludes it explicitly rather than by hoping.
+          fail=0
+
+          hit() { echo "::error file=$1,line=$2::$3"; fail=1; }
+
+          # 1. the renamed env var must not be USED. Deliberately matches
+          #    assignment and expansion rather than any mention: a comment
+          #    naming the old variable while explaining the rename is useful
+          #    history, not a defect, and loop-source's guard has exactly one.
+          while IFS=: read -r f n rest; do
+            hit "$f" "$n" "LIVE_APP_KEY was renamed to LOOP_SOURCE_KEY"
+          done < <(git grep -nIE '\$\{?LIVE_APP_KEY|LIVE_APP_KEY=' -- . ':!.github' ':!hoast360' || true)
+
+          # 2. rtmp-ingest's callback routes were renamed
+          while IFS=: read -r f n rest; do
+            hit "$f" "$n" "/rtmp/live/ was renamed to /rtmp/owner/"
+          done < <(git grep -nI '/rtmp/live/' -- . ':!.github' ':!hoast360' || true)
+
+          # 3. :1935/live is rtmp-ingest's OLD app name - unless the host is
+          #    earshot, whose own application really is still called `live`.
+          while IFS=: read -r f n rest; do
+            case "$rest" in
+              *earshot:1935/live*) ;;
+              *) hit "$f" "$n" "rtmp-ingest's app is /owner now (earshot's own /live is exempt)" ;;
+            esac
+          done < <(git grep -nI ':1935/live' -- . ':!.github' ':!hoast360' || true)
+
+          [ $fail -eq 0 ] && echo "no retired identifiers found"
+          exit $fail
+
+  docs-agree:
+    name: docs match the compose default
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: FFMPEG_FLAGS default, README and .env.example agree
+        run: |
+          # docker-compose.yml's fallback is the single source of truth for the
+          # video codec policy. These three drifted apart once and the shipped
+          # stack failed its own test as a result, so the agreement is a gate.
+          canonical=$(grep -o 'FFMPEG_FLAGS=\${FFMPEG_FLAGS:--[^}]*}' docker-compose.yml \
+              | head -1 | sed 's/^FFMPEG_FLAGS=${FFMPEG_FLAGS:-//; s/}$//')
+          [ -n "$canonical" ] || { echo "::error::no FFMPEG_FLAGS fallback in docker-compose.yml"; exit 1; }
+          case "$canonical" in
+              *"-c:v copy"*)   want="H.264 passthrough" ;;
+              *"libvpx-vp9"*)  want="VP9" ;;
+              *) echo "::error::unrecognised codec in compose fallback: $canonical"; exit 1 ;;
+          esac
+          grep -q "currently \*\*${want}\*\*" README.md \
+              || { echo "::error file=README.md::README's stated default does not match the compose fallback ($want)"; exit 1; }
+          grep -q '^FFMPEG_FLAGS=' .env.example \
+              && { echo "::error file=.env.example::an ACTIVE FFMPEG_FLAGS line would override the compose default; keep it commented"; exit 1; }
+          echo "compose, README and .env.example agree: $want"
+
+      - name: the public owner-key placeholder is never presented as usable
+        run: |
+          # README's settings table used to print `hoast_demo_owner` as the
+          # stream key to type, which is the same hole as shipping a default
+          # key. Legitimate mentions are the compose fallback (the value the
+          # startup guard matches on), setup.sh's needs-generating list, and
+          # the guard itself.
+          # ':!.github' matters: without it this rule matches its own comment
+          # and its own grep pattern, and the job fails on itself.
+          bad=$(git grep -nI 'hoast_demo_owner' -- \
+                  ':!docker-compose.yml' \
+                  ':!scripts/setup.sh' \
+                  ':!services/rtmp-ingest/entrypoint.sh' \
+                  ':!.github' \
+                  ':!hoast360' || true)
+          if [ -n "$bad" ]; then
+            echo "$bad" | while IFS=: read -r f n rest; do
+              echo "::error file=$f,line=$n::the placeholder owner key must not be presented as a usable credential"
+            done
+            exit 1
+          fi
+          echo "placeholder owner key is only referenced where it must be"

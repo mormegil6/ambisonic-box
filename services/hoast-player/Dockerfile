@@ -3,6 +3,19 @@
 #   docker build -f services/hoast-player/Dockerfile .
 FROM nginx:1.30.2-alpine
 
+# Patch the base image's OS packages. This image is unusual among the stack's:
+# every other one runs `apk add` or `apt-get install`, which refreshes the
+# package index and therefore picks up current versions as a side effect. This
+# one only COPYs files onto the nginx base, so without this line it ships
+# whatever was baked in the day that base image was published - and it is the
+# one image on the public internet. Container scanning found the difference:
+# OpenSSL (heap use-after-free in PKCS7_verify, CVE-2026-45447), curl/libcurl
+# (cookie leak across reused connections, CVE-2026-6276), c-ares, expat and
+# libxml2, all HIGH and all with fixes already available upstream.
+# The nginx version itself stays pinned above; this upgrades only what sits
+# underneath it.
+RUN apk upgrade --no-cache
+
 # 00-logformat.conf defines the `cf` log_format (real viewer IP + country from
 # Cloudflare headers) that nginx.conf's access_log references; it must load first
 # (conf.d is included alphabetically), hence the 00- prefix.

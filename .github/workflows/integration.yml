@@ -1,0 +1,124 @@
+name: integration
+
+# The two suites that drive a real stack. These are the checks that would have
+# caught the pipeline regressions this project has actually shipped, so they
+# are the point of having CI at all - but they are also slow and stateful, so
+# they do not run on every push to a topic branch.
+#
+#   test-pipeline.sh       ~3 min once images exist. Runs on PRs and main.
+#   test-guest-endpoint.sh ~12 min, ten full cycles plus nine cases. Nightly
+#                          and on demand, because it is long and because a
+#                          flaky gate is worse than no gate.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 04:20 UTC daily - well clear of any interactive work
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+    inputs:
+      run_guest_suite:
+        description: 'Also run the long guest-endpoint suite'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    name: end-to-end pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: generate a real .env
+        run: |
+          # rtmp-ingest now REFUSES to start on the committed placeholder key,
+          # so CI has to behave like a real install. Generating a key here also
+          # means the happy path of that guard is exercised on every run.
+          ./scripts/setup.sh
+          # prove the guard's precondition rather than assuming setup.sh did it
+          grep -qE '^RTMP_OWNER_KEY=(CHANGE_ME_this_default_is_public|hoast_demo_owner)?$' .env \
+            && { echo "::error::setup.sh left a placeholder owner key"; exit 1; }
+          echo "setup.sh generated a real owner key"
+
+      - name: build images (warm cache from the build workflow)
+        uses: docker/bake-action@v5
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      - name: synthesise demo content
+        run: |
+          # no committed media in the repo; the stack can make its own
+          ./scripts/make-demo-loop.sh
+          ls -la content/demo.mp4
+
+      - name: test-pipeline.sh
+        run: ./scripts/test-pipeline.sh
+
+      - name: diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          for s in rtmp-ingest earshot telemetry loop-source; do
+            echo "::group::$s"
+            docker compose logs --tail 80 "$s" || true
+            echo "::endgroup::"
+          done
+
+  guest:
+    name: guest endpoint suite
+    # long and stateful: nightly, or asked for explicitly
+    if: github.event_name == 'schedule' || inputs.run_guest_suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: generate a real .env
+        run: ./scripts/setup.sh
+
+      - name: build images
+        uses: docker/bake-action@v5
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      - name: synthesise demo content
+        run: ./scripts/make-demo-loop.sh
+
+      - name: test-guest-endpoint.sh
+        env:
+          GUEST_ENABLED: '1'
+        run: ./scripts/test-guest-endpoint.sh
+
+      - name: diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          for s in rtmp-ingest earshot telemetry loop-source srt-gateway; do
+            echo "::group::$s"
+            docker compose logs --tail 120 "$s" || true
+            echo "::endgroup::"
+          done

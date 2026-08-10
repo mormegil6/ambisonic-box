@@ -131,28 +131,69 @@ is_live() { [ "$(live_now)" = "True" ] || [ "$(live_now)" = "true" ]; }
 GRAPH='testsrc2=size=640x320:rate=30[out0];sine=frequency=200:sample_rate=48000[s0];sine=frequency=300:sample_rate=48000[s1];sine=frequency=400:sample_rate=48000[s2];sine=frequency=500:sample_rate=48000[s3];sine=frequency=600:sample_rate=48000[s4];sine=frequency=700:sample_rate=48000[s5];sine=frequency=800:sample_rate=48000[s6];sine=frequency=900:sample_rate=48000[s7];sine=frequency=1000:sample_rate=48000[s8];sine=frequency=1100:sample_rate=48000[s9];sine=frequency=1200:sample_rate=48000[s10];sine=frequency=1300:sample_rate=48000[s11];sine=frequency=1400:sample_rate=48000[s12];sine=frequency=1500:sample_rate=48000[s13];sine=frequency=1600:sample_rate=48000[s14];sine=frequency=1700:sample_rate=48000[s15];[s0][s1][s2][s3][s4][s5][s6][s7][s8][s9][s10][s11][s12][s13][s14][s15]join=inputs=16:channel_layout=hexadecagonal[out1]'
 
 # A pusher's SOURCE ADDRESS is part of what the arbiter tests, because the grace
-# window is address-locked (collect.py's guest_publish refuses a reconnect from a
-# different addr). `docker compose run` cannot pin an address, and Docker's IPAM
-# hands out the lowest free one - which changes between two sequential pushes,
-# because admission stops loop-source and frees ITS address in between. So a
-# "reconnect" arrived from a different IP than the original and was correctly
-# refused. Passing <ip> switches that one call to plain `docker run`, which can
-# pin it. Used ONLY where the test needs two pushes to be the same caller; every
-# other call site stays on compose run, deliberately, because a shared pinned
-# address would make COEXISTING pushers (T4's tkil2/tkil3, R's ra/rb) fail at
-# container create with "address already in use" - and both of those assert a
-# NONZERO rc, so they would pass for entirely the wrong reason.
-push_guest() {  # push_guest <name> <seconds> [sync|bg] [ip]
-    local name=$1 secs=$2 mode=${3:-bg} ip=${4:-}
+# window is address-locked (guest_publish refuses a reconnect from a different
+# addr). `docker compose run` gives each push a fresh container and Docker's
+# IPAM hands out the lowest free address, which CHANGES between two sequential
+# pushes - admission stops loop-source and frees its address in between. So a
+# "reconnect" used to arrive from a different IP and was correctly refused,
+# and T3 never tested a reconnect at all.
+#
+# The fix is not to pin an address. `docker run --ip` only works on networks
+# with a USER-CONFIGURED subnet, and compose lets Docker choose one, so it is
+# refused on a stock runner ("user specified IP address is supported only when
+# connecting to networks with user configured subnets") even though
+# `docker network inspect` happily reports a subnet. That difference is
+# invisible locally and cost a full CI run to find.
+#
+# Instead: one long-lived container on the compose network, and exec each push
+# inside it. Same container means the same address by construction, on any
+# Docker, with no assumptions about IPAM - and it is also what a real
+# reconnecting encoder does.
+
+# Fills the global FF_ARGS with the ffmpeg argv every pusher shares.
+# Deliberately sets an array rather than printing lines for the caller to
+# collect: reading them back would want `mapfile`, which is bash 4+, and macOS
+# still ships bash 3.2 - so that version ran ffmpeg with an EMPTY argv and the
+# suite failed on the operator's own machine while passing in CI.
+FF_ARGS=()
+build_ff_args() {  # build_ff_args <seconds> <stream name>
+    FF_ARGS=(-hide_banner -loglevel error
+        -re -f lavfi -i "$GRAPH" -map 0:v -map 0:a
+        -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+        -b:v 800k -g 60 -keyint_min 60
+        -c:a aac -b:a 256k -ar 48000
+        -t "$1" -f flv "rtmp://rtmp-ingest:1935/guest/$2")
+}
+
+# --- shared-source pusher: successive pushes from ONE container, hence one
+#     address. Used where the arbiter's address-locked grace is under test.
+shared_up() {
+    docker rm -f guestpush-shared >/dev/null 2>&1 || true
+    docker run -d --rm --network "$PUSH_NET" --name guestpush-shared \
+        --entrypoint sleep "$PUSH_IMG" 900 >/dev/null
+    SHARED_IP=$(docker inspect -f \
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' guestpush-shared)
+    [ -n "$SHARED_IP" ] || { log "could not read the shared pusher's address"; return 1; }
+    log "shared pusher up at $SHARED_IP"
+}
+shared_push() {  # shared_push <name> <seconds> - starts, does not wait
+    local name=$1 secs=$2
+    last_push=shared
+    build_ff_args "$secs" "$name"
+    # absolute path: `docker exec` does not run a login shell, and relying on
+    # the image's PATH here failed with "executable file not found"
+    docker exec -d guestpush-shared /usr/local/bin/ffmpeg "${FF_ARGS[@]}"
+}
+shared_stop_push() { docker exec guestpush-shared pkill -f ffmpeg >/dev/null 2>&1 || true; }
+shared_down()      { docker rm -f guestpush-shared >/dev/null 2>&1 || true; }
+
+push_guest() {  # push_guest <name> <seconds> [sync|bg]
+    local name=$1 secs=$2 mode=${3:-bg}
+    last_push=$name          # so why_not_live knows whose log to dump
     docker rm -f "guestpush-$name" >/dev/null 2>&1 || true
     local -a run
-    if [ -n "$ip" ]; then
-        run=(docker run --rm --network "$PUSH_NET" --ip "$ip"
-             --name "guestpush-$name" --entrypoint ffmpeg "$PUSH_IMG")
-    else
-        run=(docker compose run --rm --no-deps -T --name "guestpush-$name"
-             --entrypoint ffmpeg loop-source)
-    fi
+    run=(docker compose run --rm --no-deps -T --name "guestpush-$name"
+         --entrypoint ffmpeg loop-source)
     if [ "$mode" = sync ]; then
         "${run[@]}" \
             -hide_banner -loglevel error \
@@ -160,7 +201,7 @@ push_guest() {  # push_guest <name> <seconds> [sync|bg] [ip]
             -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
             -b:v 800k -g 60 -keyint_min 60 \
             -c:a aac -b:a 256k -ar 48000 \
-            -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >/dev/null 2>&1
+            -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >"/tmp/guestpush-$name.log" 2>&1
         return $?
     fi
     "${run[@]}" \
@@ -169,7 +210,18 @@ push_guest() {  # push_guest <name> <seconds> [sync|bg] [ip]
         -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
         -b:v 800k -g 60 -keyint_min 60 \
         -c:a aac -b:a 256k -ar 48000 \
-        -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >/dev/null 2>&1 &
+        -t "$secs" -f flv "rtmp://rtmp-ingest:1935/guest/$name" >"/tmp/guestpush-$name.log" 2>&1 &
+}
+
+# Why a pusher never went live. Without this the failure is just "guest publish
+# never accepted", which is true of a refused publish, a container that could
+# not be created, and a DNS failure alike - three very different bugs.
+why_not_live() {  # why_not_live <name>
+    local name=$1
+    echo "[guest-test]   pusher log (/tmp/guestpush-$name.log):"
+    sed 's/^/[guest-test]     /' "/tmp/guestpush-$name.log" 2>/dev/null | head -15         || echo "[guest-test]     (no log - container may never have started)"
+    echo "[guest-test]   arbiter's last words:"
+    docker compose logs --tail 15 telemetry 2>/dev/null         | grep -iE "guest|reject|ban|grace" | sed 's/^/[guest-test]     /' | tail -8
 }
 
 # Wait through a grace window until the slot is free AND the loop publishes.
@@ -213,19 +265,17 @@ wait_for "loop publishing" 90 earshot_publishing || pre "demo loop never publish
 wait_for "loop live" 60 is_live || pre "demo loop never became live"
 
 # Derived, not hardcoded: the compose project was renamed once already, and the
-# subnet comes from Docker's address pool, so both differ between machines.
-# PUSH_IP is a high host address, far above anything IPAM hands out on its own -
-# if it is ever taken, `docker run` fails loudly at create, which is the right
-# failure mode for a test (a silently different address is what broke T3).
+# image comes from compose itself, so neither can drift. No subnet arithmetic
+# here any more - the shared pusher gets whatever address Docker gives it and
+# simply keeps it, which works on every Docker rather than only on networks
+# with a user-configured subnet.
 PUSH_NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' \
     "$(docker compose ps -q telemetry)" 2>/dev/null)
 PUSH_IMG=$(docker compose config --images loop-source 2>/dev/null | head -1)
-PUSH_SUBNET=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$PUSH_NET" 2>/dev/null)
-PUSH_IP=$(printf '%s' "$PUSH_SUBNET" | sed -E 's#^([0-9]+\.[0-9]+\.[0-9]+)\..*#\1.200#')
-[ -n "$PUSH_NET" ] && [ -n "$PUSH_IMG" ] && [ "$PUSH_IP" != "$PUSH_SUBNET" ] \
-    || pre "could not derive pusher network/image/address (net='$PUSH_NET' img='$PUSH_IMG' subnet='$PUSH_SUBNET')"
+[ -n "$PUSH_NET" ] && [ -n "$PUSH_IMG" ] \
+    || pre "could not derive the pusher network/image (net='$PUSH_NET' img='$PUSH_IMG')"
 
-log "stack up, loop live; starting cycles (pinned pusher addr $PUSH_IP on $PUSH_NET)"
+log "stack up, loop live; starting cycles (pusher image $PUSH_IMG on $PUSH_NET)"
 
 clear_pushers() {  # best-effort: remove stray guest pushers from failed cycles
     for c in $(docker ps --format '{{.Names}}' | grep '^guestpush-' || true); do
@@ -250,7 +300,7 @@ for i in $(seq 1 "$CYCLES"); do
     # "live" is reported only once the handover completed (claim shows as
     # "handover"), so this measures the full takeover, loop unwind included
     if ! wait_for "$label: guest owns slot" 30 st_is live; then
-        fail "$label: guest publish never accepted"; continue
+        fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"; continue
     fi
     t1=$(now); takeover=$(python3 -c "print(f'{$t1 - $t0:.1f}')")
     loop_running && fail "$label: loop-source container still running under guest"
@@ -292,7 +342,7 @@ if wait_for "$label: guest live" 30 st_is live; then
         log "$label ok"
     fi
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ---------------------------------------------------------- T2 cap expiry ---
@@ -319,7 +369,7 @@ if wait_for "$label: guest live" 30 st_is live; then
     fi
     sleep "$TG_COOLDOWN"    # let the cooldown lapse before the next section
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ------------------------------------------------- T3 reconnect in grace ----
@@ -328,12 +378,13 @@ fails0=$FAILS
 # BOTH pushes pin the same source address, because grace is address-locked and a
 # reconnect from a different addr is refused by design. Without this the two
 # containers get different IPs and this never tested a reconnect at all.
-push_guest trec1 12 bg "$PUSH_IP"
+shared_up || fail "$label: shared pusher would not start"
+shared_push trec1 12
 if wait_for "$label: guest live" 30 st_is live; then
     r1=$(ep_remain)
     wait_for "$label: grace after first stop" 40 st_is grace \
         || fail "$label: no grace after first stop"
-    push_guest trec2 10 bg "$PUSH_IP"    # same caller, inside the grace window
+    shared_push trec2 10                 # same container, so the same caller
     wait_for "$label: reconnected" 20 st_is live \
         || fail "$label: reconnect inside grace not accepted"
     r2=$(ep_remain)
@@ -353,7 +404,7 @@ if wait_for "$label: guest live" 30 st_is live; then
         log "$label ok (remaining $r1 -> $r2)"
     fi
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ------------------------------------------------- T4 operator kill ---------
@@ -378,7 +429,7 @@ if wait_for "$label: guest live" 30 st_is live; then
     fi
     sleep "$TG_COOLDOWN"    # let the cooldown lapse before the next section
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ------------------------------------------------- T5 stalled transcode -----
@@ -448,7 +499,7 @@ if wait_for "$label: guest live" 30 st_is live; then
         log "$label ok"
     fi
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ------------------------------------------------- BN ban path --------------
@@ -457,16 +508,17 @@ fails0=$FAILS
 # Pinned, so the banned address is one we can push from AGAIN below. Without
 # that, the end-to-end re-push would come from a fresh container with a
 # different IP and would be admitted - proving nothing.
-push_guest tban 60 bg "$PUSH_IP"
+shared_up || fail "$label: shared pusher would not start"
+shared_push tban 60
 if wait_for "$label: guest live" 30 st_is live; then
     r=$(curl -s -X POST "$TEL/api/guest/ban")
     echo "$r" | grep -q '"banned"' || fail "$label: ban call did not report an address ($r)"
     wait_for "$label: session ended by ban" 30 st_is free || fail "$label: ban did not end the session"
-    docker rm -f guestpush-tban >/dev/null 2>&1 || true
+    shared_stop_push
     ip=$(docker compose exec -T telemetry sh -c 'tail -1 /data/guest_bans.csv | cut -d, -f2' | tr -d '\r')
     # the ban must have landed on the pinned address, or the re-push below is
     # testing a different caller than the one that got banned
-    [ "$ip" = "$PUSH_IP" ] || fail "$label: banned addr is '$ip', expected the pinned pusher $PUSH_IP"
+    [ "$ip" = "$SHARED_IP" ] || fail "$label: banned addr is '$ip', expected the shared pusher $SHARED_IP"
     # let the operator-kill cooldown lapse so a 403 below can ONLY be the ban
     sleep $((TG_COOLDOWN + 2))
     # Call from INSIDE telemetry, against its own loopback. telemetry's /rtmp/*
@@ -501,14 +553,14 @@ if wait_for "$label: guest live" 30 st_is live; then
     # (banned)", so a plain grep would match that and pass without the RTMP
     # push having been refused at all. Only a NEW line proves this push was.
     bans0=$(docker compose logs --tail 500 telemetry 2>/dev/null | grep -c "rejected (banned)" || true)
-    push_guest tbanx 6 sync "$PUSH_IP"; rc=$?
-    [ "$rc" -ne 0 ] || fail "$label: banned address was allowed to publish over RTMP (rc=0)"
+    shared_push tbanx 6; sleep 6
+    st_is free || fail "$label: banned address was allowed to publish over RTMP"
     st_is free || fail "$label: banned push claimed the slot (state=$(ep_state))"
     # rc alone is not proof: a container that fails to CREATE also exits nonzero.
     bans1=$(docker compose logs --tail 500 telemetry 2>/dev/null | grep -c "rejected (banned)" || true)
     [ "${bans1:-0}" -gt "${bans0:-0}" ] \
         || fail "$label: no new 'rejected (banned)' from the arbiter - the nonzero rc may be a container-create failure, not a refusal"
-    docker rm -f guestpush-tbanx >/dev/null 2>&1 || true
+    shared_stop_push; shared_down
     # triple-rule edges, tested against the exact enforcement function so no
     # slot/cooldown side effects: a stale active label past its expiry and a
     # redacted-IP row must both be inert
@@ -529,7 +581,7 @@ if wait_for "$label: guest live" 30 st_is live; then
         log "$label ok"
     fi
 else
-    fail "$label: guest publish never accepted"
+    fail "$label: guest publish never accepted"; why_not_live "${last_push:-unknown}"
 fi
 
 # ------------------------------------------------- R second publisher -------

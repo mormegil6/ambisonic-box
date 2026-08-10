@@ -1,0 +1,31 @@
+version: 2
+
+# Deliberately narrow. There is no dependency manifest at the repo root to
+# watch: telemetry is stdlib-only Python and the player's npm tree lives in the
+# hoast360 submodule, which is a separate repository and has to be updated
+# there. What IS worth watching is the CI itself - a pinned action that goes
+# stale is how a pipeline quietly stops meaning what it says.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'CI'
+    labels:
+      - dependencies
+
+  # Base images move faster than anything else here, and Container Scanning
+  # only tells you a CVE exists - this is what proposes the bump.
+  - package-ecosystem: docker
+    directories:
+      - /services/rtmp-ingest
+      - /telemetry
+      - /services/srt-gateway
+      - /services/hoast-player
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'images'
+    labels:
+      - dependencies

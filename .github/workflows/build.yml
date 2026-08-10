@@ -1,0 +1,93 @@
+name: build
+
+# Builds every image the stack builds, straight from docker-compose.yml via
+# buildx bake. Bake reads the compose build definitions itself, so the build
+# contexts can never drift from the ones compose actually uses - a hand-written
+# matrix got hoast-player wrong on the first try (its context is the repo root,
+# for the player submodule, not services/hoast-player).
+#
+# earshot is the expensive target: nginx-rtmp and an ffmpeg fork compiled from
+# source, plus a node:12 webtools stage. Hence the layer cache - the first run
+# is slow, later ones are near-instant unless those sources change.
+#
+# Deliberately amd64 only. The project targets arm64 too, but building that
+# here means QEMU-emulating an ffmpeg compile, which is hours. Multi-arch
+# belongs on a release job, not on every push.
+
+on:
+  push:
+    branches: [main, 'ci-**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bake:
+    name: build all images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # hoast-player's context is the repo root and it needs the patched
+          # player, which is a submodule
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build every compose target
+        uses: docker/bake-action@v5
+        with:
+          files: docker-compose.yml
+          # keep the images in the local docker daemon so later steps can
+          # actually run them
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      - name: images are present
+        run: docker images --filter 'reference=ambi-box-*' --format '  {{.Repository}}:{{.Tag}} {{.Size}}'
+
+      - name: earshot is a redistributable build
+        run: |
+          # ENABLE_NONFREE=0 is what keeps published images GPL-clean; compose
+          # sets it and the Dockerfile must still honour it. If the default
+          # ever flips upstream, this is the line that notices.
+          grep -q 'ARG ENABLE_NONFREE' services/earshot/src/Dockerfile \
+            || { echo "::error::earshot Dockerfile no longer declares ENABLE_NONFREE"; exit 1; }
+          if docker run --rm --entrypoint sh ambi-box-earshot:local -c \
+               'ffmpeg -hide_banner -buildconf 2>&1 | grep -q -- --enable-nonfree'; then
+            echo "::error::earshot was built with --enable-nonfree; images would not be redistributable"
+            exit 1
+          fi
+          echo "earshot ffmpeg is nonfree-free"
+
+      - name: the owner-key guard actually refuses the public placeholder
+        run: |
+          # Regression test for the 2026-08-09 fix: a clone that skips
+          # setup.sh must NOT come up serving :1935 with a key that is printed
+          # in the repository.
+          set +e
+          out=$(docker run --rm --entrypoint /entrypoint.sh \
+                  -e LOOP_SOURCE_KEY=x -e RTMP_OWNER_KEY=hoast_demo_owner \
+                  ambi-box-rtmp-ingest:latest 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          [ "$rc" -eq 1 ] || { echo "::error::rtmp-ingest started with the public default owner key (rc=$rc)"; exit 1; }
+          echo "$out" | grep -q 'REFUSING TO START' \
+            || { echo "::error::refused, but without the explanatory message"; exit 1; }
+
+          # ...and the documented opt-out still works
+          set +e
+          out2=$(timeout 6 docker run --rm --entrypoint /entrypoint.sh \
+                   -e LOOP_SOURCE_KEY=x -e RTMP_OWNER_KEY=hoast_demo_owner \
+                   -e ALLOW_DEFAULT_OWNER_KEY=1 ambi-box-rtmp-ingest:latest 2>&1)
+          set -e
+          echo "$out2" | grep -q 'WARNING: serving with the PUBLIC default' \
+            || { echo "::error::ALLOW_DEFAULT_OWNER_KEY=1 no longer warns"; exit 1; }
+          echo "guard refuses by default and warns when opted out"

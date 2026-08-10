@@ -1,3 +1,8 @@
+# shellcheck shell=sh
+# No shebang on purpose: this is a fragment, never executed on its own. The
+# directive above tells shellcheck which dialect to check it as, since it
+# cannot infer one without a shebang.
+#
 # Shared ffmpeg graph for the synthesised spherical demo loop. Sourced by the
 # loop-source entrypoint (in-container synthesis) and scripts/make-demo-loop.sh
 # (host utility), so both produce the identical file.

@@ -1,0 +1,136 @@
+name: security
+
+# What GitLab's scanners would have done, running where there is actually a
+# runner. Scoped to what is useful for THIS project rather than everything on
+# offer: telemetry is stdlib-only Python and there is no dependency manifest at
+# the repo root, so dependency scanning has nothing to chew on; the value is in
+# secrets, container CVEs, and static analysis of the two Python services and
+# the player JS.
+#
+# Honest limitation, worth stating where someone will read it: none of these
+# would have caught the bugs found by hand on 2026-08-09 (a misnested CSV
+# write, two vacuous test assertions, 41 stale comments). Secret scanning in
+# particular finds committed secrets, not a placeholder that is DOCUMENTED as
+# the default - the hygiene workflow's own check covers that case.
+
+on:
+  push:
+    branches: [main, 'ci-**']
+  pull_request:
+  schedule:
+    - cron: '40 4 * * 1'   # Mondays, after the nightly integration run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: secret scan (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks wants the whole history: this repo had a history purge in
+          # July and carries placeholder credentials by design, so the tree
+          # alone is not the interesting part
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  containers:
+    name: image CVEs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build images
+        uses: docker/bake-action@v5
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      # The four images this project actually controls are gated. earshot is
+      # scanned too but only reported: it is a vendored upstream fork whose
+      # webtools stage sits on node:12.22.1-alpine3.12, so it carries CVEs
+      # nobody can fix from here, and failing on them would train everyone to
+      # ignore this job.
+      - name: scan the images we control
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ambi-box-rtmp-ingest:latest
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: scan telemetry
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ambi-box-telemetry:local
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: scan srt-gateway
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ambi-box-srt-gateway:local
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: scan hoast-player
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ambi-box-hoast-player:latest
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: scan earshot (report only, vendored upstream)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ambi-box-earshot:local
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '0'
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql-config.yml
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

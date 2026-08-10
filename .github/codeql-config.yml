@@ -1,0 +1,13 @@
+name: ambisonic-box CodeQL scope
+
+# Scope CodeQL to code this project can actually act on. Same rule the rest of
+# the automation uses: vendored upstream and the player submodule are read, not
+# maintained, here - alerts against them cannot be fixed in this repository and
+# would train everyone to ignore the Security tab.
+paths-ignore:
+  # vendored Envelop Earshot fork, including its 2020-era React webtools tree
+  - services/earshot/src
+  # the patched HOAST360 player is a separate repository (a submodule)
+  - hoast360
+  # generated/minified output, not sources
+  - '**/dist'
