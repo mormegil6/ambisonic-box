@@ -42,11 +42,22 @@ Type the leading `.\`. cmd.exe would take a bare `setup` too, but PowerShell del
 
 **On Windows, if setup itself fails with `set: -: invalid option` or `bash\r: No such file or directory`,** your clone predates the `.gitattributes` that pins line endings and the scripts are checked out with CRLF. Run `git add --renormalize .` and then `git checkout -- .` (two separate commands: `&&` is not valid in Windows PowerShell), or just clone again.
 
+**What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because loop-source publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
+
 Without `content/demo.mp4` the stack still demos itself: on first start loop-source synthesises a spherical placeholder in-container (black sphere with a test-pattern screen at the front, and a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works). With `VOD_ENABLED=1` it also fetches the two `/vod/` reference masters from the pinned `vod-clips` release (~185 MB once, background, SHA-256 verified, fail-soft). Set `DEMO_CONTENT=0` to skip the synthesis, or replace `content/demo.mp4` with a real master any time (`docker compose restart loop-source` picks it up).
+
+**"Am I livestreaming anything right now?"** A fair question to ask before `docker compose up`, and the honest answer has two halves.
+
+**Nothing of yours is visible to anyone else.** The player, the operations dashboard and the earshot monitor all bind to `127.0.0.1` only, so nothing outside your own machine can watch, and the stack makes no outbound connection to publish anywhere. Making the demo public is a separate, deliberate act: a reverse proxy or a tunnel you set up yourself.
+
+**Three ports do listen on all interfaces**, and it is better to know than to be reassured: `1935/tcp` (RTMP contribution), `8890/udp` (SRT), and `8891/udp` if you ran setup, which writes the owner route. Those are INBOUND - they exist so that you, or a guest you have deliberately enabled, can send a stream IN. Each one is gated: `rtmp-ingest` refuses to start at all while its keys are the placeholders committed here, the owner SRT route is useless without your passphrase, and the guest port admits nobody unless you set `GUEST_ENABLED=1`. They are reachable from your LAN, and from the internet only if you forward them yourself.
+
+If you want certainty rather than reasoning, `docker compose down` stops everything.
 
 ## Requirements
 
 - Docker Engine with the compose plugin (`docker compose`), buildx for multi-arch builds
+- *On Windows:* Docker Desktop needs **WSL2** (`wsl --install`, then reboot) and **CPU virtualisation enabled in the BIOS/UEFI**, on Windows 11 as much as on 10. Docker Desktop's installer will tell you if either is missing, but not before you have downloaded it, and this caught the project's first outside tester
 - ~2 GB of image builds on first `compose build` (earshot compiles its nginx-rtmp and ffmpeg fork from source)
 - *Only for the test and measurement scripts:* host `ffmpeg`/`ffprobe`; Node.js (`npm ci`, then `npx playwright install chromium` for the two headless-browser scripts); `python3` + matplotlib for the trade-off plot
 
