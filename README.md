@@ -69,17 +69,13 @@ If you want certainty rather than reasoning, `docker compose down` stops everyth
 
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
-**What your encoder sends, and what the box does with it.** Whichever route you use, the stream arrives as H.264 video and AAC audio, because that is what OBS can send. Over RTMP the 16 audio channels have to arrive as a single AAC stream: RTMP is an old protocol and cannot carry the modern codecs this stack prefers. Over SRT they do not - OBS sends four separate 4-channel tracks - and from there the two SRT routes differ.
+**What your encoder sends, and what the box does with it.** Whichever route you use, the stream arrives as H.264 video and AAC audio, because that is what OBS can send. From earshot onward the audio is always 16-channel Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, end to end.
 
-A **guest** stream, by default, has its four tracks combined into one 16-channel AAC stream and is handed on over RTMP to the same ingest the RTMP route uses. That extra step is deliberate: it is where guests are authorised, counted, time-limited and, if need be, cut off, so every one of those protections applies to SRT senders unchanged. Guests can take the direct route too (`GUEST_SRT_DIRECT=1`), which keeps all of those controls and drops only the re-encode, but it ships off: a guest is a stranger, so it stays something an operator turns on deliberately.
+The two SRT routes differ in one step. A **guest** stream has its four tracks combined into one 16-channel AAC stream and handed on over RTMP, which is where guests are authorised, counted, time-limited and cut off; guests can take the direct route too (`GUEST_SRT_DIRECT=1`), keeping every one of those controls and dropping only the re-encode. Your **own** stream skips it by default: the four tracks pass untouched to earshot, which combines them and converts to Opus in one operation, so the audio is compressed once on the way in rather than twice.
 
-Your **own** stream (the `srt-gateway-owner` service, which `scripts/setup.sh` sets up for you) skips that step. Its four tracks are passed through untouched to earshot, which combines them and converts the audio to Opus in a single operation. The stream is therefore compressed once on the way in rather than twice, which sounds slightly better, and the box does about a third of the work it used to at 20 Mbps - the difference between a comfortable stream and an overheating one on modest hardware like a 2012 Mac Mini or a Raspberry Pi. You do not have to configure any of this; it is the default. `SRT_DIRECT=0` turns it off if you ever need the older behaviour.
+**Why 16 channels and not 25**, and the two candidate routes past that ceiling, are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). The short version: ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 and 16 pass while 9 and 25 are refused. That binds the AAC contribution leg only - the on-demand path never touches AAC and is 4th-order verified end to end.
 
-From earshot onward the audio is always 16-channel Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, 16 channels end to end.
-
-**Why 16 and not 25, and what would lift it.** ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) pass while 9 and 25 are refused outright. That is a limit on the AAC hop, not on delivery or rendering: the on-demand path never touches AAC and is **4th-order verified end to end** (a 25-channel clip auto-detected as order 4, rendered through the full order-4 impulse-response set). Live 4th order is therefore **theoretically reachable but untested**. Reaching it needs two independent things: a wider sender layout, which multitrack SRT already makes possible (25 channels would fit as five 5.1 tracks, each carrying five usable channels once the muted LFE slot is dropped), and a path that accepts a wider layout than the ones it has today. The owner route already stopped funnelling through 16-channel AAC over RTMP (that half shipped 2026-08-09); what pins the ceiling there now is that its direct listeners are fixed at 4x4 and 1x4, and guests take the AAC hop unless `GUEST_SRT_DIRECT=1`. The full argument, the two candidate routes past the ceiling, and the sender-side arithmetic beyond 3rd order are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md).
-
-**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` default is the single source of truth, and it is currently **H.264 passthrough** (`-c:v copy`) - so a clone with no `.env` streams passthrough, and video segments are `.m4s`/`.mp4` while audio stays Opus/WebM. VP9 (all-WebM) is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`, not the running default: it fell below realtime at 4K on the reference deployment host (a 2012 Mac Mini, quad-core i7), so passthrough is what actually ships. Check what your own host will do rather than trusting this paragraph:
+**Video codec.** `docker-compose.yml`'s `FFMPEG_FLAGS` fallback is the single source of truth, currently **H.264 passthrough** (`-c:v copy`). VP9 is the codec *policy* and ships as a ready-to-uncomment line in `.env.example`, not the running default: it fell below realtime at 4K on the reference host. Check yours rather than trusting this paragraph:
 
 ```bash
 docker compose config | grep FFMPEG_FLAGS
@@ -115,89 +111,40 @@ Two operator-facing views of the same running stream:
 
 ## Stream your own content
 
-Two ways in, differing in transport. **SRT (Secure Reliable Transport) is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows, all 16 channels live. The older route is RTMP (Real-Time Messaging Protocol).
+Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows. RTMP is the legacy route and needs [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only fork, because RTMP carries only one audio track.
 
 | | SRT (recommended) | RTMP (legacy) |
 |---|---|---|
-| Sender | stock OBS, macOS or Windows | OBS Studio Music Edition, Windows only |
-| Audio | one 4-channel track (1st order) or four (3rd order); `srt-gateway` reads which and handles both | one 16-channel AAC track |
-| Enabled | on by default (`SRT_ENABLED=0` unbinds the port) | always |
+| Sender | stock OBS, macOS or Windows | OBS Music Edition, Windows only |
+| Audio | one 4-channel track (1st order) or four (3rd order), detected from the stream | one 16-channel AAC track |
+| Endpoint | `srt://<box>:8891?streamid=owner&passphrase=…` | `rtmp://<box>:1935/owner`, stream key `RTMP_OWNER_KEY` |
 
-Both carry H.264 video with a keyframe interval that divides the segment duration (equality preferred: `-g 60` at 29.97/30 fps, `-g 50` at 25 fps, for the default 2 s segments; shorter intervals are valid but cost bitrate). Both land in the same place, and a guest arriving by either transport is held to the same session rules.
+Run `./scripts/setup.sh` first (`.\setup.cmd` on Windows). It generates your own key and passphrase and **prints the full SRT URL with the passphrase already filled in** - paste that rather than retyping it. Lost it? `docker compose exec srt-gateway-owner printenv SRT_OWNER_PASSPHRASE`.
 
-### Stock OBS over SRT
-
-These settings are the same on macOS and Windows - only the audio routing differs, which is what the per-OS guides below cover.
-
-Run `./scripts/setup.sh` first. It creates your `.env`, generates a publish key and a passphrase that are yours alone, switches on the SRT endpoint for your own broadcasts, and prints the URL below with your real passphrase already filled in.
-
-That endpoint listens on every network interface, so pushing from a different machine needs nothing more than a UDP 8891 forward on your router, and your box's public address in place of the one below. Anyone without the passphrase is refused: SRT uses it as the connection's encryption key, so an unauthenticated caller never gets past the handshake. Both OBS guides cover restricting it further, and what leaving it open costs you.
-
-(There is a second, separate endpoint for letting *other people* push to your box without a key. It is off by default and has its own rules: see [guest test endpoint](#guest-test-endpoint-the-guest-application).)
-
-**Lost the URL setup.sh printed?** The values live in your `.env`. Read one at a time rather than opening the whole file, so a screen-share or terminal scroll-back does not expose the rest:
-
-```sh
-grep -m1 '^SRT_OWNER_PASSPHRASE=' .env | cut -d= -f2-   # the srt:// passphrase, for stock OBS
-grep -m1 '^RTMP_OWNER_KEY='       .env | cut -d= -f2-   # the stream key, for OBS Music Edition over RTMP
-docker compose exec srt-gateway-owner printenv SRT_OWNER_PASSPHRASE   # what the RUNNING container actually has
-```
-
-That last one is worth knowing: Compose reads `.env` when a container is *created*, so after editing a secret you need `docker compose up -d srt-gateway-owner` (recreate), not `restart`, or the file and the running process disagree.
-
-`GUEST_GW_SECRET` is **not** a streaming credential and never goes into OBS - it authenticates the gateway containers to telemetry over the internal Docker network. The guest endpoint stays keyless whether or not it is set.
+The core OBS settings, identical on both platforms:
 
 | Setting | Value |
 |---|---|
 | Settings > Audio > Channels | **`4.0`** |
-| Settings > Output > Output Mode | **Advanced**, then the **Recording** tab |
-| Type | **Custom Output (FFmpeg)** |
-| FFmpeg Output Type | **Output to URL** |
-| File path or URL | `srt://<box-address>:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128` - `127.0.0.1` if OBS runs on the box |
+| Output Mode | **Advanced**, then the **Recording** tab |
+| Type / Output Type | **Custom Output (FFmpeg)** / **Output to URL** |
 | Container Format | **mpegts** |
-| Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if hidden |
+| Audio Encoder | plain **`aac`** (tick "Show all codecs" if hidden) |
 | Audio Track | tick **1, 2, 3, 4** |
-| Muxer Settings | leave empty |
-| Bitrates | audio 384 kbit/s per track, video against your uplink, see [docs/BITRATE.md](docs/BITRATE.md) |
-| Start it with | **Start Recording** (not Start Streaming - see below) |
+| Start it with | **Start Recording**, not Start Streaming |
 
-Custom Output (FFmpeg) is a **Recording**-tab output in OBS, even though it is streaming to a URL, so **Start Recording** is the button that pushes. Nothing appears under Start Streaming.
+Custom Output (FFmpeg) lives on the *Recording* tab even though it streams to a URL, so Start Recording is the button that pushes.
 
-**Per-OS routing, step by step:** creating the four 4-channel sources above is the one OS-specific step, so this is where the shared setup ends and your platform's guide takes over.
+**The one OS-specific step is routing four 4-channel sources into those tracks**, which is what the per-OS guides exist for:
 
 - **[docs/obs-macos.md](docs/obs-macos.md)** - a multichannel Core Audio device ([BlackHole](https://github.com/ExistentialAudio/BlackHole))
 - **[docs/obs-windows.md](docs/obs-windows.md)** - ASIO, via [REAPER](https://www.reaper.fm/)'s ReaRoute and the [atkAudio plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/)
 
-Feed those four tracks from four 4-channel sources - device channels 1-4, 5-8, 9-12, 13-16, downmixing off - assigned one per track in Advanced Audio Properties. The join is strictly positional (track 1 becomes channels 1-4, and so on, never a downmix), so AmbiX order survives end to end.
+Both guides also carry the settings that are **exact rather than indicative** - `4.0` and never `7.1`, plain `aac` and never `mp2` or `aac_at`, `latency` in microseconds, `pkt_size=1128` through a tunnel, and the leading space that silently turns the URL into a filename. Each was established by pushing a per-channel tone ladder through real hardware, because each obvious-looking alternative fails **without any error**.
 
-**Channel counts, sender side:** 4 channels (1st order) and 16 (3rd order) pass through as they are; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders), and a plain stereo or mono push produces no output at all - on the guest endpoint it is auto-ended with that reason. 4th order is a sender-side possibility too (see [Architecture](#architecture) above), but nothing downstream accepts it yet, so 4 and 16 are what actually work today.
+Channel counts: 4 and 16 pass through as they are, a 2nd-order source must be zero-padded to 16 by the sender, and stereo or mono produces no output at all. Why 16 is the ceiling today, and what would lift it, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). Bitrate guidance, and the honest caveat that no transparency measurement exists for AAC-coded ambisonics, is in [docs/BITRATE.md](docs/BITRATE.md).
 
-Four of those values are exact rather than indicative. Each was established by pushing a per-channel tone ladder through real hardware and reading back what arrived, because each obvious-looking alternative fails **without any error**:
-
-- **`4.0`, never `7.1`** - OBS's 7.1 path mutes the LFE slot outright, which for ambisonics erases ACN 3, the X axis.
-- **plain `aac`, never `mp2` or `aac_at`** - `mp2` is the container default and refuses more than 2 channels; `aac_at` (CoreAudio, macOS) scrambles channel order within every track.
-- **`latency` is in MICROSECONDS** - 2 s is `2000000`, not `2000`.
-- **`pkt_size=1128` through a tunnel** - SRT's default packet is about 1316 bytes and a WireGuard or Tailscale tunnel carries a 1280-byte MTU, so every packet fragments; under load a large share of the fragments never reassemble and the picture arrives shredded while SRT still reports the link up. Harmless on an ordinary 1500-byte path, essential on a tunnelled one.
-
-#### Bitrate
-
-Audio is paid once on the uplink, so the contribution rule is generous: 96 kbit/s per channel, which is where the 384 kbit/s for four tracks in the recipes above comes from. Video is the opposite trade, paid per viewer, and this deployment's 6.5 Mbit/s at 4096x2048 is a deliberate egress choice rather than a quality recommendation. The published anchors behind both, and the honest caveat that no transparency measurement exists for AAC-coded ambisonics, are in [docs/BITRATE.md](docs/BITRATE.md).
-
-### Legacy: RTMP
-
-RTMP carries exactly one audio track, so 16 channels over it need [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only patched fork. It stays fully supported - the demo loop uses this path - but new setups should start with SRT above.
-
-These are the settings for your OWN stream (the `owner` application, authenticated by your key). Guests use a different application, covered under [Guest test endpoint](#guest-test-endpoint-the-guest-application).
-
-| Setting | Value |
-|---|---|
-| Server | `rtmp://<host>:1935/owner` |
-| Stream key | your `RTMP_OWNER_KEY` (the one `scripts/setup.sh` generated into `.env`) |
-| Audio | 16 channels, AAC, AmbiX (ACN/SN3D) channel order |
-
-The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is exactly what the bundled player page requests. The manifest name is `DASH_NAME`, independent of `RTMP_OWNER_KEY`: a custom stream key does not move the manifest URL, so you can rotate the key without editing the player. A custom `DASH_NAME` needs no player edit either: the page asks telemetry (`/api/live`) which manifest the box is writing and falls back to `hoast_demo.mpd` only when telemetry is absent.
-
-The demo loop publishes over this same `owner` application under its own separate `LOOP_SOURCE_KEY`, never over the public internet - see Configuration below.
+The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is what the bundled player requests. `DASH_NAME` is independent of your keys, so rotating a credential never moves the manifest URL.
 
 ## Guest test endpoint (the `guest` application)
 
@@ -210,23 +157,7 @@ Anyone with an ambisonic microphone rig and OBS can test their stream against th
 
 **Disabled by default.** Most deployments are a single private publisher and should never expose a keyless application; set `GUEST_ENABLED=1` to opt in. Off, the `guest` application does not exist in the ingest config and the status pages carry no trace of it.
 
-| Setting | Value |
-|---|---|
-| Server (SRT, recommended) | `srt://<host>:8890?streamid=<name>&latency=2000000&pkt_size=1128` |
-| Server (RTMP) | `rtmp://<host>:1935/guest` |
-| Stream key / streamid | anything you like (it names your session in the status pages) |
-| Audio / video | same requirements as the `owner` application [above](#stream-your-own-content) |
-
-The four rules that decide whether a session works:
-
-- **One publisher at a time, first come first served.** A second concurrent push is rejected outright, not queued.
-- **Reconnect grace** of `GUEST_GRACE_S` (default 120 s): reconnect inside it and the session continues, **from the same IP address**. The slot stays locked to the original caller for the whole window, so a different address is refused rather than allowed to inherit the session's remaining time. An encoder reconnecting normally keeps its address (only the source port changes), so this is invisible in practice; it matters if you switch networks mid-session, which reads as a new guest and has to wait for the grace to lapse.
-- **Session cap** of `GUEST_MAX_S` (default 3 h), then a `GUEST_COOLDOWN_S` cooldown (default 300 s) after any forced end, so an auto-reconnecting encoder cannot re-claim the slot instantly.
-- **Optional resource guard** (`GUEST_MAX_TEMP_C`, `GUEST_MAX_MBPS`, both off by default): temperature is the one to trust, bitrate is a coarse pre-filter. Set both from a measurement of your own host.
-
-**Network prerequisite:** the RTMP guest endpoint is exactly as public as TCP port 1935; the SRT endpoint (if enabled) is exactly as public as UDP 8890. If your host sits behind a firewall or NAT, the one thing to arrange is inbound access to whichever port(s) you use; everything else ships in this compose file.
-
-Everything else - bans, reporting, the privacy notice, the session log and its retention, owner preemption, stalled-transcode auto-end, fail-closed behaviour, and the separate `SRT_MODE=owner` route for the operator's own SRT pushes - is in [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md).
+One guest at a time, admitted by an arbiter in `telemetry` that also holds the session cap, the reconnect grace, the cooldown, the ban list and the dashboard's End session button. A guest push preempts the demo loop and hands it back when the session ends. The full rule set, the resource guard, what a guest sees when refused, and how to run the endpoint responsibly are in **[docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md)**.
 
 ## On-demand VOD clips
 
@@ -242,24 +173,16 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 
 ## Configuration
 
+`scripts/setup.sh` creates `.env` from [`.env.example`](.env.example), which documents each variable at the point it is set; the per-service ones are in [docker-compose.override.yml.example](docker-compose.override.yml.example). The handful worth knowing before you edit anything:
+
 | Variable | Default | Purpose |
 |---|---|---|
-| `RTMP_OWNER_KEY` | none; **`scripts/setup.sh` generates one** | The real, security-relevant publish secret at rtmp-ingest: stream name or `?token=` must match. Also gates the SRT owner route's relay into `owner`. The placeholder that ships in `.env.example` is committed to a public repository, so **rtmp-ingest refuses to start while it is still in place** rather than coming up reachable on `:1935` with a key anyone can read. This is the only credential treated that way |
-| `ALLOW_DEFAULT_OWNER_KEY` | `0` | Start anyway with the placeholder owner key, warning on every boot. For a host where `:1935` reaches nobody (offline demo, laptop on no network). Never set it on anything reachable |
-| `LOOP_SOURCE_KEY` | `hoast_demo` | Publish auth for loop-source only. Checked the same way as `RTMP_OWNER_KEY` but never crosses the public internet (loop-source publishes over the docker-internal network); safe to leave at the default |
-| `DASH_NAME` | `hoast_demo` | Public DASH manifest filename served at `/dash/<DASH_NAME>.mpd`. Fixed and validated (`[A-Za-z0-9_-]+`) at earshot; decoupled from `RTMP_OWNER_KEY`/`LOOP_SOURCE_KEY` so either key is rotatable. The player discovers the manifest via telemetry (`/api/live`) and only falls back to the literal `hoast_demo.mpd` without it |
-| `FFMPEG_FLAGS` | the `docker-compose.yml` fallback (single source of truth) | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`; a VP9 opt-in line ships commented in `.env.example` |
-| `DEMO_CONTENT` | `1` | Self-provisioning demo at loop-source start: synthesise the spherical placeholder when `content/demo.mp4` is missing, fetch the VOD masters from the pinned release when absent (~185 MB once, SHA-256-verified, fail-soft). `0` = neither; see Quick start |
-| `VOD_ENABLED` | `0` | On-demand VOD page + packaged clips, off by default: the stack's purpose is live streaming, VOD is opt-in. `0` serves no VOD route and suppresses the reference-master fetch even with `DEMO_CONTENT=1`; the packaging scripts stay in the repo, inert until run |
-| `SRT_ENABLED` | `1` | SRT contribution ingest (`srt-gateway`), the recommended path. On by default; it still admits nobody unless `GUEST_ENABLED=1`. `0` leaves UDP 8890 unbound |
-| `GUEST_ENABLED` | `0` | Keyless guest test endpoint, off by default; see the Guest test endpoint section. Timing knobs (`GUEST_GRACE_S`, `GUEST_MAX_S`, `GUEST_COOLDOWN_S`, `GUEST_RETENTION_DAYS`, `GUEST_BAN_DAYS`) and the resource guard (`GUEST_MAX_TEMP_C`, `GUEST_MAX_MBPS`, `GUEST_LIMIT_STRIKES`) are documented in `.env.example` |
-| `SRT_MODE` | `guest` | What `srt-gateway` does with a caller: `guest` republishes into the arbitrated `guest` application; `owner` hands the stream to earshot directly by default (see `SRT_DIRECT`), or republishes into the token-authed `owner` application with `RTMP_OWNER_KEY` when `SRT_DIRECT=0`; either way it bypasses guest arbitration. Not set by the shipped compose file; `scripts/setup.sh` writes an `srt-gateway-owner` service into `docker-compose.override.yml` that sets it, and the same block ships commented in `docker-compose.override.yml.example`. Owner mode refuses to start without `SRT_OWNER_PASSPHRASE` and `RTMP_OWNER_KEY`, the key being required even though the direct route never uses it, so that `SRT_DIRECT=0` stays a working fallback. This is how you push your own 16 channels from stock OBS with `GUEST_ENABLED=0`. See [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md#the-owner-srt-route-srt_modeowner) |
-| `SRT_DIRECT` | `1` | Owner route only: hand the SRT stream to earshot as a bare MPEG-TS remux instead of re-encoding it to 16-channel AAC and republishing over RTMP. Deletes one lossy audio generation and most of the gateway's CPU (~28-42 % of a core at 20 Mbps against ~90-130 %). `0` restores the RTMP republish, which is what to use if you want the owner's stream in rtmp-ingest's stat page or are bisecting a fault across the two routes. Does not affect guests; they have their own switch, below. Written into the override by `scripts/setup.sh`; on an existing install edit the override's `SRT_DIRECT` line or set it in `.env` if that line reads `${SRT_DIRECT:-1}` |
-| `GUEST_SRT_DIRECT` | `0` | The same direct-to-DASH route for **guests**, off by default because a guest is an untrusted stranger and this is the newer path. Turning it on keeps every admission control (auth, slot, kick, ban, session cap): those hang off telemetry's session protocol, which the direct route also speaks, not off the RTMP hop. It drops only the AAC re-encode and its CPU cost. Needs `GUEST_GW_SECRET` set, and `SRT_DIRECT_LISTENERS=1` on earshot, or the session claim succeeds and the dial then hits a port nothing is listening on. No guest session has yet run on this route |
-| `SRT_OWNER_MAX_S` | `86400` | Owner-mode session ceiling (24 h), ending a session on purpose before the MPEG-TS 33-bit timestamp wrap at ~26.5 h, whose behaviour through either chain is unverified. Reconnect continues. `0` disables; guest mode never reads it |
-| `ENABLE_NONFREE` | `0` | earshot ffmpeg licence stamp: the stack builds WITHOUT `--enable-nonfree` so images are redistributable; `1` restores the stock upstream configure line (`services/earshot/README.md` section 7) |
-
-`scripts/setup.sh` creates `.env` from `.env.example`; edit it to change any of these.
+| `RTMP_OWNER_KEY` | none; **`scripts/setup.sh` generates one** | The security-relevant publish secret at rtmp-ingest. The stack refuses to start on the placeholder unless `ALLOW_DEFAULT_OWNER_KEY=1`. |
+| `FFMPEG_FLAGS` | the `docker-compose.yml` fallback | Video policy of the earshot transcode; audio is always 16-ch Opus. Check the effective value with `docker compose config \| grep FFMPEG_FLAGS`. |
+| `DASH_NAME` | `hoast_demo` | Public manifest filename, served at `/dash/<DASH_NAME>.mpd`. |
+| `SRT_ENABLED` | `1` | SRT contribution ingest, the recommended route. It still admits nobody unless a passphrase matches. |
+| `GUEST_ENABLED` | `0` | The keyless guest test endpoint. Off means the `guest` application does not exist. |
+| `VOD_ENABLED` | `0` | On-demand clips. Off by default: the stack's purpose is live. |
 
 Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, hardcoded upstream in Earshot) and the live-edge distance. The earshot image build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at 30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge by design. That is the price of gap-free playback of a 16-channel live stream.
 
@@ -272,6 +195,8 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 | `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the comparison page (`lip-sync-test/index.html`) |
 | `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants |
 | `scripts/plot-segment-tradeoff.py` | regenerate the segment-duration trade-off figure |
+| `scripts/measure-opus-compression.sh` | libopus `-compression_level` A/B on real ambisonic material, scored with AMBIQUAL ([results](opus-compression-test/RESULTS.md)) |
+| `scripts/pick-excerpt.py` | choose a measurement excerpt by content - level, spectral flatness, steadiness - rather than by a fixed offset |
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
 
 `package-dash-variants.sh` drives Shaka Packager through the compose `tools` profile. The pattern for manual runs is `docker compose run --rm shaka <packager args>`.
@@ -308,7 +233,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 
 ## Documentation
 
-- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here: the segment-duration study in [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md) and the A/V-sync instruments in [tests/av-sync/README.md](tests/av-sync/README.md), both listed below.
+- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here: the segment-duration study in [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md), the Opus `-compression_level` study in [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md), and the A/V-sync instruments in [tests/av-sync/README.md](tests/av-sync/README.md), all listed below.
 - [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md): why the live path stops at 16 channels, what is already 4th-order verified, and the two routes past the AAC ceiling
 - [docs/BITRATE.md](docs/BITRATE.md): contribution bitrate, audio and video, with the published anchors
 - [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md): the guest session rules in full, and the `SRT_MODE=owner` route
@@ -320,6 +245,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
+- [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - the whole saving is 0.9 % of a core, and solo piano is the one material that measurably loses
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
 - [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it
