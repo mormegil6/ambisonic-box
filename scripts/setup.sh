@@ -86,6 +86,21 @@ if [ -e "$ENV_FILE" ]; then
                 say "LOOP_SOURCE_KEY was missing or still the committed public default - replaced with a fresh secret"
             fi ;;
     esac
+    # SRT_PASSPHRASE was retired on 2026-08-10 in favour of role-specific names,
+    # so that what you set here is what the container reads. Migrate rather than
+    # leave it: the gateway refuses to start while the old name carries a value,
+    # because silently ignoring it would take a passphrase-protected guest port
+    # keyless with nothing said.
+    if grep -q '^SRT_PASSPHRASE=' "$ENV_FILE"; then
+        if grep -q '^SRT_GUEST_PASSPHRASE=' "$ENV_FILE"; then
+            warn "both SRT_PASSPHRASE (retired) and SRT_GUEST_PASSPHRASE are set in $ENV_FILE;"
+            warn "delete the SRT_PASSPHRASE line - the gateway will not start while it has a value"
+        else
+            awk '/^SRT_PASSPHRASE=/ {sub(/^SRT_PASSPHRASE=/, "SRT_GUEST_PASSPHRASE=")} {print}' \
+                "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+            say "renamed the retired SRT_PASSPHRASE to SRT_GUEST_PASSPHRASE (guest listener)"
+        fi
+    fi
     # SRT_OWNER_PASSPHRASE: append when absent. The override below references
     # it, and the owner gateway refuses to start on an empty one, so without
     # this an existing .env means a crash-looping owner container.
@@ -162,6 +177,20 @@ fi
 # ---------------------------------------------------------------------------
 if [ -e "$OVR_FILE" ]; then
     say "keeping your existing $OVR_FILE (not overwritten)"
+    # ...with one exception, because "not overwritten" would otherwise mean
+    # "left broken". Every override generated before 2026-08-10 passes the
+    # retired SRT_PASSPHRASE to the owner gateway, which now refuses to start on
+    # it rather than drop the passphrase silently. That is the right refusal and
+    # the wrong experience: the file is gitignored, so a pull cannot fix it, and
+    # the operator would meet a crash-looping container with no idea that a
+    # generated file three weeks old was the reason. One line, in place.
+    if grep -q '^[[:space:]]*-[[:space:]]*SRT_PASSPHRASE=' "$OVR_FILE"; then
+        awk '{ sub(/^([[:space:]]*-[[:space:]]*)SRT_PASSPHRASE=/, "&") }
+             /^[[:space:]]*-[[:space:]]*SRT_PASSPHRASE=/ { sub(/SRT_PASSPHRASE=/, "SRT_OWNER_PASSPHRASE=") }
+             { print }' "$OVR_FILE" > "$OVR_FILE.tmp" && mv "$OVR_FILE.tmp" "$OVR_FILE"
+        say "  migrated the retired SRT_PASSPHRASE line to SRT_OWNER_PASSPHRASE"
+        say "  (recreate the service to pick it up: docker compose up -d srt-gateway-owner)"
+    fi
     say "  if you want the owner route, copy the srt-gateway-owner block from"
     say "  docker-compose.override.yml.example into it."
 else
@@ -196,7 +225,7 @@ services:
       # refuse a claim that arrives without a matching secret.
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
       - RTMP_OWNER_KEY=${RTMP_OWNER_KEY}
-      - SRT_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # mandatory in owner mode
+      - SRT_OWNER_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # mandatory in owner mode
       - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
       - HOME=/tmp
       - XDG_CACHE_HOME=/tmp

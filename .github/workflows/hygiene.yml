@@ -133,6 +133,19 @@ jobs:
             hit "$f" "$n" "LIVE_APP_KEY was renamed to LOOP_SOURCE_KEY"
           done < <(git grep -nIE '\$\{?LIVE_APP_KEY|LIVE_APP_KEY=' -- . ':!.github' ':!docs/CI.md' ':!hoast360' || true)
 
+          # 1b. SRT_PASSPHRASE was retired on 2026-08-10 for role-specific names
+          #     (SRT_OWNER_PASSPHRASE / SRT_GUEST_PASSPHRASE), so that what you
+          #     set in .env is what the container reads. Only the dangerous
+          #     shape is matched - handing the old name to a container through a
+          #     compose environment list - because the name is still referred to
+          #     on purpose in three places: the gateway's refuse-to-start guard,
+          #     setup.sh's .env migration, and the .env.example note explaining
+          #     the change. Those are what make the retirement safe, not
+          #     violations of it.
+          while IFS=: read -r f n rest; do
+            hit "$f" "$n" "SRT_PASSPHRASE was retired; use SRT_OWNER_PASSPHRASE or SRT_GUEST_PASSPHRASE"
+          done < <(git grep -nIE '^[[:space:]]*#?[[:space:]]*-[[:space:]]*SRT_PASSPHRASE=' -- . ':!.github' ':!docs/CI.md' ':!hoast360' || true)
+
           # 2. rtmp-ingest's callback routes were renamed
           while IFS=: read -r f n rest; do
             hit "$f" "$n" "/rtmp/live/ was renamed to /rtmp/owner/"

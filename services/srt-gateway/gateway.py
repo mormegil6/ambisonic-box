@@ -60,7 +60,26 @@ ENABLED       = os.environ.get("SRT_ENABLED", "0") == "1"     # "0" is the
 LISTEN_PORT   = 8890                                          # container-side, fixed;
                                                               # SRT_PORT only moves the host mapping
 LATENCY_MS    = int(os.environ.get("SRT_LATENCY_MS", "2000"))
-PASSPHRASE    = os.environ.get("SRT_PASSPHRASE", "")
+# Role-specific NAME, not just a role-specific value. One image serves both
+# gateways, and until 2026-08-10 both read a shared SRT_PASSPHRASE, which forced
+# .env to use a different name (SRT_OWNER_PASSPHRASE) purely so the two roles
+# could not collide. That mapping was invisible, had to be explained in four
+# documents, and still confused people - `printenv SRT_PASSPHRASE` on the OWNER
+# container printing the owner's value is not something anyone should have to be
+# told. Reading the role's own name makes the separation structural: the two
+# gateways now cannot share a secret because they do not read the same variable,
+# and what you set in .env is what you see in the container.
+PASSPHRASE_VAR = "SRT_OWNER_PASSPHRASE" if MODE == "owner" else "SRT_GUEST_PASSPHRASE"
+PASSPHRASE    = os.environ.get(PASSPHRASE_VAR, "")
+# A value left under the retired name would otherwise go quiet, and quiet here is
+# a security downgrade: a guest port that was passphrase-protected yesterday
+# would come up keyless with nothing said. Refuse instead.
+if os.environ.get("SRT_PASSPHRASE", ""):
+    sys.stderr.write(
+        "[srt-gateway] FATAL: SRT_PASSPHRASE was retired on 2026-08-10. Use "
+        f"{PASSPHRASE_VAR} instead; leaving the old name set would silently drop "
+        "the passphrase on this listener. Re-run scripts/setup.sh to migrate .env.\n")
+    sys.exit(1)
 STATUS_PORT   = int(os.environ.get("STATUS_PORT", "8091"))
 ARBITER_URL   = os.environ.get("ARBITER_URL", "http://telemetry:8090")
 INGEST_URL    = os.environ.get("INGEST_URL",
@@ -1104,7 +1123,7 @@ def main():
         # SRT_DIRECT=0), so the SRT passphrase is the
         # only thing standing between a public caller and an owner-broadcast
         # takeover. Required, not optional, in this mode.
-        log("FATAL: owner mode requires SRT_PASSPHRASE (it is the caller gate; "
+        log("FATAL: owner mode requires SRT_OWNER_PASSPHRASE (it is the caller gate; "
             "without it any handshake becomes an authenticated owner publish)")
         sys.exit(1)
     Gst.init(None)

@@ -100,7 +100,7 @@ services:
   #     # owner is a different container from srt-gateway and needs its own copy.
   #     - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
   #     - RTMP_OWNER_KEY=${RTMP_OWNER_KEY}
-  #     - SRT_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # MANDATORY in owner mode
+  #     - SRT_OWNER_PASSPHRASE=${SRT_OWNER_PASSPHRASE}   # MANDATORY in owner mode
   #     - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
   #     - HOME=/tmp
   #     - XDG_CACHE_HOME=/tmp

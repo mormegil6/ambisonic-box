@@ -486,7 +486,10 @@ services:
     environment:
       - SRT_ENABLED=${SRT_ENABLED:-1}
       - SRT_LATENCY_MS=${SRT_LATENCY_MS:-2000}
-      - SRT_PASSPHRASE=${SRT_PASSPHRASE:-}
+      # The GUEST listener's own passphrase, optional and publishable (see
+      # .env.example). Role-specific name: the owner gateway reads
+      # SRT_OWNER_PASSPHRASE, so the two can never share a value by accident.
+      - SRT_GUEST_PASSPHRASE=${SRT_GUEST_PASSPHRASE:-}
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
       # Direct-to-DASH for GUESTS. Default OFF, unlike the owner route: a
       # guest is an untrusted stranger, so this only turns on where the
