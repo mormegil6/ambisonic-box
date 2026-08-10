@@ -36,7 +36,20 @@ cleanup() { docker rm -f "$CALLER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "[1/6] preconditions"
-command -v ffmpeg >/dev/null || { echo "host ffmpeg required (clip synthesis)" >&2; exit 2; }
+# Clip synthesis needs an ffmpeg, but not necessarily one on the host. Demanding
+# a host binary made the RECOMMENDED route's test the only one a Docker-only
+# machine could not run, while scripts/make-demo-loop.sh had already solved the
+# same problem by borrowing the earshot image's ffmpeg. Prefer the host one when
+# it is there (no container start, no bind mount), fall back to the image when
+# it is not. Found by CI: ubuntu-latest no longer ships ffmpeg.
+if command -v ffmpeg >/dev/null 2>&1; then
+    FFMPEG_MODE=host
+elif docker image inspect ambi-box-earshot:local >/dev/null 2>&1; then
+    FFMPEG_MODE=container
+else
+    echo "need an ffmpeg: install one, or build the image (docker compose build earshot)" >&2
+    exit 2
+fi
 command -v python3 >/dev/null || { echo "python3 required" >&2; exit 2; }
 docker compose ps --format '{{.Service}} {{.State}}' | grep -q "earshot running" \
     || { echo "compose stack not running (docker compose up -d)" >&2; exit 2; }
@@ -66,14 +79,23 @@ for t in 0 1 2 3; do
     FC="${FC}[${a}:a][${b}:a][${c}:a][${d}:a]amerge=inputs=4,pan=4.0|c0=c0|c1=c1|c2=c2|c3=c3[t${t}];"
     MAPS+=(-map "[t${t}]")
 done
-ffmpeg -hide_banner -loglevel error -y \
-    -f lavfi -i "testsrc2=size=1280x720:rate=30:duration=20" \
-    "${IN[@]}" \
-    -filter_complex "${FC%;}" \
-    -map 0:v "${MAPS[@]}" \
-    -c:v libx264 -preset veryfast -g 60 -pix_fmt yuv420p \
-    -c:a aac -b:a 384k \
-    -f mpegts "$WORK/clip.ts"
+FF_ARGS=(-hide_banner -loglevel error -y
+    -f lavfi -i "testsrc2=size=1280x720:rate=30:duration=20"
+    "${IN[@]}"
+    -filter_complex "${FC%;}"
+    -map 0:v "${MAPS[@]}"
+    -c:v libx264 -preset veryfast -g 60 -pix_fmt yuv420p
+    -c:a aac -b:a 384k
+    -f mpegts)
+
+if [ "$FFMPEG_MODE" = host ]; then
+    ffmpeg "${FF_ARGS[@]}" "$WORK/clip.ts"
+else
+    echo "  (no host ffmpeg; synthesising with the earshot image)"
+    docker run --rm -v "$PWD/$WORK:/w" --entrypoint ffmpeg ambi-box-earshot:local \
+        "${FF_ARGS[@]}" /w/clip.ts
+fi
+[ -s "$WORK/clip.ts" ] || { echo "clip synthesis produced nothing" >&2; exit 2; }
 
 echo "[3/6] pushing as an SRT caller from inside the compose network"
 # -map 0 is load-bearing: without it ffmpeg's default stream selection sends
