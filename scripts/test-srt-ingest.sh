@@ -41,7 +41,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "[1/6] preconditions"
+echo "[1/7] preconditions"
 # Clip synthesis needs an ffmpeg, but not necessarily one on the host. Demanding
 # a host binary made the RECOMMENDED route's test the only one a Docker-only
 # machine could not run, while scripts/make-demo-loop.sh had already solved the
@@ -84,7 +84,7 @@ echo "$GWSTATUS" | grep -q '"enabled": true' \
 curl -sf --max-time 3 "$TEL/api/live" >/dev/null \
     || { echo "telemetry not reachable on $TEL" >&2; exit 2; }
 
-echo "[2/6] synthesising the OBS-shaped SRT payload (H.264 + 4x quad AAC tone ladder)"
+echo "[2/7] synthesising the OBS-shaped SRT payload (H.264 + 4x quad AAC tone ladder)"
 rm -rf "$WORK" && mkdir -p "$WORK"
 IN=()
 for i in $(seq 0 15); do
@@ -113,8 +113,8 @@ FF_ARGS=(-hide_banner -loglevel error -y
 ff "${FF_ARGS[@]}" "$FFW/clip.ts"
 [ -s "$WORK/clip.ts" ] || { echo "clip synthesis produced nothing" >&2; exit 2; }
 
-echo "[3/6] pushing as an SRT caller from inside the compose network"
-# Marker written BEFORE the push, so step 4 can tell this session's segments
+echo "[3/7] pushing as an SRT caller from inside the compose network"
+# Marker written BEFORE the push, so step 5 can tell this session's segments
 # from whatever was already in output/. The demo loop is normally publishing
 # when this test starts, and its chunks sit in the same directory with the same
 # names - so "the two newest chunks" is only the right answer once the SRT
@@ -142,7 +142,7 @@ done
 [ "$ADOPTED" -eq 1 ] || fail "session never adopted as 'srte2e' (state: $(curl -s $TEL/api/live))"
 echo "  adopted: srte2e is live"
 
-echo "[4/6] verifying 16-ch DASH output (manifest + per-channel tones)"
+echo "[4/7] verifying 16-ch DASH output (manifest + per-channel tones)"
 # Poll rather than sleep a flat 10 s. Segments are 2 s, so two of them is the
 # real precondition, and a slow or loaded host simply needs longer to cut them.
 # A fixed sleep turns that into an intermittent red for a stack that is working.
@@ -198,7 +198,7 @@ case "$TONE_RC" in
     *) fail "channel order did not survive the SRT path (DASH Opus output)" ;;
 esac
 
-echo "[5/6] second concurrent caller must be rejected at the handshake"
+echo "[5/7] second concurrent caller must be rejected at the handshake"
 set +e
 timeout 15 docker run --rm --network "$NET" \
     -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg ambi-box-srt-gateway:local \
@@ -212,7 +212,7 @@ curl -s --max-time 3 "$TEL/api/live" | grep -q '"name": "srte2e"' \
     || fail "first session lost during the second-caller probe"
 echo "  rejected (rc=$RC), first session intact"
 
-echo "[6/6] teardown: operator kill must drop the LIVE session end to end"
+echo "[6/7] teardown: operator kill must drop the LIVE session end to end"
 # kill while the caller is still pushing: this exercises the whole
 # enforcement chain (403 at the next 10 s update ping -> nginx drops the
 # publisher -> the gateway's relay dies -> the gateway drops the SRT caller)
@@ -226,3 +226,45 @@ docker rm -f "$CALLER" >/dev/null 2>&1 || true
 [ "$ENDED" -eq 1 ] || fail "session still live 30s after the kill"
 echo "PASS (SRT caller admitted, 16 discrete ordered channels in DASH, second caller refused, kill honoured)"
 echo "note: the guest slot now carries the standard operator-kill cooldown (${GUEST_COOLDOWN_S:-300}s)"
+
+echo "[7/7] a hostile streamid must be sanitised before it reaches anything"
+# The streamid is the ONE value an SRT caller fully controls, and unlike an RTMP
+# publish name it is a PROTOCOL field rather than part of a URL, so it carries
+# what an RTMP URL cannot - spaces and ampersands included (probed 2026-08-10:
+# ffmpeg refuses those in an RTMP publish URL client-side). It becomes a publish
+# name inside an RTMP URL downstream, and reaches /api/live, which hoast-player
+# proxies to the PUBLIC port, the dashboard, and guest_sessions.csv.
+#
+# Written after a literal "<any-name>" was pasted into an OBS streamid by
+# accident and the allowlist stripped it correctly, with nothing asserting it.
+#
+# LAST on purpose. The gateway logs the resolved name at handshake ACCEPT,
+# before admission decides anything, so this assertion holds whether the
+# session is admitted or refused - and after the teardown above it will be
+# refused by the operator-kill cooldown, which is exactly what makes it safe
+# to run here. Placed third it passed its own assertion and then broke the
+# next step: the push WAS admitted, took the slot, and left grace behind.
+HOSTILE_SID='<script>alert(1)</script>";DROP TABLE--`$(id)`&x=1 ../../etc/passwd'
+docker rm -f "$CALLER-sid" >/dev/null 2>&1 || true
+docker run -d --rm --name "$CALLER-sid" --network "$NET" \
+    -v "$PWD/$WORK:/w:ro" --entrypoint ffmpeg ambi-box-srt-gateway:local \
+    -hide_banner -loglevel error -re -i /w/clip.ts -map 0 -c copy -t 6 -f mpegts \
+    "srt://srt-gateway:8890?mode=caller&streamid=$HOSTILE_SID&latency=2000000" >/dev/null 2>&1 || true
+SIDLINE=""
+for _ in $(seq 1 12); do
+    sleep 1
+    SIDLINE=$(docker compose logs --tail 40 srt-gateway 2>&1 | grep -F "streamid=" | tail -1)
+    [ -n "$SIDLINE" ] && break
+done
+docker rm -f "$CALLER-sid" >/dev/null 2>&1 || true
+if [ -z "$SIDLINE" ]; then
+    echo "  no accept line seen; not asserting (the gateway may refuse before logging)"
+else
+    SIDNAME=$(printf '%s' "$SIDLINE" | sed -n 's/.*-> name=\([^ ]*\).*/\1/p')
+    echo "  gateway resolved it to name='$SIDNAME'"
+    case "$SIDNAME" in
+        *[!A-Za-z0-9_-]*) fail "streamid sanitiser passed characters outside the allowlist: '$SIDNAME'" ;;
+    esac
+    [ "${#SIDNAME}" -le 32 ] || fail "sanitised streamid is ${#SIDNAME} chars, cap is 32"
+    [ -n "$SIDNAME" ] || fail "streamid sanitised away to nothing (sanitize() falls back to 'guest')"
+fi

@@ -174,15 +174,31 @@ shared_up() {
     SHARED_IP=$(docker inspect -f \
         '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' guestpush-shared)
     [ -n "$SHARED_IP" ] || { log "could not read the shared pusher's address"; return 1; }
-    log "shared pusher up at $SHARED_IP"
+    # BOTH lookups, because neither is reliable alone and each fails on the
+    # architecture the other works on. `docker exec` runs no login shell and
+    # inherits whatever PATH the image config declares, which on the amd64 image
+    # here omits /usr/local/bin, so `command -v` finds nothing even though the
+    # binary is right there. A hardcoded path was the previous fix and it broke
+    # the Pi 4 run on 2026-08-10 the other way round. Ask the container, then
+    # fall back to probing the usual locations.
+    SHARED_FF=$(docker exec guestpush-shared sh -c \
+        'command -v ffmpeg || for p in /usr/local/bin/ffmpeg /usr/bin/ffmpeg /opt/ffmpeg/bin/ffmpeg; do [ -x "$p" ] && { echo "$p"; break; }; done' \
+        2>/dev/null | tr -d '\r' | head -1)
+    [ -n "$SHARED_FF" ] || { log "no ffmpeg inside the shared pusher image"; return 1; }
+    log "shared pusher up at $SHARED_IP (ffmpeg at $SHARED_FF)"
 }
 shared_push() {  # shared_push <name> <seconds> - starts, does not wait
     local name=$1 secs=$2
     last_push=shared
     build_ff_args "$secs" "$name"
-    # absolute path: `docker exec` does not run a login shell, and relying on
-    # the image's PATH here failed with "executable file not found"
-    docker exec -d guestpush-shared /usr/local/bin/ffmpeg "${FF_ARGS[@]}"
+    # `docker exec` runs no login shell, so a bare `ffmpeg` is not found. An
+    # absolute path fixed that and introduced a worse bug: it assumed a layout.
+    # The Pi 4 run on 2026-08-10 failed BN-ban and T3 with
+    # `exec: "/usr/local/bin/ffmpeg": no such file or directory` while every
+    # A-cycle passed, because those two cases are the only ones that go through
+    # this helper. $SHARED_FF is resolved once from inside the container itself,
+    # which is right on any architecture and any image compose picks.
+    docker exec -d guestpush-shared "$SHARED_FF" "${FF_ARGS[@]}"
 }
 shared_stop_push() { docker exec guestpush-shared pkill -f ffmpeg >/dev/null 2>&1 || true; }
 shared_down()      { docker rm -f guestpush-shared >/dev/null 2>&1 || true; }
