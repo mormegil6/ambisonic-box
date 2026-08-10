@@ -69,6 +69,30 @@ jobs:
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 
+      - name: a running stack reports the version the repo claims
+        run: |
+          # hygiene checks that the two version FILES agree. This checks the
+          # part that actually reaches a user: file -> image -> /api/live, the
+          # number the dashboard and the player display and the bug report form
+          # asks for. AMBI_VERSION is unset here on purpose, so this exercises
+          # the fallback that a real deployment uses rather than the override.
+          docker compose up -d telemetry
+          v=''
+          for _ in $(seq 1 20); do
+            v=$(curl -sf --max-time 3 http://127.0.0.1:8090/api/live \
+                | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)
+            [ -n "$v" ] && break
+            sleep 2
+          done
+          want=$(tr -d ' \t\r\n' < telemetry/VERSION)
+          if [ "$v" != "$want" ]; then
+            echo "::error::/api/live reports '$v' but telemetry/VERSION says '$want'"
+            docker compose logs --tail 40 telemetry || true
+            docker compose down; exit 1
+          fi
+          echo "the running stack reports $v"
+          docker compose down
+
       - name: synthesise demo content
         run: |
           # no committed media in the repo; the stack can make its own

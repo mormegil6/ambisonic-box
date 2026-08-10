@@ -7,6 +7,10 @@ name: hygiene
 on:
   push:
     branches: [main, 'ci-**']
+    # Tags too, because the version gate below has nothing to check a tag
+    # against unless it runs on one. 20 seconds is a cheap thing to spend on
+    # catching a release that disagrees with itself.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -184,6 +188,80 @@ jobs:
             exit 1
           fi
           echo "placeholder owner key is only referenced where it must be"
+
+  version-agrees:
+    name: version metadata agrees
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: telemetry/VERSION, CITATION.cff and the tag say the same thing
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          # A running stack reports telemetry/VERSION on /api/live, and the bug
+          # report form asks reporters for it, so a wrong number here sends
+          # someone debugging the wrong commit. The number is only trustworthy
+          # if it cannot silently drift from the tag or from CITATION.cff, and
+          # `remember to bump it` is not a mechanism. scripts/set-version.sh
+          # writes both files at once; this refuses a push where they disagree.
+          import datetime, os, pathlib, re, sys, yaml
+
+          fail = 0
+          def err(msg):
+              global fail
+              print(f"::error::{msg}")
+              fail = 1
+
+          v_file = pathlib.Path("telemetry/VERSION").read_text().strip()
+          cff = yaml.safe_load(pathlib.Path("CITATION.cff").read_text())
+          v_cff = str(cff.get("version", "")).strip()
+          released = cff.get("date-released")
+
+          SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$")
+
+          if not SEMVER.match(v_file):
+              err(f"telemetry/VERSION is '{v_file}', which is not X.Y.Z or X.Y.Z-marker")
+          if v_cff != v_file:
+              err(f"CITATION.cff says version '{v_cff}' but telemetry/VERSION says "
+                  f"'{v_file}'. Use ./scripts/set-version.sh, which writes both.")
+
+          # date-released is a string here, but stays valid if someone unquotes
+          # it and YAML hands back a date object instead.
+          if isinstance(released, datetime.date):
+              released = released.isoformat()
+          try:
+              datetime.date.fromisoformat(str(released))
+          except (TypeError, ValueError):
+              err(f"CITATION.cff date-released is '{released}', not an ISO date")
+
+          ref = os.environ.get("REF", "")
+          if ref.startswith("refs/tags/"):
+              tag = ref[len("refs/tags/"):]
+              if tag != f"v{v_file}":
+                  err(f"tag {tag} does not match the version in the tree "
+                      f"('{v_file}', so the tag should be v{v_file})")
+              # -dev means "past a release, not itself released". Tagging one
+              # would ship a stack that reports a version that was never cut.
+              if "-dev" in v_file:
+                  err(f"tag {tag} carries a -dev version. Run "
+                      f"./scripts/set-version.sh {v_file.split('-dev')[0]} first.")
+              if not fail:
+                  print(f"tag {tag} agrees with both files, released {released}")
+          else:
+              if SEMVER.match(v_file) and "-" not in v_file:
+                  # Not an error: `git push origin main v1.0.0` runs this on the
+                  # branch as well as the tag, and on the branch there is no tag
+                  # to check. It is a reminder that the bump back is still owed.
+                  print(f"::notice::the tree claims to BE release {v_file} with no "
+                        f"marker. After tagging, run ./scripts/set-version.sh "
+                        f"<next>-dev so main stops claiming to be a release.")
+              if not fail:
+                  print(f"telemetry/VERSION and CITATION.cff agree: {v_file}")
+
+          sys.exit(fail)
+          PY
 
   arm64-bases:
     name: base images support arm64

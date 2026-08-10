@@ -1,10 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the paper below (preferred), or the software directly."
 title: "Ambisonic Box: containerised Higher-Order Ambisonics + 4K 360 livestream toolchain"
-abstract: >-
-  A freely-accessible, containerised toolchain for live streaming music events
-  with Higher-Order Ambisonics audio (3rd order, 16 channels, ACN/SN3D) and 4K
-  360 video over MPEG-DASH, rendered binaurally in the browser.
+abstract: "A freely-accessible, containerised toolchain for live streaming music events with Higher-Order Ambisonics audio (3rd order, 16 channels, ACN/SN3D) and 4K 360 video over MPEG-DASH, rendered binaurally in the browser."
 type: software
 authors:
   - family-names: "Mróz"
@@ -16,11 +13,10 @@ repository-code: "https://github.com/mormegil6/ambisonic-box"
 repository: "https://git.pg.edu.pl/p829296/ambisonic-box"
 url: "https://bmroz.eu/projects/360-livestream/"
 license: "Apache-2.0"
-# Keep these two in step with telemetry/VERSION and with the tag being cut.
-# Without them a citation describes an unversioned snapshot, which for a
-# toolchain paper is the difference between reproducible and not.
-version: "0.9.9-dev"
-date-released: "2026-08-10"
+# Do not edit these two by hand: `./scripts/set-version.sh <version>` sets them together with telemetry/VERSION, which is what a running stack reports on /api/live, and the hygiene workflow fails a push where the two disagree or where a tag does not match them. Without a version a citation describes an unversioned snapshot, which for a toolchain paper is the difference between reproducible and not.
+# A -dev marker means the tree has moved past the release named by date-released and has not itself been released.
+version: "1.0.0-dev"
+date-released: "2026-08-06"
 keywords:
   - "Higher-Order Ambisonics"
   - "spatial audio"
@@ -49,14 +45,7 @@ preferred-citation:
   month: 8
   url: "https://www.aes.org/e-lib/browse.cfm?elib=22204"
 
-# TODO, publication roadmap: this file currently offers ONE citable work, the
-# 2023 AES paper, which is the right reference for the toolchain's ORIGIN but
-# not for what this repository has become - the containerisation itself, the
-# browser interop findings, and the Phase 5 A/V-sync measurements all postdate
-# it. While it is the only entry, someone citing "the interop finding" will
-# cite the 2023 paper by default, because there is nothing else to point at.
+# TODO, publication roadmap: this file currently offers ONE citable work, the 2023 AES paper, which is the right reference for the toolchain's ORIGIN but not for what this repository has become. The containerisation itself, the browser interop findings and the Phase 5 A/V-sync measurements all postdate it, so while it is the only entry, someone citing "the interop finding" will cite the 2023 paper by default because there is nothing else to point at.
 #   - add the IEEE MultiMedia paper once accepted
 #   - add the toolchain paper (Huddersfield) once it exists
-# CFF allows only one `preferred-citation`, so additional works belong under a
-# `references:` list, with preferred-citation reassigned to whichever paper
-# best matches what the repository is by then.
+# CFF allows only one `preferred-citation`, so additional works belong under a `references:` list, with preferred-citation reassigned to whichever paper best matches what the repository is by then.
