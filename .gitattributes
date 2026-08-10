@@ -3,3 +3,10 @@
 # containers, and a shebang broken by a stray \r fails opaquely on Windows
 # clones ("bash\r: No such file or directory" instead of a clear error).
 * text=auto eol=lf
+
+# Batch files are the exception to the LF rule above. Not because LF was
+# observed to break one - it was tested on Windows 11 and parsed fine - but
+# because cmd.exe has a long history of mis-parsing LF-only scripts around
+# labels and goto, setup.cmd uses both, and this costs nothing.
+*.cmd text eol=crlf
+*.bat text eol=crlf
