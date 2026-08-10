@@ -279,7 +279,31 @@ for i in $(seq 0 15); do
     graph+="sine=frequency=$((200 + i * 100)):sample_rate=48000[s$i];"
     labels+="[s$i]"
 done
-graph+="${labels}join=inputs=16:channel_layout=hexadecagonal[out1]"
+# join needs an EXPLICIT map, or it does not produce the ladder it looks like it
+# produces. Without one, join default-maps by channel NAME: a mono `sine` carries
+# layout "mono", which is FC, so input 0 claims FC - slot 2 of
+# FL+FR+FC+BL+... - and inputs 1 and 2 then fall into the first unused slots FL
+# and FR. The bed arrives as 300,400,200,500... with only the first three
+# rotated, which is invisible until something asserts channel order, and then
+# looks exactly like a pipeline fault. Measured 2026-08-10.
+#
+# The production gateway (services/srt-gateway/gateway.py) and
+# scripts/merge-obs-tracks.sh have always mapped explicitly, and the latter
+# documents why amerge is no better. This harness was the straggler.
+#
+# Names come from the ffmpeg that will RUN the graph, not the host's, since CI
+# has no host ffmpeg and a layout table is not something to hardcode.
+ch_names=$(docker compose run --rm --no-deps -T --entrypoint ffmpeg loop-source \
+             -hide_banner -layouts 2>/dev/null \
+           | awk '$1=="hexadecagonal" {print $2}' | tr '+' ' ')
+read -r -a name_arr <<< "$ch_names"
+[ "${#name_arr[@]}" -eq 16 ] \
+    || pre "hexadecagonal has ${#name_arr[@]} channels in the container's ffmpeg, expected 16"
+join_map=""
+for i in $(seq 0 15); do
+    join_map="${join_map}${join_map:+|}${i}.0-${name_arr[$i]}"
+done
+graph+="${labels}join=inputs=16:channel_layout=hexadecagonal:map=${join_map}[out1]"
 
 log "pushing ${PUSH_SECONDS}s synthetic H.264 + 16-ch AAC (PCE) to owner/${TEST_STREAM} (token auth)"
 push_start=$(date +%s)
@@ -337,4 +361,39 @@ log "chunks written: stream0=$chunks_v stream1=$chunks_a"
 [ "$chunks_v" -ge "$MIN_CHUNKS" ] && [ "$chunks_a" -ge "$MIN_CHUNKS" ] || \
     fail "expected at least $MIN_CHUNKS chunks per stream (got $chunks_v/$chunks_a)"
 
-log "PASS: first segment after ${t_first}s (deadline ${FIRST_SEGMENT_DEADLINE}s), $chunks_v+$chunks_a chunks, 16-ch Opus + $VIDEO_CODEC manifest OK"
+# ------------------------------------------------ channel order -------------
+# This test has pushed a 200..1700 Hz ladder, one tone per channel, since it was
+# written, and until 2026-08-10 nothing ever looked at where those tones came
+# out. Everything above is a COUNT: a chain that silently permuted channels
+# satisfies all of it. Order is the property the whole exercise exists to
+# protect - it is what ACN/SN3D means in practice - and the SRT harness has
+# asserted it while this one, which runs on every PR, did not.
+init_a="$OUTPUT_DIR/init-stream1.webm"
+chunk_a=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream1-*' -newer "$marker" \
+          | sort | tail -2 | head -1)
+if [ ! -f "$init_a" ] || [ -z "$chunk_a" ]; then
+    fail "cannot check channel order: no init segment or no fresh audio chunk"
+fi
+cat "$init_a" "$chunk_a" > "$OUTPUT_DIR/.tone.webm"
+# The earshot image's ffmpeg, not the host's: CI has none, and this is the same
+# fallback test-srt-ingest.sh and make-demo-loop.sh use.
+docker run --rm -v "$PWD/$OUTPUT_DIR:/o" --entrypoint ffmpeg ambi-box-earshot:local \
+    -v error -i /o/.tone.webm -ss 0.5 -t 1.5 -f s16le -c:a pcm_s16le - \
+    > "$OUTPUT_DIR/.tone.pcm" 2>"$OUTPUT_DIR/.tone.err" || true
+if [ ! -s "$OUTPUT_DIR/.tone.pcm" ]; then
+    head -3 "$OUTPUT_DIR/.tone.err" >&2 || true
+    rm -f "$OUTPUT_DIR/.tone.webm" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
+    fail "could not decode the DASH audio to check channel order"
+fi
+set +e
+python3 scripts/check-tones.py 16 48000 200 100 < "$OUTPUT_DIR/.tone.pcm"
+tone_rc=$?
+set -e
+rm -f "$OUTPUT_DIR/.tone.webm" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
+case "$tone_rc" in
+    0) log "channel order survived the RTMP path: all 16 tones in their own channels" ;;
+    2) fail "decoded the WRONG STREAM, not an order fault: the audio checked was not this test's ladder" ;;
+    *) fail "channel order did NOT survive the RTMP path (see the per-channel report above)" ;;
+esac
+
+log "PASS: first segment after ${t_first}s (deadline ${FIRST_SEGMENT_DEADLINE}s), $chunks_v+$chunks_a chunks, 16-ch Opus + $VIDEO_CODEC manifest OK, channel order verified"
