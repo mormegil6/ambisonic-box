@@ -7,6 +7,8 @@ Four workflows, on GitHub Actions rather than on git.pg.edu.pl: that instance ha
 
 Pushes land on GitHub and Actions runs immediately; a separate workflow copies `main` and tags on to GitLab afterwards. (Until 2026-08-10 this ran the other way round - see the last section.)
 
+A docs-only push (`**.md`, `docs/**`, `LICENSE`) skips `build`, `integration` and `security` entirely - prose cannot break an image, and the point is to not spend six minutes, or a notification email, on a typo fix. `hygiene` still runs on everything, because it is the workflow that checks the docs.
+
 | workflow | when | roughly |
 |---|---|---|
 | `hygiene` | every push and PR | 20 s |

@@ -16,6 +16,15 @@ name: security
 on:
   push:
     branches: [main, 'ci-**']
+    # A docs-only change cannot affect an image or the running stack, so it
+    # does not need a 6-minute build. This is also the noise lever: fewer
+    # runs on prose-only commits means fewer notification emails for pushes
+    # that could not have broken anything. hygiene still runs on everything,
+    # because it is the one that checks the docs themselves.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
   pull_request:
   schedule:
     - cron: '40 4 * * 1'   # Mondays, after the nightly integration run

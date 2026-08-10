@@ -102,6 +102,12 @@ jobs:
           # references behind, which is exactly why this is automated.
           # earshot's OWN `live` application is untouched and legitimate, so
           # every rule here excludes it explicitly rather than by hoping.
+          #
+          # Two files are exempt because they DESCRIBE these rules rather than
+          # breaking them: this workflow, and docs/CI.md which documents it.
+          # docs/CI.md was exempt for free while it lived in .github/; moving
+          # it out (it was hijacking the repository front page) put it back in
+          # scope and reddened main until this line was added.
           fail=0
 
           hit() { echo "::error file=$1,line=$2::$3"; fail=1; }
@@ -112,12 +118,12 @@ jobs:
           #    history, not a defect, and loop-source's guard has exactly one.
           while IFS=: read -r f n rest; do
             hit "$f" "$n" "LIVE_APP_KEY was renamed to LOOP_SOURCE_KEY"
-          done < <(git grep -nIE '\$\{?LIVE_APP_KEY|LIVE_APP_KEY=' -- . ':!.github' ':!hoast360' || true)
+          done < <(git grep -nIE '\$\{?LIVE_APP_KEY|LIVE_APP_KEY=' -- . ':!.github' ':!docs/CI.md' ':!hoast360' || true)
 
           # 2. rtmp-ingest's callback routes were renamed
           while IFS=: read -r f n rest; do
             hit "$f" "$n" "/rtmp/live/ was renamed to /rtmp/owner/"
-          done < <(git grep -nI '/rtmp/live/' -- . ':!.github' ':!hoast360' || true)
+          done < <(git grep -nI '/rtmp/live/' -- . ':!.github' ':!docs/CI.md' ':!hoast360' || true)
 
           # 3. :1935/live is rtmp-ingest's OLD app name - unless the host is
           #    earshot, whose own application really is still called `live`.
@@ -126,7 +132,7 @@ jobs:
               *earshot:1935/live*) ;;
               *) hit "$f" "$n" "rtmp-ingest's app is /owner now (earshot's own /live is exempt)" ;;
             esac
-          done < <(git grep -nI ':1935/live' -- . ':!.github' ':!hoast360' || true)
+          done < <(git grep -nI ':1935/live' -- . ':!.github' ':!docs/CI.md' ':!hoast360' || true)
 
           [ $fail -eq 0 ] && echo "no retired identifiers found"
           exit $fail
