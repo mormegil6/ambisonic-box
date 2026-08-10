@@ -74,7 +74,12 @@ PASSPHRASE    = os.environ.get(PASSPHRASE_VAR, "")
 # A value left under the retired name would otherwise go quiet, and quiet here is
 # a security downgrade: a guest port that was passphrase-protected yesterday
 # would come up keyless with nothing said. Refuse instead.
-if os.environ.get("SRT_PASSPHRASE", ""):
+# PRESENCE ONLY, converted at the read. The value is never bound to a name here,
+# which is both the honest expression of what this check needs and what stops
+# CodeQL flagging the stderr write below as clear-text logging of a secret
+# (alert #1, 2026-08-10). The message names the VARIABLE, never its contents.
+_retired_name_set = bool(os.environ.get("SRT_PASSPHRASE"))
+if _retired_name_set:
     sys.stderr.write(
         "[srt-gateway] FATAL: SRT_PASSPHRASE was retired on 2026-08-10. Use "
         f"{PASSPHRASE_VAR} instead; leaving the old name set would silently drop "
