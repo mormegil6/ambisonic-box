@@ -249,7 +249,88 @@ YAML
 fi
 
 # ---------------------------------------------------------------------------
-# 3. what to do next
+# 3. preflight: say what will collide, before `up` says it worse
+# ---------------------------------------------------------------------------
+# Two failures this project has actually hit, both of which look like something
+# else at the time:
+#
+#   - A previous stack still running. On the Pi (2026-08-10) five containers
+#     from the pre-rename `hoa360` project were up for two days holding 1935,
+#     8080, 8081, 8090 and 8890. `up` would have failed on a port bind, which
+#     reads as a firewall or permissions problem rather than "you already have
+#     one of these running".
+#   - Leftovers from the 2026-08-08 project rename. Renaming a Compose project
+#     renames its VOLUMES, so a naive `up -d` silently creates empty ones and
+#     orphans the old telemetry history rather than failing.
+#
+# Advisory, never fatal: this reports, and leaves the decision to the operator.
+# Skipped entirely without a working docker, since setup.sh is otherwise usable
+# on a machine that has none yet.
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    # Ports come from compose rather than a list here, so they cannot drift.
+    ports=$(docker compose config --format json 2>/dev/null | python3 -c "
+import json,sys
+try:
+    c = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for name, svc in (c.get('services') or {}).items():
+    for p in (svc.get('ports') or []):
+        pub = p.get('published')
+        if pub:
+            print('%s %s %s' % (pub, p.get('protocol', 'tcp'), name))
+" 2>/dev/null || true)
+
+    if [ -n "${ports:-}" ]; then
+        # Whatever is here: ss on Linux, lsof on macOS. If neither, skip quietly
+        # rather than claim the ports are free.
+        if command -v ss >/dev/null 2>&1;   then probe=ss
+        elif command -v lsof >/dev/null 2>&1; then probe=lsof
+        else probe=none; fi
+
+        if [ "$probe" != none ]; then
+            echo "$ports" | while read -r port proto svc; do
+                [ -n "${port:-}" ] || continue
+                busy=""
+                if [ "$probe" = ss ]; then
+                    if [ "$proto" = udp ]; then
+                        ss -lnu 2>/dev/null | awk '{print $5}' | grep -qE "[:.]$port\$" && busy=1
+                    else
+                        ss -lnt 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$port\$" && busy=1
+                    fi
+                else
+                    if [ "$proto" = udp ]; then
+                        lsof -nP -iUDP:"$port" >/dev/null 2>&1 && busy=1
+                    else
+                        lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && busy=1
+                    fi
+                fi
+                # An explicit if, not `[ -n ... ] && warn`: under set -e a false
+                # test as the last command of a loop body is the SC2015 footgun
+                # that has already bitten a script in this repository.
+                if [ -n "$busy" ]; then
+                    warn "  port $port/$proto is already in use, and $svc wants it"
+                fi
+            done
+        fi
+    fi
+
+    # Containers and volumes from a differently-named project. `ambi-box` has
+    # been the project name since 2026-08-08; anything else here is a leftover.
+    others=$(docker ps -a --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null \
+             | grep -v '^$' | grep -v '^ambi-box$' | sort -u || true)
+    if [ -n "${others:-}" ]; then
+        warn ""
+        warn "Containers from another Compose project are present: $(echo "$others" | tr '\n' ' ')"
+        warn "If that is an older copy of THIS stack, stop it first (it holds the ports),"
+        warn "and note that its volumes keep the old project's name: a fresh 'up' will"
+        warn "create empty ones rather than reusing them. docs/DEPLOYMENT.md has the"
+        warn "copy-the-volume-across procedure."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. what to do next
 # ---------------------------------------------------------------------------
 pass_now=$(grep -m1 '^SRT_OWNER_PASSPHRASE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
 
