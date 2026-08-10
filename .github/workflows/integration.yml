@@ -112,6 +112,72 @@ jobs:
             echo "::endgroup::"
           done
 
+  srt:
+    name: SRT and direct-to-DASH
+    # The RECOMMENDED contribution route, and until 2026-08-10 it was the one
+    # thing CI did not touch: `pipeline` drives RTMP, so an SRT or direct-path
+    # regression would have left every job green. That is backwards for the
+    # route the README tells people to use.
+    #
+    # Both suites are cheap enough to gate on. test-direct-session.sh is the
+    # control plane only - real containers, real HTTP, real auth, no SRT and no
+    # media - so it is fast and deterministic. test-srt-ingest.sh does push
+    # media, but its SRT caller runs inside the compose network using the
+    # gateway's own image, so the runner needs no libsrt-enabled ffmpeg.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GUEST_ENABLED: '1'    # both suites drive the guest route
+      SRT_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: generate a real .env
+        run: |
+          # also generates GUEST_GW_SECRET, which the direct path's
+          # /gw/session/* routes fail closed without
+          ./scripts/setup.sh
+          grep -q '^GUEST_GW_SECRET=' .env \
+            || { echo "::error::setup.sh did not generate GUEST_GW_SECRET"; exit 1; }
+
+      - name: build images
+        uses: docker/bake-action@v7
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      - name: synthesise demo content
+        run: ./scripts/make-demo-loop.sh
+
+      - name: bring the stack up
+        run: |
+          docker compose up -d
+          docker compose ps
+
+      - name: test-direct-session.sh (session protocol conformance)
+        run: ./scripts/test-direct-session.sh
+
+      - name: test-srt-ingest.sh (a real SRT push, end to end)
+        run: ./scripts/test-srt-ingest.sh
+
+      - name: diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          for s in srt-gateway rtmp-ingest earshot telemetry; do
+            echo "::group::$s"
+            docker compose logs --tail 120 "$s" || true
+            echo "::endgroup::"
+          done
+
   guest:
     name: guest endpoint suite
     # long and stateful: nightly, or asked for explicitly
