@@ -1,0 +1,69 @@
+name: mirror to gitlab
+
+# GitHub is this project's SOURCE OF TRUTH; git.pg.edu.pl is the mirror.
+#
+# That is the opposite of the operator's other repositories, which are all
+# GitLab -> GitHub, so it is deliberate and worth explaining. Two reasons:
+#   - contributions arrive on GitHub. Outside contributors cannot realistically
+#     get accounts on a university GitLab, and merging their PRs on GitHub only
+#     worked if GitHub were canonical - under the old direction GitLab
+#     force-updated GitHub (keep_divergent_refs=false) and any merge made here
+#     was silently reverted on the next push.
+#   - CI runs here. git.pg.edu.pl has no runner available to this project, so
+#     every gate lives on GitHub anyway (see docs/CI.md).
+#
+# The old GitLab -> GitHub push mirror has been DISABLED rather than deleted,
+# so the previous arrangement can be restored by re-enabling it and removing
+# this workflow.
+#
+# Auth is a GitLab DEPLOY KEY with push rights, scoped to this one project -
+# not a personal token. Private half in the GITLAB_MIRROR_SSH_KEY secret.
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # never let two mirror pushes race
+  group: mirror-to-gitlab
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # full history and tags: the mirror should be a faithful copy, and a
+          # shallow clone cannot be pushed as one
+          fetch-depth: 0
+
+      - name: load the deploy key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.GITLAB_MIRROR_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t rsa,ecdsa,ed25519 git.pg.edu.pl >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: push main and tags to GitLab
+        run: |
+          git remote add gitlab git@git.pg.edu.pl:p829296/ambisonic-box.git
+          # main only, plus tags. Deliberately NOT --mirror: that would delete
+          # refs on GitLab that do not exist here, and would try to push every
+          # dependabot/* branch into the university instance for no reason.
+          git push gitlab "HEAD:refs/heads/main"
+          git push gitlab --tags
+          echo "mirrored $(git rev-parse --short HEAD) to git.pg.edu.pl"
+
+      - name: verify the two now agree
+        run: |
+          here=$(git rev-parse HEAD)
+          there=$(git ls-remote gitlab refs/heads/main | awk '{print $1}')
+          echo "  github: $here"
+          echo "  gitlab: $there"
+          [ "$here" = "$there" ] || { echo "::error::mirror push did not take effect"; exit 1; }

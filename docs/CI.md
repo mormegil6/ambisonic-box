@@ -1,8 +1,11 @@
 # CI (GitHub Actions)
 
-Four workflows, on GitHub Actions. Not on GitLab, despite git.pg.edu.pl being this project's source of truth: that instance has **no CI runner available to this project**, proven on 2026-08-09 by enabling CI/CD and watching two real pipelines sit `pending` with `runner: None` until they were cancelled. GitLab's own Secret Detection template behaved identically, which is the answer for every GitLab scanner at once - on self-managed GitLab a security scan is just another CI job, and it needs the same runner nothing here has.
+> **This repository's source of truth is GitHub, and git.pg.edu.pl is the mirror.**
+> That is the OPPOSITE of the maintainer's other repositories, which are all GitLab -> GitHub. It is deliberate; the reasoning is in "Why this one is backwards" at the end of this file.
 
-GitLab push-mirrors every branch to GitHub within seconds, so a push to GitLab arrives here and Actions runs. There is no private branch: `only_protected_branches` is false on the mirror.
+Four workflows, on GitHub Actions rather than on git.pg.edu.pl: that instance has **no CI runner available to this project**, proven on 2026-08-09 by enabling CI/CD and watching two real pipelines sit `pending` with `runner: None` until they were cancelled. GitLab's own Secret Detection template behaved identically, which is the answer for every GitLab scanner at once - on self-managed GitLab a security scan is just another CI job, and it needs the same runner nothing here has.
+
+Pushes land on GitHub and Actions runs immediately; a separate workflow copies `main` and tags on to GitLab afterwards. (Until 2026-08-10 this ran the other way round - see the last section.)
 
 | workflow | when | roughly |
 |---|---|---|
@@ -32,3 +35,20 @@ Vendored upstream (`services/earshot/src`) and the player submodule (`hoast360`)
 None of these would have caught the bugs found by hand on 2026-08-09 - a misnested CSV write, two test assertions that passed while testing nothing, 41 stale comments. Secret scanning in particular finds committed secrets, not a placeholder *documented* as the default; the hygiene workflow's own check covers that case, and it exists because README once printed that placeholder as the stream key to type.
 
 Builds are amd64 only. The project also targets arm64, but building that here means QEMU-emulating an ffmpeg compile. Multi-arch belongs on a release job.
+
+
+## Why this one is backwards (2026-08-10)
+
+Every other repository of this maintainer's is GitLab-canonical, push-mirrored to GitHub. This one is the exception, and the exception is deliberate:
+
+- **Contributions arrive on GitHub.** Outside contributors cannot realistically obtain accounts on a university GitLab, so pull requests will land here. Under the old direction that was a trap rather than a workflow: the GitLab mirror ran with `keep_divergent_refs=false`, so GitLab force-updated GitHub and anything merged here was silently reverted on the next push. The Merge button appeared to work and then quietly undid itself.
+- **CI runs here.** git.pg.edu.pl has no CI runner available to this project - proven by enabling CI/CD and watching two real pipelines, including GitLab's own Secret Detection template, sit `pending` with `runner: None`. Every gate therefore lives on GitHub regardless of where the canonical copy is.
+- **Reversing the mirror on GitLab's side is not possible here.** Pull mirroring is a Premium feature and this instance is Community Edition (`enterprise: false`, 16.11). GitLab cannot pull from GitHub, so if GitHub is to be canonical, GitHub must push - which is what `.github/workflows/mirror-to-gitlab.yml` does.
+
+Practical consequences:
+
+- Push to **GitHub**. `git push origin main` should reach GitHub; the mirror workflow copies `main` and tags to GitLab within a minute.
+- The GitLab copy is **read-only in practice**. Pushing there directly will be overwritten by the next mirror run, and the two will disagree until then.
+- Auth for the mirror is a GitLab **deploy key** scoped to this one project with push rights, not a personal token. The private half is the `GITLAB_MIRROR_SSH_KEY` GitHub secret.
+- The old GitLab -> GitHub mirror was **disabled, not deleted**. To revert: re-enable it in the GitLab project's Repository Settings and delete the mirror workflow.
+- The mirror pushes `main` and tags only, deliberately not `--mirror`: nothing should copy `dependabot/*` branches into the university instance, and `--mirror` would also delete GitLab refs that do not exist on GitHub.
