@@ -1,0 +1,78 @@
+name: Something is not working
+description: A stream that will not start, audio that is wrong, a service that will not come up
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every field here exists because it is something I would otherwise have to ask for, and each round trip costs a day. If you do not know an answer, say so and send it anyway.
+
+        **Do not report a security problem here.** See [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect instead?
+      placeholder: |
+        e.g. OBS connects and says it is streaming, but the player page stays on "waiting for stream" and never starts.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Which route were you using?
+      description: This decides which half of the stack is involved, so it narrows things more than anything else here.
+      options:
+        - SRT, my own stream (srt-gateway-owner, port 8891)
+        - SRT, as a guest (port 8890)
+        - RTMP, my own stream (:1935/owner, OBS Music Edition)
+        - RTMP, as a guest (:1935/guest)
+        - Just the built-in demo loop, no external sender
+        - Playback only (the player page or the VOD clips)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: What is the stack running on?
+      description: OS and hardware. A Raspberry Pi and a workstation fail in very different ways.
+      placeholder: e.g. Windows 11 + Docker Desktop with WSL2 / Raspberry Pi 4 8GB, Pi OS 13 / Mac mini 2012, macOS 10.15
+    validations:
+      required: true
+
+  - type: input
+    id: sender
+    attributes:
+      label: What are you sending with, and how many audio channels?
+      description: Channel count matters more than almost anything else. The chain expects ambisonic 4 or 16; stereo and 5.1 are the classic cause of a stream that connects and then produces nothing.
+      placeholder: e.g. stock OBS 32.2.1, 4 tracks x 4 channels / OBS Music Edition, 16-ch AAC / ffmpeg, 2-ch
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Usually decisive. `docker compose ps` plus whichever of these is relevant:
+        `docker compose logs --tail 80 rtmp-ingest earshot telemetry srt-gateway`
+        Redact any stream key before pasting.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Which version?
+      description: A tag, or the output of `git rev-parse --short HEAD`.
+      placeholder: e.g. v0.9.9, or 8a8f861
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Two quick things that explain a good share of reports
+      options:
+        - label: I ran `git submodule update --init` (without it the player will not build)
+        - label: I ran `./scripts/setup.sh`, or set `RTMP_OWNER_KEY` myself (rtmp-ingest refuses to start on the committed placeholder)

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/mormegil6/ambisonic-box/security/advisories/new
+    about: Please report privately rather than in a public issue. See SECURITY.md.
+  - name: A defect in Envelop Earshot itself
+    url: https://github.com/EnvelopSound/Earshot/issues
+    about: services/earshot/src is a vendored copy of Earshot. Transcoder and nginx-rtmp bugs belong upstream.
+  - name: A defect in the HOAST360 player
+    url: https://github.com/mormegil6/hoast360/issues
+    about: The player is a submodule with its own repository.

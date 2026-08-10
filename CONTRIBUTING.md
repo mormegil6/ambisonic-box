@@ -1,0 +1,63 @@
+# Contributing
+
+Thanks for looking. This is a research project from a university department rather than a product, so the bar is "does it work and is it honest about what it does" rather than anything ceremonial.
+
+## Where to file things
+
+**GitHub is the canonical repository.** You may find a copy at `git.pg.edu.pl`; that is a mirror, it is pushed to automatically, and issues or merge requests opened there will not be seen. Everything happens here.
+
+For security problems, do not open an issue. See [SECURITY.md](SECURITY.md).
+
+## Getting it running
+
+```bash
+git clone https://github.com/mormegil6/ambisonic-box.git && cd ambisonic-box
+git submodule update --init      # the patched HOAST360 player; nothing works without it
+./scripts/setup.sh               # writes .env and generates YOUR OWN publish key
+docker compose up -d --build
+```
+
+Two things that catch people:
+
+- **The submodule is not optional.** `hoast-player` builds from the repository root because it needs `hoast360/dist`. Skip `submodule update` and the build fails in a way that does not obviously say why.
+- **`setup.sh` is not optional either.** `rtmp-ingest` deliberately refuses to start while `RTMP_OWNER_KEY` is still the placeholder committed to this repository, because port 1935 is published on all interfaces and that key is public. The error names the fix.
+
+You do not need media to start: with `DEMO_CONTENT=1` (the default) `loop-source` synthesises a spherical test loop in-container.
+
+## Running the tests
+
+```bash
+./scripts/test-pipeline.sh                            # ~3 min, the documented smoke test
+GUEST_ENABLED=1 ./scripts/test-guest-endpoint.sh      # ~14 min, ten full cycles plus nine cases
+```
+
+`test-pipeline.sh` is the one to run for almost any change. The guest suite is long and drives a live stack, so CI runs it nightly rather than per push; run it yourself if you touch the arbiter, the gateway, or anything in the guest path.
+
+These scripts run on the maintainer's macOS machine as well as in CI, and macOS ships **bash 3.2**. Avoid `mapfile`/`readarray`, associative arrays and `${var,,}`: they are bash 4+, and `bash -n` will not catch them because a missing builtin fails at runtime.
+
+## What CI will check
+
+Four workflows, described in [docs/CI.md](docs/CI.md). The ones most likely to surprise a first contribution:
+
+- **shell, python and yaml must parse**, and `shellcheck` must be clean at error level.
+- **Retired identifiers must not come back.** A rename in 2026 left stragglers behind three manual sweeps, so a gate now refuses them. It matches uses rather than mentions, so writing about an old name in a comment is fine.
+- **The docs must agree with the code.** `docker-compose.yml`'s `FFMPEG_FLAGS` fallback is the single source of truth for video codec policy; README and `.env.example` must not contradict it. They drifted apart once and the shipped stack failed its own test as a result.
+- **Base images must publish `linux/arm64`.** A Raspberry Pi 4 is a supported target, and an amd64-only base breaks it somewhere nobody would notice until the device.
+
+A docs-only change skips the expensive workflows.
+
+## Things that are not ours to change
+
+- **`services/earshot/src`** is a vendored copy of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (GPL-2.0). Fixes belong upstream, not here. Patching the vendored copy means the next sync silently reverts you. If upstream is unresponsive and a fix cannot wait, say so in the pull request so the divergence is deliberate and recorded.
+- **`hoast360/`** is a submodule pointing at a separate repository. Player changes go there.
+
+## Style
+
+- Comments and commit messages explain **why**, not what. The code already says what. A comment that records the failure a line prevents is worth more than one restating it.
+- If you find a comment or a document that is wrong, fix it in the same change. Stale prose is treated as a defect here, not as cosmetics, because someone eventually acts on it.
+- Markdown is unwrapped: one line per paragraph, no manual line breaks.
+- No em-dashes in shipped text.
+
+## Licensing
+
+Configuration and orchestration are Apache 2.0. The vendored Earshot fork is GPL-2.0, the HOAST360 player is GPLv3, and the reference media clips are CC BY 4.0 with one documented exception. If a contribution mixes these, say so.
