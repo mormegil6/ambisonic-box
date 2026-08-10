@@ -185,8 +185,18 @@ if [ ! -s "$WORK/dash.pcm" ]; then
     head -5 "$WORK/decode.err" | sed 's/^/    /' >&2
     fail "could not decode the DASH audio at all (not a channel-order result)"
 fi
-python3 scripts/check-tones.py 16 48000 100 100 < "$WORK/dash.pcm" \
-    || fail "channel order did not survive the SRT path (DASH Opus output)"
+# check-tones.py exits 2 for "this is not the ladder" and 1 for a real order
+# fault; collapsing both into one message is how CI came to report a channel
+# mapping bug on 2026-08-10 for a session that was fine. Honour the distinction.
+set +e
+python3 scripts/check-tones.py 16 48000 100 100 < "$WORK/dash.pcm"
+TONE_RC=$?
+set -e
+case "$TONE_RC" in
+    0) ;;
+    2) fail "decoded the WRONG STREAM, not a channel-order fault: the audio checked was not this session's tone ladder. output/ is shared with the demo loop, so the segment selection above picked the wrong chunks" ;;
+    *) fail "channel order did not survive the SRT path (DASH Opus output)" ;;
+esac
 
 echo "[5/6] second concurrent caller must be rejected at the handshake"
 set +e
