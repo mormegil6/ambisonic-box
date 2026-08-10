@@ -28,7 +28,7 @@ jobs:
     name: build all images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # hoast-player's context is the repo root and it needs the patched
           # player, which is a submodule
