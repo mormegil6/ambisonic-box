@@ -26,7 +26,7 @@ Nothing here is generic. Every check traces to a mistake this project actually m
 
 **integration** - the two real suites. `test-pipeline.sh` on every PR; `test-guest-endpoint.sh` nightly and on demand, because it takes about 17 minutes and a slow gate gets ignored. CI runs `scripts/setup.sh` to generate a real key, which also exercises the happy path of the startup guard.
 
-**security** - gitleaks over full history (this repo carries placeholder credentials by design and had a history purge in July), Trivy on the four images this project controls, and CodeQL. earshot is scanned but **report-only**: it is a vendored upstream fork whose webtools stage sits on `node:12.22.1-alpine3.12` and carries CVEs nobody can fix from here, and failing on those would train everyone to ignore the job.
+**security** - gitleaks over full history. Note the trigger matters: on a `push` the action scans only that push's commits, so the FULL-history scan happens on the Monday schedule. The first one (2026-08-10) flagged Earshot's vendored placeholder TLS cert, which is a self-signed example with OpenSSL's default dummy subject, expired since 2019, and byte-identical to upstream. It is silenced by fingerprint in `.gitleaksignore` rather than by excluding a path, so a genuinely new key anywhere still fails. Gitleaks over full history (this repo carries placeholder credentials by design and had a history purge in July), Trivy on the four images this project controls, and CodeQL. earshot is scanned but **report-only**: it is a vendored upstream fork whose webtools stage sits on `node:12.22.1-alpine3.12` and carries CVEs nobody can fix from here, and failing on those would train everyone to ignore the job.
 
 ## Scope rule
 

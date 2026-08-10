@@ -1534,9 +1534,17 @@ def guest_publish(name, addr):
     # earshot is invisible to the stat probe, and skipping the stop for it was
     # exactly the two-writers hole. The whole hold stays under nginx-rtmp's
     # ~10 s netcall patience: docker stop -t 3 (<=3.5 s) + unwind (<=4 s).
+    # Timed, not just bounded. HANDOVER_S is tuned for the hosts this has run
+    # on so far, and a slower one simply misses it: a 2-core CI runner blew the
+    # budget on 2 of 10 cycles (2026-08-10), which matters because the Pi 4 is
+    # a target and may well be slower again. Logging the ELAPSED time on both
+    # paths turns "it timed out" into a number, so the budget can be set from
+    # measurement on the slowest real host rather than from the fastest one.
+    _hand_t0 = time.time()
     with _start_lock:
         source_stop("guest handover", kill_after_s=3)
         settled = _earshot_unwound(HANDOVER_S) and not source_container(running_only=True)
+    _hand_s = time.time() - _hand_t0
     if not settled:
         # could not clear the slot in time: refuse this publish but leave the
         # slot in grace with the loop already stopping, so an immediate manual
@@ -1546,9 +1554,12 @@ def guest_publish(name, addr):
                           grace_started=time.time())
             _guest_save()
             _grace_timer_arm(GUEST_GRACE_S)
-        print(f"guest handover timed out; slot in grace ({name} from {addr})", flush=True)
+        print(f"guest handover timed out after {_hand_s:.1f}s "
+              f"(budget: docker stop <=3.5s + unwind {HANDOVER_S}s); "
+              f"slot in grace ({name} from {addr})", flush=True)
         _refresh_pub_endpoint()
         return 503
+    print(f"guest handover completed in {_hand_s:.1f}s ({name} from {addr})", flush=True)
     # handover complete: flip to live, but only if the slot still belongs to
     # this publish (a pusher that died mid-unwind has already moved it to
     # grace via on_publish_done; do not resurrect it)

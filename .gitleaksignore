@@ -1,0 +1,18 @@
+# Known, reviewed, and not a secret.
+#
+# Format is commit:path:rule:line. Fingerprints are deliberately narrow rather
+# than a path or directory exclusion: a NEW private key appearing anywhere,
+# including under the vendored earshot tree, must still fail the scan. This
+# file only silences findings that have been looked at and understood.
+
+# Envelop Earshot's own placeholder TLS cert, vendored with the rest of its
+# source in the Phase 2 skeleton commit. Verified byte-identical to upstream
+# (blob a04d829f3f88 in EnvelopSound/Earshot). It is a self-signed example with
+# OpenSSL's default dummy subject ("Some-State", "Internet Widgits Pty Ltd")
+# and it EXPIRED on 2019-11-20, so it protects nothing and grants nothing. The
+# stack ships SSL_ENABLED=false and never presents it.
+#
+# Not removed, because the file belongs to the vendored fork: deleting it would
+# put this tree out of step with upstream for no security gain, and the SSL
+# variant of earshot's nginx config still references the path.
+a67816cb18b1f9ea3f858c02e1da1467767363c3:services/earshot/src/nginx-transcoder/certs/example.com.key:private-key:1
