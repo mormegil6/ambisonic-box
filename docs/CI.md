@@ -1,4 +1,4 @@
-# CI
+# CI (GitHub Actions)
 
 Four workflows, on GitHub Actions. Not on GitLab, despite git.pg.edu.pl being this project's source of truth: that instance has **no CI runner available to this project**, proven on 2026-08-09 by enabling CI/CD and watching two real pipelines sit `pending` with `runner: None` until they were cancelled. GitLab's own Secret Detection template behaved identically, which is the answer for every GitLab scanner at once - on self-managed GitLab a security scan is just another CI job, and it needs the same runner nothing here has.
 

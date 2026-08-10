@@ -280,6 +280,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): where the stack has run, what was measured on each host, and what belongs in a per-host override
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
+- [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
