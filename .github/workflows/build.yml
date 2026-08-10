@@ -36,6 +36,16 @@ jobs:
   bake:
     name: build all images
     runs-on: ubuntu-latest
+    # `docker buildx bake -f docker-compose.yml` interpolates the compose file
+    # before it builds anything, and the two publish credentials are mandatory
+    # there (`:?`, so a clone with no .env fails loudly instead of half-starting
+    # a stack). This job has no .env, so it supplies throwaway values. They are
+    # not credentials and reach no running service: the owner-key guard below
+    # passes its own values with `docker run -e`, which is what actually
+    # exercises the refusal.
+    env:
+      RTMP_OWNER_KEY: ci-interpolation-only-never-served
+      LOOP_SOURCE_KEY: ci-interpolation-only-never-served
     steps:
       - uses: actions/checkout@v7
         with:

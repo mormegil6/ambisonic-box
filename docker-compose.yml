@@ -189,11 +189,12 @@ services:
     environment:
       # loop-source's own token. NOT low-stakes, though this comment used to
       # say so: nginx checks it in the `owner` application, which is published
-      # on all interfaces, so until 2026-08-10 the committed default below was
+      # on all interfaces, so until 2026-08-10 the committed default here was
       # a working owner-publish credential for anyone who had read the repo.
-      # It is now scoped to the loop's own stream name (DASH_NAME, below) and
-      # rtmp-ingest refuses the default, the same way it does for the owner key.
-      - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
+      # It is now scoped to the loop's own stream name (DASH_NAME, below), and
+      # mandatory rather than defaulted: see the RTMP_OWNER_KEY note below for
+      # why the two of them say so here rather than leaving it to the container.
+      - 'LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:?.env is missing or incomplete. Run ./scripts/setup.sh first (on Windows: .\setup.cmd), then docker compose up -d --build}'
       # The stream name loop-source publishes under. rtmp-ingest needs it to
       # scope LOOP_SOURCE_KEY: the token is accepted only together with this
       # name, so it grants the one publish loop-source makes and nothing else.
@@ -201,14 +202,30 @@ services:
       - DASH_NAME=${DASH_NAME:-hoast_demo}
       # the real public-facing owner secret: gates any /owner publish arriving
       # by NAME (an OBS Stream Key push straight to :1935), the credential a
-      # leak of which would actually matter. The fallback below is a PLACEHOLDER
-      # that is committed to a public repo, so rtmp-ingest REFUSES TO START on
-      # it: this is the one credential where a working default would mean a
-      # clone comes up reachable with a key everyone already has. Generate a
-      # real one with scripts/setup.sh.
-      - RTMP_OWNER_KEY=${RTMP_OWNER_KEY:-hoast_demo_owner}
+      # leak of which would actually matter.
+      #
+      # MANDATORY, with no fallback, and that is a fix rather than tidiness.
+      # There used to be a placeholder default here, which meant a clone with
+      # no .env got far enough to CREATE containers: rtmp-ingest then refused
+      # to start (correctly, since both placeholders are public), but because
+      # it restarts and two services wait on its health, compose reported only
+      # "dependency failed to start: container ambi-box-rtmp-ingest-1 is
+      # unhealthy" and the five lines explaining why stayed in a log nobody had
+      # been told to read. A beta tester lost an evening to exactly that. `:?`
+      # puts the reason on the terminal of whoever typed `up`, before anything
+      # is pulled, built or created, on every platform.
+      #
+      # The entrypoint's refusal is NOT redundant now: it is what still catches
+      # an .env that predates this and carries the committed literals, which
+      # no interpolation rule can see. Empty counts as missing to `:?`, so a
+      # hand-edited .env with a blank value lands here too.
+      - 'RTMP_OWNER_KEY=${RTMP_OWNER_KEY:?.env is missing or incomplete. Run ./scripts/setup.sh first (on Windows: .\setup.cmd), then docker compose up -d --build}'
       # accept the placeholder anyway, for a host where :1935 reaches nobody
       # (an offline demo, a laptop on no network). Warns loudly at every start.
+      # This still needs an .env: it waives the check on the two known-public
+      # LITERALS, and the two variables above have to have a value regardless.
+      # `cp .env.example .env` is enough, which is the shape that route always
+      # took anyway.
       - ALLOW_DEFAULT_OWNER_KEY=${ALLOW_DEFAULT_OWNER_KEY:-0}
       # keyless guest test endpoint (rtmp://<host>:1935/guest); OFF by default,
       # see the README's guest section before enabling
@@ -252,7 +269,11 @@ services:
     image: ambi-box-earshot:local
     entrypoint: ["/bin/sh", "/opt/loop-source/entrypoint.sh"]
     environment:
-      - LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:-hoast_demo}
+      # Mandatory, exactly as on rtmp-ingest above, and deliberately not
+      # defaulted here either: a fallback on this copy would be unreachable
+      # (the file fails to interpolate before it gets here) while reading as
+      # though the loop had a key of its own to fall back to.
+      - 'LOOP_SOURCE_KEY=${LOOP_SOURCE_KEY:?.env is missing or incomplete. Run ./scripts/setup.sh first (on Windows: .\setup.cmd), then docker compose up -d --build}'
       # the loop's publish NAME (the entrypoint reads it and defaulted to
       # hoast_demo all along; passing it keeps a custom DASH_NAME in step
       # with telemetry's copy, whose loop/owner discrimination keys on it)

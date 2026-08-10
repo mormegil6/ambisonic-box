@@ -20,20 +20,27 @@ docker compose up -d --build
 # (Earshot monitor: http://localhost:8081/webtools)
 ```
 
-**On Windows, the third line is `setup` instead** (or double-click `setup.cmd`). Everything else is identical.
+**On Windows, the setup line is `.\setup.cmd` instead** (or double-click `setup.cmd` in Explorer). Everything else is identical. The block below works the same in `cmd.exe` and in PowerShell, which is why its first line is split in two rather than joined with `&&`: `&&` is a cmd.exe thing, and Windows PowerShell 5.1, the one in the Start menu, rejects it.
 
 ```
-git clone https://github.com/mormegil6/ambisonic-box.git && cd ambisonic-box
+git clone https://github.com/mormegil6/ambisonic-box.git
+cd ambisonic-box
 git submodule update --init
-setup
+.\setup.cmd
 docker compose up -d --build
 ```
 
-`setup.cmd` is a launcher, not a second implementation: it finds the bash that ships with Git for Windows and runs the same `scripts/setup.sh`. Do **not** substitute `bash scripts/setup.sh` on Windows. `bash` there is the WSL launcher in `System32`, not Git Bash, because Git's installer puts `cmd\` on PATH and not `bin\` - so that command reaches a different machine, or waits for a WSL distro that may not exist.
+Type the leading `.\`. cmd.exe would take a bare `setup` too, but PowerShell deliberately never runs a program out of the current directory, and `.\setup.cmd` is the one spelling both of them accept.
+
+`setup.cmd` is a launcher, not a second implementation: it finds the bash that ships with Git for Windows and runs the same `scripts/setup.sh`. Do **not** substitute `bash scripts/setup.sh` on Windows. `bash` there is the WSL launcher in `System32`, not Git Bash, because Git's installer puts `cmd\` on PATH and not `bin\` - so that command reaches a different machine, or waits for a WSL distro that may not exist. If Git is installed somewhere unusual, `setup.cmd` also asks the registry and follows `git` on your PATH; failing everything it runs the same script inside a container, since you already need Docker.
 
 `setup.sh` is what prints your ready-to-paste OBS URL with the passphrase already filled in, which is the main reason to run it rather than editing `.env` by hand. If you cannot run it at all, the stack needs only two values to start: copy `.env.example` to `.env` and set `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` to any random strings of about 30 letters and digits. That skips the owner SRT route on UDP 8891; to get that too, also copy `docker-compose.override.yml.example` and set `SRT_OWNER_PASSPHRASE`.
 
-**If `docker compose up` says `dependency failed to start: container ambi-box-rtmp-ingest-1 is unhealthy`,** run `docker compose logs rtmp-ingest`. Compose reports only that the dependency failed and swallows the reason. Almost always the reason is that `RTMP_OWNER_KEY` or `LOOP_SOURCE_KEY` is still the placeholder committed to this repository, which `rtmp-ingest` refuses to serve because port 1935 is published on all interfaces and both values are public. Running setup fixes it, on an existing `.env` too.
+**If `docker compose up` refuses with `required variable RTMP_OWNER_KEY is missing a value`,** setup has not run: there is no `.env`, or it has no value for that key. Run setup and try again. That check happens before anything is pulled, built or created, so there is nothing to clean up first.
+
+**If instead it says `dependency failed to start: container ambi-box-rtmp-ingest-1 is unhealthy`,** run `docker compose logs rtmp-ingest`: compose reports that a dependency failed and swallows the reason. You reach this with an `.env` that exists but still carries one of the placeholder keys committed to this repository, which `rtmp-ingest` refuses to serve because port 1935 is published on all interfaces and both values are public. Re-running setup repairs an existing `.env` in place, without touching a key you chose yourself.
+
+**On Windows, if setup itself fails with `set: -: invalid option` or `bash\r: No such file or directory`,** your clone predates the `.gitattributes` that pins line endings and the scripts are checked out with CRLF. Run `git add --renormalize .` and then `git checkout -- .` (two separate commands: `&&` is not valid in Windows PowerShell), or just clone again.
 
 Without `content/demo.mp4` the stack still demos itself: on first start loop-source synthesises a spherical placeholder in-container (black sphere with a test-pattern screen at the front, and a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works). With `VOD_ENABLED=1` it also fetches the two `/vod/` reference masters from the pinned `vod-clips` release (~185 MB once, background, SHA-256 verified, fail-soft). Set `DEMO_CONTENT=0` to skip the synthesis, or replace `content/demo.mp4` with a real master any time (`docker compose restart loop-source` picks it up).
 

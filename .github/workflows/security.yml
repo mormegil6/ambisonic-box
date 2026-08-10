@@ -54,6 +54,13 @@ jobs:
     name: image CVEs
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # bake interpolates docker-compose.yml before building, and the two publish
+    # credentials are mandatory there (`:?`) so that a clone with no .env fails
+    # on the user's terminal rather than inside a container. Throwaway values,
+    # for interpolation only: this job builds and scans images, it starts none.
+    env:
+      RTMP_OWNER_KEY: ci-interpolation-only-never-served
+      LOOP_SOURCE_KEY: ci-interpolation-only-never-served
     steps:
       - uses: actions/checkout@v7
         with:

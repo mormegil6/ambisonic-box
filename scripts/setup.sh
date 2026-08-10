@@ -282,11 +282,26 @@ for name, svc in (c.get('services') or {}).items():
 " 2>/dev/null || true)
 
     if [ -n "${ports:-}" ]; then
-        # Whatever is here: ss on Linux, lsof on macOS. If neither, skip quietly
-        # rather than claim the ports are free.
-        if command -v ss >/dev/null 2>&1;   then probe=ss
-        elif command -v lsof >/dev/null 2>&1; then probe=lsof
-        else probe=none; fi
+        # Whatever is here: ss on Linux, lsof on macOS. If neither, say so
+        # rather than either claiming the ports are free or saying nothing.
+        #
+        # busybox's lsof is explicitly NOT usable: it takes no options at all
+        # ("Usage: lsof / Show all open files"), so it ignores the query below,
+        # exits 0, and every single port comes back "already in use". Verified
+        # on alpine 3.24 / busybox 1.37: six false warnings on a host with no
+        # containers running. A capability test, not a name test.
+        if command -v ss >/dev/null 2>&1; then
+            probe=ss
+        elif command -v lsof >/dev/null 2>&1 && ! lsof --help 2>&1 | grep -qi busybox; then
+            probe=lsof
+        else
+            probe=none
+        fi
+
+        if [ "$probe" = none ]; then
+            warn "  (no usable ss or lsof here, so nothing was checked for port collisions;"
+            warn "   'docker compose up' is what will tell you about a busy port)"
+        fi
 
         if [ "$probe" != none ]; then
             echo "$ports" | while read -r port proto svc; do

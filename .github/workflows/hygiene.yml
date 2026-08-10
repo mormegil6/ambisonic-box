@@ -73,6 +73,15 @@ jobs:
   compose:
     name: compose resolves
     runs-on: ubuntu-latest
+    # docker-compose.yml declares the two publish credentials MANDATORY (`:?`),
+    # so that a clone with no .env fails on the user's own terminal instead of
+    # inside a container nobody has been told to look in. A fresh checkout has
+    # no .env, so CI has to behave like a real install and supply values. These
+    # are not credentials: nothing here starts a service, they only let
+    # interpolation succeed so the file itself can be validated.
+    env:
+      RTMP_OWNER_KEY: ci-interpolation-only-never-served
+      LOOP_SOURCE_KEY: ci-interpolation-only-never-served
     steps:
       - uses: actions/checkout@v7
 
@@ -170,13 +179,14 @@ jobs:
         run: |
           # README's settings table used to print `hoast_demo_owner` as the
           # stream key to type, which is the same hole as shipping a default
-          # key. Legitimate mentions are the compose fallback (the value the
-          # startup guard matches on), setup.sh's needs-generating list, and
-          # the guard itself.
+          # key. Two legitimate mentions are left: setup.sh's needs-generating
+          # list and the startup guard that matches on it. docker-compose.yml
+          # used to be a third, as the fallback value, and is deliberately no
+          # longer excluded here: since the credential became mandatory (`:?`)
+          # the literal is gone from that file and must not come back.
           # ':!.github' matters: without it this rule matches its own comment
           # and its own grep pattern, and the job fails on itself.
           bad=$(git grep -nI 'hoast_demo_owner' -- \
-                  ':!docker-compose.yml' \
                   ':!scripts/setup.sh' \
                   ':!services/rtmp-ingest/entrypoint.sh' \
                   ':!.github' \

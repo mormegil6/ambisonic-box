@@ -17,10 +17,12 @@ git submodule update --init      # the patched HOAST360 player; nothing works wi
 docker compose up -d --build
 ```
 
+On Windows, run `.\setup.cmd` in place of `./scripts/setup.sh` (cmd.exe and PowerShell alike), and split the first line at the `&&`, which Windows PowerShell does not accept. `setup.cmd` is a launcher for that same `scripts/setup.sh` rather than a second implementation of it; the README's quick start has the detail.
+
 Two things that catch people:
 
 - **The submodule is not optional.** `hoast-player` builds from the repository root because it needs `hoast360/dist`. Skip `submodule update` and the build fails in a way that does not obviously say why.
-- **`setup.sh` is not optional either.** `rtmp-ingest` deliberately refuses to start while `RTMP_OWNER_KEY` is still the placeholder committed to this repository, because port 1935 is published on all interfaces and that key is public. The error names the fix.
+- **`setup.sh` is not optional either.** `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` are declared mandatory in `docker-compose.yml`, so without an `.env` compose refuses to create anything and says why on your terminal. With an `.env` that still carries the placeholders committed to this repository, `rtmp-ingest` refuses to start instead, because port 1935 is published on all interfaces and both values are public. Both errors name the fix.
 
 You do not need media to start: with `DEMO_CONTENT=1` (the default) `loop-source` synthesises a spherical test loop in-container.
 
