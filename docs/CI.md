@@ -41,7 +41,9 @@ None of these would have caught the bugs found by hand on 2026-08-09 - a misnest
 
 Per-push builds are amd64 only. The `arm64` workflow covers four of the five images under emulation on a weekly schedule, but **earshot is not built for arm64 anywhere in CI** - it is the one with the ffmpeg compile, and it is proven on the Pi by hand instead. Nothing here publishes a multi-arch image yet; that belongs on a release job, and is the prerequisite for putting images in a registry.
 
-Emulated timings are meaningless, so nothing in CI says anything about performance. The Raspberry Pi 4 numbers that matter (thermals, direct-path CPU, and how long a guest handover really takes) can only come from the device.
+Emulated timings are meaningless, so nothing in CI says anything about performance. The Raspberry Pi 4 numbers that matter (thermals, sustained transcode CPU, and how long a guest handover really takes) can only come from the device - and as of 2026-08-10 they exist: build 19m38s, peak 71.0 C, never throttled, handover 0.5 s median and 1.0 s worst against a 4 s budget.
+
+The recommended contribution route WAS the one thing CI did not touch, which was backwards. Until 2026-08-10 `integration` drove RTMP only, so an SRT or direct-to-DASH regression would have left every job green. Both suites now run on every push and PR: `test-direct-session.sh` (the session protocol, no media) and `test-srt-ingest.sh` (a real SRT push, its caller running inside the compose network so the runner needs no libsrt ffmpeg). What is still hand-certified rather than gated: the browser player, whose worst bug to date passed headless and failed only on real GPU browsers, so a headless check would not catch the class it most wants to.
 
 ## Versions and releases
 

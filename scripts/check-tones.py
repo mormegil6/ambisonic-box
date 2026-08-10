@@ -7,8 +7,10 @@ default) on every channel, and asserts channel k's dominant ladder tone is
 tone k. This proves channel ORDER survived whatever chain produced the PCM,
 which is the property the whole exercise exists to protect.
 
-Usage: ffmpeg ... -f s16le - | check-tones.py <channels> [samplerate] [base] [step]
-Exit: 0 all channels carry their expected tone, 1 otherwise.
+Usage: ffmpeg ... -f s16le - | check-tones.py <channels> [samplerate] [base] [step] [stagger_dB]
+With stagger_dB the level ramp is asserted too, relative to channel 0.
+Exit: 0 all channels carry their expected tone (and level), 1 a real fault,
+      2 the input was not the tone ladder at all.
 """
 import sys, math, struct
 
@@ -16,6 +18,27 @@ ch = int(sys.argv[1])
 sr = int(sys.argv[2]) if len(sys.argv) > 2 else 48000
 base = int(sys.argv[3]) if len(sys.argv) > 3 else 200
 step = int(sys.argv[4]) if len(sys.argv) > 4 else 100
+# Optional 5th argument: dB per channel of an intended level stagger, so channel
+# k is expected k*stagger below channel 0. Omit it and levels are reported but
+# not asserted, which is how every caller behaved before 2026-08-10.
+#
+# WHY IT EXISTS. Frequency alone catches a swap, a duplicate or a dropped
+# channel, because all three change WHICH tone lands WHERE. It cannot see a
+# per-channel GAIN fault: sixteen tones each in the right slot at the wrong
+# level pass green. That is not hypothetical here - merge-obs-tracks.sh writes
+# pan=...|c0=c0|c1=c1|... by hand and the gateway builds a 16-entry join map, so
+# a single wrong coefficient in either is exactly that fault. The operator's
+# REAPER fixture has always carried a 6 dB stagger and caught it; the synthetic
+# ladders generated every tone at one amplitude and did not.
+#
+# RELATIVE to channel 0 on purpose, never absolute dBFS: an overall gain change
+# anywhere in the chain is not the fault being hunted, and asserting absolute
+# levels would turn every encoder-setting change into a false failure.
+stagger = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
+# Measured through the real chain (16 tones, 2 dB apart, libopus mapping_family
+# 255 at 512k, decoded back): worst deviation 0.07 dB. 2 dB of tolerance is
+# about thirty times that, so this fails on a wiring fault and not on the codec.
+STAGGER_TOL_DB = 2.0
 
 N = sr  # 1 s of audio: 1 Hz bins, far finer than the 100 Hz ladder spacing
 raw = sys.stdin.buffer.read(N * ch * 2)
@@ -59,6 +82,7 @@ TONE_RATIO_MIN = 1e5
 
 ok = True
 tonal = 0
+levels = {}
 for c in range(ch):
     xs = samples[c::ch]
     rms = math.sqrt(sum(x * x for x in xs) / len(xs)) / 32768.0
@@ -80,6 +104,7 @@ for c in range(ch):
     status = "ok" if best == c else f"WRONG (dominant {freqs[best]} Hz)"
     if best != c:
         ok = False
+    levels[c] = rms_db
     print(f"  ch{c:02d} expect {freqs[c]:4d} Hz: {status} ({rms_db:.0f} dBFS)")
 
 # Report the wrong-input case as its own thing, with its own exit code, so a
@@ -92,6 +117,29 @@ if tonal < ch / 2:
           f"test signal. Channel order was NOT tested. Check the input is the "
           f"harness clip rather than live content, and that base/step match it.")
     sys.exit(2)
+
+# Level ramp, only when the caller says one was generated. Checked after the
+# not-a-ladder verdict above, so an unrelated input is never reported as a gain
+# fault - the same misdiagnosis this file already exists to prevent.
+if stagger and ok:
+    if 0 not in levels:
+        print("LEVEL CHECK SKIPPED: channel 0 was silent, so there is no reference")
+    else:
+        worst = 0.0
+        for c in sorted(levels):
+            expected = levels[0] - stagger * c
+            err = levels[c] - expected
+            if abs(err) > abs(worst):
+                worst = err
+            if abs(err) > STAGGER_TOL_DB:
+                print(f"  ch{c:02d} level {levels[c]:.1f} dBFS, expected {expected:.1f} "
+                      f"({stagger:g} dB/ch below ch00): off by {err:+.1f} dB")
+                ok = False
+        if ok:
+            print(f"  level ramp ok: {stagger:g} dB per channel held to {abs(worst):.2f} dB")
+        else:
+            print("LEVEL RAMP FAIL: tones are in the right channels at the WRONG levels, "
+                  "which is a per-channel gain fault rather than a mapping one")
 
 print("TONE CHECK " + ("PASS" if ok else "FAIL"))
 sys.exit(0 if ok else 1)

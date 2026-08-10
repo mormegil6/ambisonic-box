@@ -276,7 +276,14 @@ docker rm -f "$PUSH_CONTAINER" >/dev/null 2>&1 || true   # stale from a crashed 
 graph="testsrc2=size=1920x960:rate=30[out0];"
 labels=""
 for i in $(seq 0 15); do
-    graph+="sine=frequency=$((200 + i * 100)):sample_rate=48000[s$i];"
+    # 2 dB per channel, descending. Frequency proves WHICH channel a tone
+    # landed in; the ramp proves it arrived at the right LEVEL, which is the
+    # one fault a per-channel gain error produces and frequency cannot see.
+    # 2 dB and not 6: sixteen channels at 6 dB apart put the quietest one
+    # below check-tones.py's -60 dBFS silence floor and it would report a
+    # false SILENT. At 2 dB the span is 30 dB and the last channel clears
+    # the floor by ~9 dB, measured.
+    graph+="sine=frequency=$((200 + i * 100)):sample_rate=48000,volume=-$((i * 2))dB[s$i];"
     labels+="[s$i]"
 done
 # join needs an EXPLICIT map, or it does not produce the ladder it looks like it
@@ -386,7 +393,7 @@ if [ ! -s "$OUTPUT_DIR/.tone.pcm" ]; then
     fail "could not decode the DASH audio to check channel order"
 fi
 set +e
-python3 scripts/check-tones.py 16 48000 200 100 < "$OUTPUT_DIR/.tone.pcm"
+python3 scripts/check-tones.py 16 48000 200 100 2 < "$OUTPUT_DIR/.tone.pcm"
 tone_rc=$?
 set -e
 rm -f "$OUTPUT_DIR/.tone.webm" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
