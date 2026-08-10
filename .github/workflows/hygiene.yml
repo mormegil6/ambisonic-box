@@ -175,6 +175,30 @@ jobs:
               && { echo "::error file=.env.example::an ACTIVE FFMPEG_FLAGS line would override the compose default; keep it commented"; exit 1; }
           echo "compose, README and .env.example agree: $want"
 
+      - name: no real-looking secret in the documentation
+        run: |
+          # 2026-08-10: an example URL was added to both OBS guides so a reader
+          # could compare their own against something concrete, and the value
+          # pasted into it was a REAL passphrase that scripts/setup.sh had just
+          # generated on a test machine. Harmless in itself - throwaway install,
+          # rotated since - but it is the wrong habit to publish, and a
+          # realistic hex string is also the worst possible example, because it
+          # invites the verbatim paste the example exists to prevent. The
+          # replacement says what it is: th1s-is-n0t-your-passphrase-...
+          #
+          # Matches the ASSIGNMENT shape only, so a git SHA or a SHA-256 asset
+          # checksum in prose stays fine. gitleaks does not cover this: the
+          # value is not a recognised credential format, it is just hex.
+          bad=$(git grep -nIE '(passphrase|PASSPHRASE|_KEY|_SECRET)=[0-9a-f]{32,}' \
+                  -- 'docs/**' '*.md' ':!hoast360' || true)
+          if [ -n "$bad" ]; then
+            echo "$bad" | while IFS=: read -r f n rest; do
+              echo "::error file=$f,line=$n::a secret-shaped value in documentation; use an obviously fake placeholder"
+            done
+            exit 1
+          fi
+          echo "no secret-shaped values in the docs"
+
       - name: the public owner-key placeholder is never presented as usable
         run: |
           # README's settings table used to print `hoast_demo_owner` as the

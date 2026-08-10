@@ -134,7 +134,7 @@ Identical on every platform, and authoritative: it reports the value the gateway
 Filled in, the URL looks like this. **The passphrase below is an example - yours will be different**, and pasting this one will be refused at the handshake:
 
 ```
-srt://127.0.0.1:8891?streamid=owner&passphrase=0d08a82788aee6f676ee10ec715381561ac7dd7a4cd0ccd8&latency=2000000&pkt_size=1128
+srt://127.0.0.1:8891?streamid=owner&passphrase=th1s-is-n0t-your-passphrase-run-setup-to-get-it&latency=2000000&pkt_size=1128
 ```
 
 Everything except the passphrase is literal, including the word `owner` in `streamid=owner`. `127.0.0.1` is right when OBS runs on the box itself. Anywhere else, replace only that part with the address you reach the box on, and leave the rest exactly as it is.
