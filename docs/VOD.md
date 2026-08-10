@@ -4,7 +4,7 @@ Opt-in. The stack's purpose is live streaming; this page is everything about the
 
 ## Enabling it
 
-**Off by default.** Set `VOD_ENABLED=1` to serve the on-demand page; disabled, the `/vod/` and `/vod-dash/` routes return 404, the Live|VOD nav pill is removed, and loop-source skips the reference-master fetch. The two flags are independent: `DEMO_CONTENT` governs the live verification loop (placeholder synthesis), `VOD_ENABLED` governs the on-demand clips, and `VOD_ENABLED=0` suppresses the clip fetch even with `DEMO_CONTENT=1`.
+**Off by default.** Set `VOD_ENABLED=1` to serve the on-demand page; disabled, the `/vod/` and `/vod-dash/` routes return 404, the Live|VOD nav pill is removed, and loop-source skips the reference-master fetch. The master fetch needs BOTH flags on. `VOD_ENABLED` governs whether the on-demand route is served, and `VOD_ENABLED=0` suppresses the fetch even with `DEMO_CONTENT=1`; `DEMO_CONTENT` is the umbrella auto-provisioning switch, so `DEMO_CONTENT=0` suppresses it too, and you supply the masters yourself. They are not independent in that direction.
 
 When enabled, the player serves on-demand reference clips at `/vod/` (`/vod/?clip=<name>`). Delivery location is a `brand.json` choice: `vodBase` empty or absent serves the clips from this host's `/vod-dash/` route; setting it to a URL serves them from an external host that mirrors the `vod-dash/` tree (see [Serving VOD from object storage](#optional-serving-vod-from-object-storage) below for the CORS requirements). The player reads the key at clip start, so switching needs no rebuild.
 

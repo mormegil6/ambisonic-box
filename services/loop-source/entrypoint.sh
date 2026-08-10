@@ -33,6 +33,11 @@ if [ "$DEMO_CONTENT" = "1" ] && [ "${VOD_ENABLED:-0}" = "1" ]; then
     sh "$DIR/fetch-demo-content.sh" &
 elif [ "$DEMO_CONTENT" = "1" ]; then
     echo "[loop-source] VOD_ENABLED=0: skipping the reference-master fetch (set VOD_ENABLED=1 to also fetch the VOD reference masters)"
+elif [ "${VOD_ENABLED:-0}" = "1" ]; then
+    # The other half of the AND above, which used to fall through silently:
+    # asking for VOD while switching auto-provisioning off is a plausible
+    # combination, and the operator should hear why no masters appeared.
+    echo "[loop-source] DEMO_CONTENT=0 with VOD_ENABLED=1: skipping the reference-master fetch, since DEMO_CONTENT governs all auto-provisioning. Supply content/vod/ yourself, or set DEMO_CONTENT=1"
 fi
 
 if [ ! -f /content/demo.mp4 ]; then
