@@ -23,10 +23,11 @@ W=${WORKDIR:-$PWD/opus-compression-test/work}
 OUT=$PWD/opus-compression-test/results.tsv
 mkdir -p "$W"
 
-# Only excerpts that survived content screening. carnival (spectral flatness
-# 0.33 at -49 dBFS: applause or pre-concert crowd) and quarry (66 % near-silent)
-# are excluded - a fixed 60 s offset chose them, which was the wrong method.
-ITEMS="piano orchestra deusexmachina"
+# Windows chosen by scripts/pick-excerpt.py rather than a fixed offset: the
+# first pass cut everything at 60 s and put the live-concert excerpt in the
+# pre-concert audience (spectral flatness 0.33 at -49 dBFS) and the ambience
+# one at 66 % silence. Selection is part of the method.
+ITEMS="piano orchestra deusexmachina carnival quarry"
 LEVELS="10 5 0"
 
 printf 'item\tlevel\tLQ\tLA\n' > "$OUT"
