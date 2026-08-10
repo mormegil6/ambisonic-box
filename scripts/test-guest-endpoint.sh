@@ -35,8 +35,13 @@
 #            the demo loop keeps publishing untouched.
 #
 # The stack is (re)started with GUEST_GRACE_S/GUEST_MAX_S shrunk so the run
-# finishes in minutes; production defaults are untouched. Timings per cycle are
-# printed at the end. Exit 0 all pass, 1 any fail, 2 precondition.
+# finishes in minutes. `.env` is never written, but the RUNNING CONTAINERS do
+# carry the shrunk values while the suite is up, so an EXIT trap recreates the
+# stack with them unset. Without that the box is left with a 45 s session cap,
+# a 10 s grace and auto-idle disabled - which is exactly what happened on the
+# reference deployment on 2026-08-10, where the demo loop then transcoded 4K
+# for nobody until it was noticed. Timings per cycle are printed at the end.
+# Exit 0 all pass, 1 any fail, 2 precondition.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -270,6 +275,22 @@ if [ ! -f content/demo.mp4 ]; then
 fi
 
 log "starting stack with GUEST_ENABLED=1 GRACE=$TG_GRACE CAP=$TG_CAP COOLDOWN=$TG_COOLDOWN TEL_IDLE_STOP_MIN=0"
+
+# Put the deployment back however this exits, including Ctrl-C and a failed
+# precondition. `env -u` rather than restoring saved values on purpose: the
+# right end state is whatever docker-compose.yml and .env say, not whatever
+# happened to be exported when the suite started.
+restore_stack() {
+    local rc=$?
+    [ -n "${REPORT:-}" ] && rm -f "$REPORT"
+    log "restoring production timings (unsetting the suite's overrides)"
+    env -u GUEST_GRACE_S -u GUEST_MAX_S -u GUEST_COOLDOWN_S -u TEL_IDLE_STOP_MIN \
+        docker compose up -d --force-recreate --no-deps telemetry >/dev/null 2>&1 \
+        || log "WARNING: could not restore telemetry; run 'docker compose up -d --force-recreate telemetry' by hand"
+    return $rc
+}
+trap restore_stack EXIT
+
 export GUEST_ENABLED=1 GUEST_GRACE_S=$TG_GRACE GUEST_MAX_S=$TG_CAP GUEST_COOLDOWN_S=$TG_COOLDOWN TEL_IDLE_STOP_MIN=0
 docker compose down --remove-orphans >/dev/null 2>&1
 docker compose up -d >/dev/null 2>&1 || pre "compose up failed"
