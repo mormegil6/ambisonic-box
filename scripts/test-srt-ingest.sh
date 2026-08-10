@@ -50,6 +50,21 @@ else
     echo "need an ffmpeg: install one, or build the image (docker compose build earshot)" >&2
     exit 2
 fi
+
+# ONE dispatcher for every ffmpeg call in this script, and $FFW for the working
+# directory as that ffmpeg sees it. There are two such calls, synthesis and
+# decode; fixing only the first cost a CI cycle, because the decode's
+# `2>/dev/null` swallowed "command not found" and the empty pipe reached
+# check-tones.py as "0 samples", which the script then reported as a channel
+# ORDER failure. A wrong diagnosis is worse than a loud one. Route any new
+# ffmpeg call through here.
+if [ "$FFMPEG_MODE" = host ]; then
+    FFW="$WORK"
+    ff() { ffmpeg "$@"; }
+else
+    FFW=/w
+    ff() { docker run --rm -v "$PWD/$WORK:/w" --entrypoint ffmpeg ambi-box-earshot:local "$@"; }
+fi
 command -v python3 >/dev/null || { echo "python3 required" >&2; exit 2; }
 docker compose ps --format '{{.Service}} {{.State}}' | grep -q "earshot running" \
     || { echo "compose stack not running (docker compose up -d)" >&2; exit 2; }
@@ -88,13 +103,8 @@ FF_ARGS=(-hide_banner -loglevel error -y
     -c:a aac -b:a 384k
     -f mpegts)
 
-if [ "$FFMPEG_MODE" = host ]; then
-    ffmpeg "${FF_ARGS[@]}" "$WORK/clip.ts"
-else
-    echo "  (no host ffmpeg; synthesising with the earshot image)"
-    docker run --rm -v "$PWD/$WORK:/w" --entrypoint ffmpeg ambi-box-earshot:local \
-        "${FF_ARGS[@]}" /w/clip.ts
-fi
+[ "$FFMPEG_MODE" = host ] || echo "  (no host ffmpeg; using the earshot image)"
+ff "${FF_ARGS[@]}" "$FFW/clip.ts"
 [ -s "$WORK/clip.ts" ] || { echo "clip synthesis produced nothing" >&2; exit 2; }
 
 echo "[3/6] pushing as an SRT caller from inside the compose network"
@@ -121,17 +131,40 @@ done
 echo "  adopted: srte2e is live"
 
 echo "[4/6] verifying 16-ch DASH output (manifest + per-channel tones)"
-sleep 10       # let earshot cut a couple of segments beyond the handover
+# Poll rather than sleep a flat 10 s. Segments are 2 s, so two of them is the
+# real precondition, and a slow or loaded host simply needs longer to cut them.
+# A fixed sleep turns that into an intermittent red for a stack that is working.
+SEGDEADLINE=60
+t0=$(date +%s)
+while :; do
+    INIT=output/init-stream1.webm
+    CHUNK=$(ls -t output/chunk-stream1-*.webm 2>/dev/null | head -2 | tail -1)
+    if [ -f "$INIT" ] && [ -n "$CHUNK" ]; then break; fi
+    if [ $(( $(date +%s) - t0 )) -ge "$SEGDEADLINE" ]; then
+        fail "no DASH audio segments in output/ after ${SEGDEADLINE}s (session was adopted, so earshot is not cutting)"
+    fi
+    sleep 2
+done
+echo "  segments after $(( $(date +%s) - t0 ))s"
+
 MPD=$(ls output/*.mpd 2>/dev/null | head -1)
 [ -n "$MPD" ] || fail "no MPD in output/"
 grep -q 'AudioChannelConfiguration[^/]*value="16"' "$MPD" \
     || fail "manifest does not declare 16 audio channels"
-INIT=output/init-stream1.webm
-CHUNK=$(ls -t output/chunk-stream1-*.webm 2>/dev/null | head -2 | tail -1)
-[ -f "$INIT" ] && [ -n "$CHUNK" ] || fail "no DASH audio segments in output/"
 cat "$INIT" "$CHUNK" > "$WORK/dash-audio.webm"
-ffmpeg -v error -i "$WORK/dash-audio.webm" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - 2>/dev/null \
-    | python3 scripts/check-tones.py 16 48000 100 100 \
+
+# Decode to a file first, and assert it is non-empty, so a decode failure says
+# so instead of arriving at check-tones.py as an empty stream and being reported
+# as a channel-ORDER fault. That misdiagnosis is exactly what happened on
+# 2026-08-10 when this call still required a host ffmpeg.
+ff -v error -i "$FFW/dash-audio.webm" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - \
+    > "$WORK/dash.pcm" 2> "$WORK/decode.err" || true
+if [ ! -s "$WORK/dash.pcm" ]; then
+    echo "  decoder said:" >&2
+    head -5 "$WORK/decode.err" | sed 's/^/    /' >&2
+    fail "could not decode the DASH audio at all (not a channel-order result)"
+fi
+python3 scripts/check-tones.py 16 48000 100 100 < "$WORK/dash.pcm" \
     || fail "channel order did not survive the SRT path (DASH Opus output)"
 
 echo "[5/6] second concurrent caller must be rejected at the handshake"
