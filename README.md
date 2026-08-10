@@ -20,7 +20,7 @@ docker compose up -d --build
 # (Earshot monitor: http://localhost:8081/webtools)
 ```
 
-**On Windows, the setup line is `.\setup.cmd` instead** (or double-click `setup.cmd` in Explorer). Everything else is identical. The block below works the same in `cmd.exe` and in PowerShell, which is why its first line is split in two rather than joined with `&&`: `&&` is a cmd.exe thing, and Windows PowerShell 5.1, the one in the Start menu, rejects it.
+**On Windows the setup line is `.\setup.cmd`** (or double-click it in Explorer), and everything else is identical. Check [Requirements](#requirements) first: Docker Desktop needs WSL2 and CPU virtualisation enabled in the BIOS. Type the leading `.\`, the one spelling both cmd.exe and PowerShell accept, and do **not** substitute `bash scripts/setup.sh`: Git's installer puts `cmd\` on PATH and not `bin\`, so `bash` there is the WSL launcher in `System32` and that command reaches a different machine. The block below avoids `&&` because Windows PowerShell 5.1, the one in the Start menu, rejects it.
 
 ```
 git clone https://github.com/mormegil6/ambisonic-box.git
@@ -30,29 +30,13 @@ git submodule update --init
 docker compose up -d --build
 ```
 
-Type the leading `.\`. cmd.exe would take a bare `setup` too, but PowerShell deliberately never runs a program out of the current directory, and `.\setup.cmd` is the one spelling both of them accept.
+`content/demo.mp4` is optional: without it loop-source synthesises a spherical placeholder on first start, a test pattern with a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works. Preparing a real master, and every variable named above, is in [`.env.example`](.env.example).
 
-`setup.cmd` is a launcher, not a second implementation: it finds the bash that ships with Git for Windows and runs the same `scripts/setup.sh`. Do **not** substitute `bash scripts/setup.sh` on Windows. `bash` there is the WSL launcher in `System32`, not Git Bash, because Git's installer puts `cmd\` on PATH and not `bin\` - so that command reaches a different machine, or waits for a WSL distro that may not exist. If Git is installed somewhere unusual, `setup.cmd` also asks the registry and follows `git` on your PATH; failing everything it runs the same script inside a container, since you already need Docker.
+**A playing loop proves the delivery half only.** loop-source publishes from inside the compose network with a token the stack gave itself, so your encoder, your channel layout, your network path and your credentials are all still untested: see [Stream your own content](#stream-your-own-content).
 
-`setup.sh` is what prints your ready-to-paste OBS URL with the passphrase already filled in, which is the main reason to run it rather than editing `.env` by hand. If you cannot run it at all, the stack needs only two values to start: copy `.env.example` to `.env` and set `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` to any random strings of about 30 letters and digits. That skips the owner SRT route on UDP 8891; to get that too, also copy `docker-compose.override.yml.example` and set `SRT_OWNER_PASSPHRASE`.
+**Nothing of yours is visible to anyone else.** The player, the operations dashboard and the earshot monitor all bind to `127.0.0.1`, and the stack makes no outbound connection to publish anywhere. Three INBOUND contribution ports do listen on all interfaces (`1935/tcp`, `8890/udp`, and `8891/udp` once setup has run), each gated by a key, a passphrase or `GUEST_ENABLED`; the port-by-port answer is in [docs/ENDPOINTS.md](docs/ENDPOINTS.md#am-i-broadcasting-to-the-internet-right-now). `docker compose down` stops everything.
 
-**If `docker compose up` refuses with `required variable RTMP_OWNER_KEY is missing a value`,** setup has not run: there is no `.env`, or it has no value for that key. Run setup and try again. That check happens before anything is pulled, built or created, so there is nothing to clean up first.
-
-**If instead it says `dependency failed to start: container ambi-box-rtmp-ingest-1 is unhealthy`,** run `docker compose logs rtmp-ingest`: compose reports that a dependency failed and swallows the reason. You reach this with an `.env` that exists but still carries one of the placeholder keys committed to this repository, which `rtmp-ingest` refuses to serve because port 1935 is published on all interfaces and both values are public. Re-running setup repairs an existing `.env` in place, without touching a key you chose yourself.
-
-**On Windows, if setup itself fails with `set: -: invalid option` or `bash\r: No such file or directory`,** your clone predates the `.gitattributes` that pins line endings and the scripts are checked out with CRLF. Run `git add --renormalize .` and then `git checkout -- .` (two separate commands: `&&` is not valid in Windows PowerShell), or just clone again.
-
-**What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because loop-source publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
-
-Without `content/demo.mp4` the stack still demos itself: on first start loop-source synthesises a spherical placeholder in-container (black sphere with a test-pattern screen at the front, and a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works). With `VOD_ENABLED=1` it also fetches the two `/vod/` reference masters from the pinned `vod-clips` release (~185 MB once, background, SHA-256 verified, fail-soft). Set `DEMO_CONTENT=0` to skip the synthesis, or replace `content/demo.mp4` with a real master any time (`docker compose restart loop-source` picks it up).
-
-**"Am I livestreaming anything right now?"** A fair question to ask before `docker compose up`, and the honest answer has two halves.
-
-**Nothing of yours is visible to anyone else.** The player, the operations dashboard and the earshot monitor all bind to `127.0.0.1` only, so nothing outside your own machine can watch, and the stack makes no outbound connection to publish anywhere. Making the demo public is a separate, deliberate act: a reverse proxy or a tunnel you set up yourself.
-
-**Three ports do listen on all interfaces**, and it is better to know than to be reassured: `1935/tcp` (RTMP contribution), `8890/udp` (SRT), and `8891/udp` if you ran setup, which writes the owner route. Those are INBOUND - they exist so that you, or a guest you have deliberately enabled, can send a stream IN. Each one is gated: `rtmp-ingest` refuses to start at all while its keys are the placeholders committed here, the owner SRT route is useless without your passphrase, and the guest port admits nobody unless you set `GUEST_ENABLED=1`. They are reachable from your LAN, and from the internet only if you forward them yourself.
-
-If you want certainty rather than reasoning, `docker compose down` stops everything.
+If setup or the first `docker compose up` fails, the exact error strings are in [Troubleshooting](#troubleshooting).
 
 ## Requirements
 
@@ -111,6 +95,8 @@ Two operator-facing views of the same running stream:
 
 ## Stream your own content
 
+**What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because loop-source publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
+
 Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows. RTMP is the legacy route and needs [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only fork, because RTMP carries only one audio track.
 
 | | SRT (recommended) | RTMP (legacy) |
@@ -163,7 +149,7 @@ One guest at a time, admitted by an arbiter in `telemetry` that also holds the s
 
 **Off by default:** the stack's purpose is live streaming, VOD is opt-in. Set `VOD_ENABLED=1` to serve the on-demand page at `/vod/`; disabled, the `/vod/` and `/vod-dash/` routes return 404.
 
-Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay that shows where each read is supposed to come from, so a listener can hear whether the delivered audio still agrees with the picture) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips), and only the generators and the player wiring are tracked.
+Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay that shows where each read is supposed to come from, so a listener can hear whether the delivered audio still agrees with the picture) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips), and only the generators and the player wiring are tracked. With `VOD_ENABLED=1` the two masters are fetched once on first start (~185 MB, in the background, SHA-256 verified against pinned hashes, fail-soft), so a fresh clone needs no manual download.
 
 Generation, packaging, the 360 test card and its projection check, captions, headset playback and serving VOD from object storage: [docs/VOD.md](docs/VOD.md).
 
@@ -184,6 +170,8 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 | `GUEST_ENABLED` | `0` | The keyless guest test endpoint. Off means the `guest` application does not exist. |
 | `VOD_ENABLED` | `0` | On-demand clips. Off by default: the stack's purpose is live. |
 
+**Setting up without `scripts/setup.sh`.** Copy `.env.example` to `.env` and set `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` to any random strings of about 30 letters and digits. That is all the stack needs to start, and it skips the owner SRT route on UDP 8891; to get that too, copy `docker-compose.override.yml.example` and set `SRT_OWNER_PASSPHRASE`. Running setup is still the easier path, because it prints the SRT URL with your passphrase already in it.
+
 Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, hardcoded upstream in Earshot) and the live-edge distance. The earshot image build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at 30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge by design. That is the price of gap-free playback of a 16-channel live stream.
 
 ## Test and measurement scripts
@@ -202,6 +190,17 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 `package-dash-variants.sh` drives Shaka Packager through the compose `tools` profile. The pattern for manual runs is `docker compose run --rm shaka <packager args>`.
 
 ## Troubleshooting
+
+### First run
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `docker compose up` refuses with `required variable RTMP_OWNER_KEY is missing a value` | Setup has not run: there is no `.env`, or it has no value for that key | Run `./scripts/setup.sh` (`.\setup.cmd` on Windows) and try again. The check happens before anything is pulled, built or created, so there is nothing to clean up first |
+| `dependency failed to start: container ambi-box-rtmp-ingest-1 is unhealthy` | An `.env` that exists but still carries a placeholder key committed to this repository. `rtmp-ingest` refuses to serve it, because port 1935 is published on all interfaces and both values are public. Compose swallows the reason; `docker compose logs rtmp-ingest` prints it | Re-run setup: it repairs an existing `.env` in place, without touching a key you chose yourself |
+| On Windows, `bash scripts/setup.sh` hangs, opens an unfamiliar Linux shell, or reports no WSL distro | Git for Windows puts `cmd\` on PATH and not `bin\`, so `bash` there is the WSL launcher in `System32` rather than Git Bash | Run `.\setup.cmd` instead. It is a launcher for the same `scripts/setup.sh`: it looks for Git Bash in the usual places, then in the registry, then follows `git` on your PATH, and failing all of those runs the script in a container |
+| On Windows, setup fails with `set: -: invalid option` or `bash\r: No such file or directory` | The clone predates the `.gitattributes` that pins line endings, so the shell scripts are checked out with CRLF | `git add --renormalize .` then `git checkout -- .`, as two separate commands (`&&` is not valid in Windows PowerShell), or clone again |
+
+### Running
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -239,7 +238,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md): the guest session rules in full, and the `SRT_MODE=owner` route
 - [docs/VOD.md](docs/VOD.md): on-demand clips, the 360 test card, captions, headset playback, object-storage delivery
 - [docs/obs-macos.md](docs/obs-macos.md) / [docs/obs-windows.md](docs/obs-windows.md): the per-OS sender recipes, step by step
-- [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, and what to monitor
+- [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, what to monitor, and the port-by-port answer to whether the box is broadcasting anything right now
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): where the stack has run, what was measured on each host, and what belongs in a per-host override
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
