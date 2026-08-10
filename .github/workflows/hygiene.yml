@@ -18,7 +18,7 @@ jobs:
     name: shell, python, yaml
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: shell syntax (every script must at least parse)
         run: |
@@ -70,7 +70,7 @@ jobs:
     name: compose resolves
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: docker compose config is valid
         run: docker compose config --quiet
@@ -94,7 +94,7 @@ jobs:
     name: no retired identifiers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: retired names must not come back
         run: |
@@ -135,7 +135,7 @@ jobs:
     name: docs match the compose default
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: FFMPEG_FLAGS default, README and .env.example agree
         run: |

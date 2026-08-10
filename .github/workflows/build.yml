@@ -28,16 +28,16 @@ jobs:
     name: build all images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # hoast-player's context is the repo root and it needs the patched
           # player, which is a submodule
           submodules: recursive
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: build every compose target
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           # keep the images in the local docker daemon so later steps can
