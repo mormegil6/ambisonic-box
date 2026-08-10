@@ -74,10 +74,16 @@ PASSPHRASE    = os.environ.get(PASSPHRASE_VAR, "")
 # A value left under the retired name would otherwise go quiet, and quiet here is
 # a security downgrade: a guest port that was passphrase-protected yesterday
 # would come up keyless with nothing said. Refuse instead.
-# PRESENCE ONLY, converted at the read. The value is never bound to a name here,
-# which is both the honest expression of what this check needs and what stops
-# CodeQL flagging the stderr write below as clear-text logging of a secret
-# (alert #1, 2026-08-10). The message names the VARIABLE, never its contents.
+# PRESENCE ONLY, converted at the read: this check needs to know THAT the retired
+# name is set, never what it holds, and the value is deliberately not bound to a
+# name here. Kept because it is the honest expression of the requirement.
+#
+# It did NOT silence CodeQL alert #1, and an earlier version of this comment
+# claimed it would. The alert points at the string LITERAL below, not at any
+# dataflow: the rule matches the word "PASSPHRASE" appearing in a message and
+# calls it a logged password. There is nothing to fix, and rewording the error
+# so it stops naming the variable would make it useless to the person who has to
+# act on it, so the alert is dismissed as a false positive rather than appeased.
 _retired_name_set = bool(os.environ.get("SRT_PASSPHRASE"))
 if _retired_name_set:
     sys.stderr.write(
