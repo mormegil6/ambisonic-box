@@ -1,10 +1,18 @@
 version: 2
 
-# Deliberately narrow. There is no dependency manifest at the repo root to
-# watch: telemetry is stdlib-only Python and the player's npm tree lives in the
-# hoast360 submodule, which is a separate repository and has to be updated
-# there. What IS worth watching is the CI itself - a pinned action that goes
-# stale is how a pipeline quietly stops meaning what it says.
+# Deliberately narrow, and narrow for a REASON rather than for lack of targets.
+# There IS a root package.json (http-server and playwright-core, the headless
+# test harness) with a lockfile, so npm updates could be enabled here. They are
+# not: those are dev-only tooling that never ships in an image or reaches a
+# viewer, and playwright-core alone would open PRs faster than they are worth
+# reading. Their real risk is CVEs, and Dependabot SECURITY ALERTS cover that
+# without the version-bump noise - enabled on the repository, not here.
+# telemetry needs nothing either way: it is stdlib-only Python with no manifest.
+# The player's npm tree lives in the hoast360 submodule, a separate repository
+# that has to be updated there.
+#
+# What IS worth watching is the CI itself, and the base images below - a pinned
+# action that goes stale is how a pipeline quietly stops meaning what it says.
 updates:
   - package-ecosystem: github-actions
     directory: /
