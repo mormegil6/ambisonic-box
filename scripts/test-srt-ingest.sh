@@ -32,7 +32,13 @@ CALLER=srt-e2e-caller
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-cleanup() { docker rm -f "$CALLER" >/dev/null 2>&1 || true; }
+SEGMARK=
+cleanup() {
+    docker rm -f "$CALLER" >/dev/null 2>&1 || true
+    # output/ is the live DASH directory, so leave nothing of ours in it
+    [ -n "$SEGMARK" ] && rm -f "$SEGMARK"
+    return 0
+}
 trap cleanup EXIT
 
 echo "[1/6] preconditions"
@@ -108,6 +114,12 @@ ff "${FF_ARGS[@]}" "$FFW/clip.ts"
 [ -s "$WORK/clip.ts" ] || { echo "clip synthesis produced nothing" >&2; exit 2; }
 
 echo "[3/6] pushing as an SRT caller from inside the compose network"
+# Marker written BEFORE the push, so step 4 can tell this session's segments
+# from whatever was already in output/. The demo loop is normally publishing
+# when this test starts, and its chunks sit in the same directory with the same
+# names - so "the two newest chunks" is only the right answer once the SRT
+# session has actually written some. Same idiom as test-pipeline.sh.
+SEGMARK=$(mktemp output/.srt-e2e.XXXXXX)
 # -map 0 is load-bearing: without it ffmpeg's default stream selection sends
 # ONE audio track of the four (the same footgun the Windows SRT receiver test
 # hit), and the gateway's fixed 4x4 join then correctly refuses the input
@@ -138,14 +150,23 @@ SEGDEADLINE=60
 t0=$(date +%s)
 while :; do
     INIT=output/init-stream1.webm
-    CHUNK=$(ls -t output/chunk-stream1-*.webm 2>/dev/null | head -2 | tail -1)
-    if [ -f "$INIT" ] && [ -n "$CHUNK" ]; then break; fi
+    # -newer "$SEGMARK": only chunks this session produced. Without it the poll
+    # matches the demo loop's leftovers on its first iteration and the whole
+    # tone check runs against the wrong stream, reporting a channel-ORDER fault
+    # for a perfectly good SRT session. That is what CI did on 2026-08-10, and
+    # the giveaway in the log was "segments after 0s".
+    FRESH=$(find output -maxdepth 1 -name 'chunk-stream1-*.webm' -newer "$SEGMARK" 2>/dev/null | wc -l | tr -d ' ')
+    if [ -f "$INIT" ] && [ "$FRESH" -ge 2 ]; then
+        CHUNK=$(find output -maxdepth 1 -name 'chunk-stream1-*.webm' -newer "$SEGMARK" 2>/dev/null \
+                | sort | tail -2 | head -1)
+        break
+    fi
     if [ $(( $(date +%s) - t0 )) -ge "$SEGDEADLINE" ]; then
-        fail "no DASH audio segments in output/ after ${SEGDEADLINE}s (session was adopted, so earshot is not cutting)"
+        fail "only $FRESH new DASH segments after ${SEGDEADLINE}s (session was adopted, so earshot is not cutting for it)"
     fi
     sleep 2
 done
-echo "  segments after $(( $(date +%s) - t0 ))s"
+echo "  $FRESH fresh segments after $(( $(date +%s) - t0 ))s"
 
 MPD=$(ls output/*.mpd 2>/dev/null | head -1)
 [ -n "$MPD" ] || fail "no MPD in output/"
