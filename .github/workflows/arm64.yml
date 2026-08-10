@@ -52,7 +52,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
