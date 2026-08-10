@@ -648,6 +648,18 @@ p2=$(curl -s --max-time 4 "$PLAYER/dash/hoast_demo.mpd" | grep -o 'publishTime="
 docker compose start telemetry >/dev/null 2>&1
 wait_for "$label: telemetry back" 60 sh -c "curl -s --max-time 2 $TEL/api/live | grep -q endpoint" \
     || fail "$label: telemetry did not come back"
+# Answering the HOST is not the post-condition the next case depends on.
+# Stopping telemetry pulls its record from docker's embedded DNS, and
+# rtmp-ingest's nginx can still be holding that failure when the next case
+# publishes (guest-http.conf.in sets `resolver 127.0.0.11 valid=5s` precisely
+# so it recovers on its own, and measured 2026-08-10 it does: ~3 s, versus 1 s
+# for telemetry to answer the host). Two seconds is a small window, but a case
+# that opens with a publish would fail inside it for a reason unrelated to what
+# it tests. So wait for the observable from INSIDE ingest, which is the path a
+# guest actually traverses.
+wait_for "$label: rtmp-ingest can reach telemetry again" 60 \
+    sh -c 'docker compose exec -T rtmp-ingest wget -qO- --timeout=2 http://telemetry:8090/api/live 2>/dev/null | grep -q endpoint' \
+    || fail "$label: rtmp-ingest still cannot resolve telemetry after restart"
 wait_for "$label: slot free after restart" $((TG_GRACE + 30)) st_is free \
     || fail "$label: slot not free after telemetry restart"
 is_live || wait_for "$label: loop still live" 30 is_live || fail "$label: loop lost after restart"
@@ -682,9 +694,33 @@ fails0=$FAILS
 # against the 32-char cap. The SRT streamid is a protocol field rather than a
 # URL and accepts more; test-srt-ingest.sh covers that side.
 HOSTILE='<script>alert(1)</script>";DROP--`$(id)`'"'"'x'"$(printf 'A%.0s' $(seq 1 100))"
-shared_up || fail "$label: shared pusher would not start"
-shared_push "$HOSTILE" 25
-if wait_for "$label: hostile-named guest goes live" 45 st_is live; then
+
+# WHICH LAYER THIS TESTS, and why it is not an RTMP push. Measured on the box
+# 2026-08-10: ffmpeg refuses to publish to rtmp://.../guest/<HOSTILE> at all,
+# failing with an I/O error before a byte leaves the client, while the same
+# push with a legal name succeeds. That is the same wall the comment above
+# records for space and `&` - it just applies to the whole hostile set, which
+# the first version of this case did not check. A test that pushes it over RTMP
+# therefore asserts something that cannot reach the box on that path, and fails
+# forever while reporting a sanitising bug that does not exist. It did exactly
+# that on the box before this was corrected.
+#
+# So drive the layer where such a name CAN arrive: the notify callback, which
+# is what nginx-rtmp itself sends and which SRT streamids also reach. The
+# request goes from inside rtmp-ingest so it traverses the real route
+# (guest-http.conf.in proxies /guest/publish to $arbiter/rtmp$request_uri),
+# and every byte of the name is percent-encoded so nothing is reinterpreted on
+# the way. test-srt-ingest.sh covers the streamid side.
+ing_claim() {  # ing_claim <raw-name> <addr>; echoes the HTTP status
+    local enc; enc=$(printf %s "$1" | od -An -tx1 | tr -d '\n ' | sed 's/\(..\)/%\1/g')
+    docker compose exec -T rtmp-ingest wget -qSO- --timeout=5 \
+        "http://telemetry:8090/rtmp/guest/publish?app=guest&name=${enc}&addr=$2" 2>&1 \
+        | awk '/HTTP\//{print $2; exit}'
+}
+wait_for "$label: slot free before the hostile claim" 90 st_is free \
+    || fail "$label: slot not free, a refusal here would be ambiguous"
+st=$(ing_claim "$HOSTILE" 203.0.113.99)
+if [ "$st" = "201" ]; then
     got=$(ep_name)
     log "$label: name as published had $(printf '%s' "$HOSTILE" | wc -c | tr -d ' ') chars; arbiter reports '$got'"
     # 1. allowlist held: nothing outside [A-Za-z0-9_-] survived anywhere it is shown
@@ -697,9 +733,16 @@ if wait_for "$label: hostile-named guest goes live" 45 st_is live; then
     #    indistinguishable in the CSV and the dashboard
     [ -n "$got" ] || fail "$label: name sanitised away to nothing (telemetry should fall back to 'guest')"
 else
-    fail "$label: hostile-named guest never went live (a legal name must survive sanitising)"
+    fail "$label: hostile name refused outright (HTTP $st); it must be sanitised and admitted"
 fi
-shared_stop_push
+# End the session the same way nginx-rtmp would, so the slot is not left held.
+ing_done() {
+    local enc; enc=$(printf %s "$1" | od -An -tx1 | tr -d '\n ' | sed 's/\(..\)/%\1/g')
+    docker compose exec -T rtmp-ingest wget -qO- --timeout=5 \
+        "http://telemetry:8090/rtmp/guest/done?app=guest&name=${enc}&addr=$2" >/dev/null 2>&1 || true
+}
+ing_done "${got:-$HOSTILE}" 203.0.113.99
+
 # 4. the persisted row must be clean too: /api/live is rendered with
 #    textContent, but the CSV is read by whatever anyone points at it later
 st_not_live() { [ "$(ep_state)" != "live" ]; }
@@ -713,7 +756,6 @@ if [ -n "$csv_name" ]; then
 else
     log "$label: no CSV row yet (session may still be draining); /api/live assertions stand"
 fi
-shared_down
 if [ "$FAILS" -eq "$fails0" ]; then
     row "$label: hostile stream name sanitised to '$got' - allowlist and 32-char cap held at /api/live and in the CSV"
     log "$label ok"
