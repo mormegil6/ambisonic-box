@@ -424,4 +424,70 @@ case "$tone_rc" in
     *) fail "channel order did NOT survive the RTMP path (see the per-channel report above)" ;;
 esac
 
+# ---------------------------------- the MASTER's colour range ----------------
+# Checked separately from the delivered segments above, because this test pushes
+# its own synthetic video: the delivered bytes during a run are testsrc2, not
+# what viewers actually receive. The master is what ships.
+#
+# Measured 2026-08-11: the reference box's demo master is yuvj420p(pc) - FULL
+# range - and passes through untouched under -c:v copy. That plays correctly
+# everywhere today, including a Quest 3, because it is H.264. It becomes the
+# known-broken combination the moment FFMPEG_FLAGS is switched to the documented
+# VP9 policy, which is a one-line change in .env. CLAUDE.md already states the
+# rule ("any re-encoded master must convert"); nothing checked it.
+if [ -f content/demo.mp4 ]; then
+    minfo=$( { docker run --rm -v "$PWD/content:/c:ro" --entrypoint ffmpeg ambi-box-earshot:local \
+                 -hide_banner -i /c/demo.mp4 2>&1 | grep -m1 'Video:'; } || true )
+    case "$minfo" in
+        *"(pc,"*|*"(full,"*)
+            if [ "$VIDEO_CODEC" = "vp09" ]; then
+                fail "content/demo.mp4 is FULL RANGE and the codec policy is VP9: this is the combination that breaks dash.js on real GPU browsers while passing headless. Convert it: -vf scale=in_range=pc:out_range=tv -color_range tv"
+            fi
+            log "NOTE: content/demo.mp4 is full range (pc). Harmless under H.264 passthrough, but switching FFMPEG_FLAGS to VP9 would produce the broken combination - convert the master first" ;;
+        *) : ;;
+    esac
+fi
+
+# ---------------------------------- delivered video colour range -------------
+# The one bug that escaped this project into production was full-range (pc) VP9:
+# it broke the dash.js/MSE player with PIPELINE_ERROR_DECODE on real GPU
+# browsers, decoded fine in plain single-file playback, and PASSED the headless
+# harness. The browser check cannot catch that class, but the property whose
+# violation caused it can be asserted on the bytes a viewer receives.
+#
+# SCOPED TO VP9 ON PURPOSE. Measured 2026-08-11: the reference box serves
+# full-range H.264 today, inherited from a demo master that is yuvj420p(pc) and
+# passed through untouched by -c:v copy, and it plays correctly everywhere
+# including a Quest 3. Full-range H.264 is not the hazard; full-range VP9 is.
+# So this fails only for the combination that is known to break, and warns for
+# the one that is known to work - otherwise it would fail a healthy deployment,
+# which is how a real assertion gets deleted for crying wolf.
+#
+# The LATENT hazard is the point: switching FFMPEG_FLAGS to the documented VP9
+# policy, with a master like this one, produces exactly the broken combination.
+# ffmpeg, not ffprobe: the earshot image ships only ffmpeg.
+init_v=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'init-stream0.*' -print -quit 2>/dev/null)
+chunk_v=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream0-*' ! -name '*.tmp' -newer "$marker" \
+             -print 2>/dev/null | sort | tail -1)
+if [ -n "$init_v" ] && [ -f "$init_v" ] && [ -n "$chunk_v" ]; then
+    cat "$init_v" "$chunk_v" > "$OUTPUT_DIR/.range.seg"
+    # `|| true`: this script runs under `set -euo pipefail`, so a grep that
+    # matches nothing returns 1 and kills the run with no message, before the
+    # PASS line. That is the third time today the same construct did it.
+    vinfo=$( { docker run --rm -v "$PWD/$OUTPUT_DIR:/o" --entrypoint ffmpeg ambi-box-earshot:local \
+                -hide_banner -i /o/.range.seg 2>&1 | grep -m1 'Video:'; } || true )
+    rm -f "$OUTPUT_DIR/.range.seg"
+    case "$vinfo" in
+        *"(pc,"*|*"(full,"*)
+            if [ "$VIDEO_CODEC" = "vp09" ]; then
+                fail "delivered video is FULL-RANGE VP9, the combination that breaks the dash.js/MSE player on real GPU browsers while passing headless (lip-sync-test/RESULTS.md). Convert the master: -vf scale=in_range=pc:out_range=tv -color_range tv"
+            fi
+            log "NOTE: delivered video is full range, but H.264, which browsers handle. Switching FFMPEG_FLAGS to VP9 with this source WOULD produce the broken combination - convert the master first"
+            ;;
+        *"(tv,"*|*"(limited,"*) log "delivered video is limited range" ;;
+        "") log "could not read the delivered video's range; not asserting" ;;
+        *)  log "delivered video range not stated by ffmpeg; not asserting" ;;
+    esac
+fi
+
 log "PASS: first segment after ${t_first}s (deadline ${FIRST_SEGMENT_DEADLINE}s), $chunks_v+$chunks_a chunks, 16-ch Opus + $VIDEO_CODEC manifest OK, channel order verified"
