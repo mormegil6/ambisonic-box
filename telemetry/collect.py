@@ -2860,6 +2860,36 @@ def backup_check():
     return out
 
 
+def publisher_label():
+    """Who is publishing right now, in words, for alert messages.
+
+    Added 2026-08-11 after the operator received `stream publishing but
+    segments 757s stale` and had to ask which sender that was - twice in one
+    day, because a test suite was running at the time. An alert that names the
+    host but not the publisher makes the reader do the lookup at the one moment
+    they are least able to.
+
+    Reads the module state rather than the payload: collect_once fills
+    s["endpoint"] AFTER evaluate_alerts, so the payload has no publisher yet at
+    the moment an alert is built. Takes the two locks SEPARATELY and never
+    nested - guest_publish nests _guest_lock -> _owner_lock, so nesting the
+    other way here would be the AB-BA deadlock the round-3 review caught.
+    """
+    try:
+        with _guest_lock:
+            if _guest.get("state") == "live":
+                name, addr = _guest.get("name"), _guest.get("addr")
+                return f"guest '{name}'" + (f" from {addr}" if addr else "")
+        with _owner_lock:
+            if _owner.get("live"):
+                return "the operator's own stream"
+        if source_container(running_only=True):
+            return "the demo loop"
+    except Exception:
+        pass          # an alert must never fail to send because of its own label
+    return "an unidentified source"      # reads correctly in "... publishing but ..."
+
+
 def evaluate_alerts(s):
     try:
         state = json.loads(STATE.read_text())
@@ -2875,12 +2905,13 @@ def evaluate_alerts(s):
     stalled = bool(st["publishing"] and st["segment_age_s"] is not None and st["segment_age_s"] > SEG_STALE_S)
     # Trailing pair is the reading to track across the episode and whether lower
     # or higher is worse, so the recovery line can report how bad it got.
+    _pub = publisher_label()
     conds = {
         "services_down":  (bool(down), "service(s) unhealthy: " + ", ".join(down), "all services healthy again", None, None),
         "disk_full":      (d is not None and d >= DISK_FULL_PCT, f"disk {d}% full", "disk usage back to normal", d, "max"),
         "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, at/above the alert threshold", "CPU temp back below 100°C", t, "max"),
-        "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x)", "encoder keeping up again", s["encoder"]["speed"], "min"),
-        "stream_stalled": (stalled, f"stream publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
+        "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x) on {_pub}", "encoder keeping up again", s["encoder"]["speed"], "min"),
+        "stream_stalled": (stalled, f"{_pub} publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
         "tunnel_down":    (bool(s.get("tunnel")) and s["tunnel"]["connected"] is False, "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
         "backup_stale":   (bool(s.get("backup")) and s["backup"]["stale"], f"telemetry backup STALE: last successful pull {(s.get('backup') or {}).get('age_h')} h ago (limit {BACKUP_MAX_AGE_H} h)", "backup pulls resumed", (s.get("backup") or {}).get("age_h"), "max"),
     }
