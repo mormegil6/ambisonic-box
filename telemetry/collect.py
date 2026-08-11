@@ -2659,8 +2659,28 @@ def telegram(msg):
     if not tail:
         _h = os.environ.get("TEL_HOST", "")
         tail = f"http://{_h}:8090/" if _h else ""
-    if tail and "8090" not in msg:
-        msg = f"{msg}\n{tail}"
+    # FOOTER, in the same shape the operator's other senders use, so every
+    # machine on the one Telegram chat reads alike:
+    #
+    #     Link (TS):   100.113.245.44:8090
+    #     Report Date: 2026-08-11 12:14:16
+    #     Server:      ambisonic-box
+    #
+    # Labels padded so the values line up at one column, blank line before.
+    # A BARE ip:port, no scheme: Telegram linkifies that, and it is far shorter
+    # than the MagicDNS name it replaced. Only one of the three call sites here
+    # used to name the host at all, so guest auto-end and guest-report alerts
+    # arrived with no way to tell which machine sent them. The report date is
+    # DETECTION time, which is not Telegram's delivery time when a send is
+    # retried or the network stalls.
+    if HOST and f"Server:" not in msg:
+        when = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        foot = []
+        if tail:
+            foot.append(f"{'Link (TS):':<13}{tail}")
+        foot.append(f"{'Report Date:':<13}{when}")
+        foot.append(f"{'Server:':<13}{HOST}")
+        msg = msg + "\n\n" + "\n".join(foot)
     data = urllib.parse.urlencode({"chat_id": CHAT, "text": msg}).encode()
     # One retry, then a log line. A swallowed failure here used to be
     # invisible, which on the alerting path is the worst possible place for
@@ -2943,7 +2963,7 @@ def evaluate_alerts(s):
     state["_since"], state["_worst"] = since, worst
     STATE.write_text(json.dumps(state))
     for m in msgs:
-        telegram(f"🎛️ {HOST}: {m}")
+        telegram(f"🎛️ {m}")          # host is appended by telegram() for every sender
     return active
 
 CSV_METHOD_MARK = "methodology-change-2026-08-07-viewers-require-segments"
