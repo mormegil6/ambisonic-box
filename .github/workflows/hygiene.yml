@@ -88,20 +88,52 @@ jobs:
       - name: docker compose config is valid
         run: docker compose config --quiet
 
-      - name: every image reference resolves to something buildable or pullable
+      - name: every PULLED image reference actually exists in a registry
         run: |
-          python3 - <<'PY'
-          import json, subprocess, sys
-          cfg = json.loads(subprocess.check_output(
-              ["docker", "compose", "config", "--format", "json"]))
-          bad = 0
-          for name, svc in cfg["services"].items():
-              if not svc.get("build") and not svc.get("image"):
-                  print(f"::error::service {name} has neither build nor image")
-                  bad = 1
-          print(f"checked {len(cfg['services'])} services")
-          sys.exit(bad)
-          PY
+          # This step used to check that each service had `build` or `image`,
+          # which `docker compose config --quiet` above already rejects - so it
+          # could not fail, and its name promised a registry check it never
+          # made. It also enumerated only the active profile, so it never saw
+          # shaka's pinned packager at all. Renamed and rewritten to do the
+          # thing it claimed, using the imagetools idiom this file already uses
+          # for the arm64 gate.
+          #
+          # Only PULLED images are checked: a service with a `build` section is
+          # proven by the build workflow, and its `image:` is just the local tag
+          # that build writes. What is left is genuinely third-party and can
+          # disappear from a registry without anything here noticing.
+          set -u
+          fail=0
+          # COMPOSE_PROFILES so the tools-profile services are included; the
+          # previous version's blind spot.
+          refs=$(COMPOSE_PROFILES=tools docker compose config --format json \
+                   | python3 -c '
+          import json, sys
+          cfg = json.load(sys.stdin)["services"]
+          # Tags this repo BUILDS. loop-source reuses earshot`s image with no
+          # build section of its own, so "no build key" alone would send a
+          # local-only tag to a registry lookup and fail on a healthy repo.
+          # Caught exactly that way while testing this step.
+          built = {s["image"] for s in cfg.values() if s.get("build") and s.get("image")}
+          for name, svc in cfg.items():
+              img = svc.get("image")
+              if img and not svc.get("build") and img not in built:
+                  print(img)
+          ' | sort -u)
+          # test-direct-session.sh dials a throwaway image directly, so it is a
+          # pulled reference the compose files never mention.
+          refs="$refs $(grep -hoE 'alpine:[0-9.]+' scripts/*.sh | sort -u)"
+          [ -n "$(printf '%s' "$refs" | tr -d '[:space:]')" ] \
+            || { echo "::error::found no pulled image references at all - the extraction is broken, not the repo"; exit 1; }
+          for img in $refs; do
+            if docker buildx imagetools inspect "$img" >/dev/null 2>&1; then
+              printf '  ok      %s\n' "$img"
+            else
+              echo "::error::$img cannot be resolved in a registry (tag deleted, renamed, or network)"
+              fail=1
+            fi
+          done
+          exit $fail
 
   vocabulary:
     name: no retired identifiers
@@ -352,6 +384,27 @@ jobs:
                         f"<next>-dev so main stops claiming to be a release.")
               if not fail:
                   print(f"telemetry/VERSION and CITATION.cff agree: {v_file}")
+
+          # Prose that a version bump makes false. SECURITY.md said "Pre-1.0, so
+          # only the current main and the most recent tag receive fixes" right up
+          # to the day v1.0.0 was being prepared - in the one document an outside
+          # reporter reads first, and no workflow read that file, so nothing could
+          # have caught it. Checked whenever the tree claims a 1.x or later
+          # version, tag or not, because that is when the claim goes stale.
+          # SEMVER's only group is the pre-release suffix, so take the major
+          # off the string rather than off a group that means something else.
+          try:
+              major = int(v_file.split(".")[0])
+          except ValueError:
+              major = 0
+          if major >= 1:
+              for path, bad, why in [
+                  ("SECURITY.md", "Pre-1.0", "the project is no longer pre-1.0"),
+                  ("README.md",   "pre-release", "the project is no longer a pre-release"),
+              ]:
+                  f = pathlib.Path(path)
+                  if f.exists() and bad.lower() in f.read_text().lower():
+                      err(f"{path} still says '{bad}' while the tree claims {v_file}: {why}")
 
           sys.exit(fail)
           PY
