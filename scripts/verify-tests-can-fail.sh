@@ -88,10 +88,16 @@ ENTRIES=(
 "opus|services/earshot/src/nginx-transcoder/nginx-no-ssl.conf@@t.replace('-c:a libopus -mapping_family 255', '-c:a aac')|earshot|./scripts/test-pipeline.sh|manifest lacks Opus audio"
 
 # A SECURITY property: with the arbiter down, a guest publish must be REFUSED,
+# and the assertion lives in test-guest-endpoint.sh. Aimed first at
+# test-direct-session.sh, which has no fail-closed case at all, so the suite
+# passed with the product broken and the harness reported NOT CAUGHT - correctly
+# for what it was told, and uselessly. An entry naming the wrong suite looks
+# exactly like a hollow assertion; only checking which suite owns the claim
+# tells them apart.
 # not admitted. guest-http.conf already has @guest_tolerate for the update path,
 # where tolerating a 502 is correct; pointing publish at it too turns fail-closed
 # into fail-open, changing exactly one behaviour.
-"failclosed|services/rtmp-ingest/guest-http.conf@@t.replace('    proxy_read_timeout 15s;    # on_publish is held during loop handover\n}', '    proxy_read_timeout 15s;    # on_publish is held during loop handover\n    error_page 502 504 = @guest_tolerate;\n}', 1)|rtmp-ingest|./scripts/test-direct-session.sh|fail-closed"
+"failclosed|services/rtmp-ingest/guest-http.conf@@t.replace('    proxy_read_timeout 15s;    # on_publish is held during loop handover\n}', '    proxy_read_timeout 15s;    # on_publish is held during loop handover\n    error_page 502 504 = @guest_tolerate;\n}', 1)|rtmp-ingest|./scripts/test-guest-endpoint.sh|guest accepted while telemetry down"
 )
 
 if [ -n "${LIST:-}" ]; then
