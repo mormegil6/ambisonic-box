@@ -14,6 +14,12 @@
 # tests WERE the problem. What was missing is the question this script asks:
 # break the thing on purpose, and check the suite notices.
 #
+# It found a fourth on its first real run, 2026-08-11: test-srt-ingest.sh's
+# 32-character cap assertion could not fail, because its hostile streamid
+# sanitised to 31 characters. Nothing was wrong with the assertion; its INPUT
+# never reached the boundary it guarded. That is a shape code review does not
+# catch, and it is why this script exists.
+#
 # Each entry mutates PRODUCT code, never test code - a test that only fails when
 # you break the test proves nothing.
 #
@@ -38,7 +44,14 @@ FILTER="${1:-}"
 # legitimately cannot see teaches nothing.
 ENTRIES=(
 "play|services/rtmp-ingest/nginx.conf.template|t.replace('            deny play all;\n', '')|rtmp-ingest|./scripts/test-pipeline.sh|UNAUTHENTICATED PLAY SUCCEEDED"
-"sanitise|services/srt-gateway/gateway.py|t.replace('    name = re.sub(r\"[^A-Za-z0-9_-]\", \"\", name or \"\")[:32]', '    name = name or \"\"')|srt-gateway|./scripts/test-srt-ingest.sh|sanitiser passed characters outside the allowlist"
+# Drops ONLY the length cap, leaving the character allowlist intact. The first
+# version of this entry neutered the whole sanitiser, which put raw URL syntax
+# into the RTMP republish target: the republish then failed, the session died
+# with "no playable output", and the suite went red on a tone-ladder error
+# instead of on the assertion under test. The harness reported that honestly as
+# CAUGHT FOR THE WRONG REASON, which is what sent me here. A mutation must break
+# exactly one thing, or it proves nothing about the assertion aimed at it.
+"cap|services/srt-gateway/gateway.py|t.replace('name or \"\")[:32]', 'name or \"\")')|srt-gateway|./scripts/test-srt-ingest.sh|sanitised streamid is"
 )
 
 if [ -n "${LIST:-}" ]; then

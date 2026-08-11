@@ -129,7 +129,13 @@ ff "${FF_ARGS[@]}" "$FFW/clip.ts"
 # remains is everything an SRT caller can really transmit here - angle brackets,
 # both quote kinds, a semicolon, a backtick, a dollar-substitution and an SQL
 # comment - and it is what the gateway was observed to receive intact.
-HOSTILE_SID='<script>alert(1)</script>";DROP TABLE--`$(id)`'
+# The A-run is not padding. Without it this string sanitises to 31 characters,
+# one under the 32 cap, so the length assertion below could never fail no matter
+# what the sanitiser did - the same vacuous shape as the three assertions removed
+# on 2026-08-10, found on 2026-08-11 by scripts/verify-tests-can-fail.sh. A's are
+# used because they are URL-safe and provably transmittable, so lengthening the
+# input cannot break the republish and mask the very assertion it enables.
+HOSTILE_SID='<script>alert(1)</script>";DROP TABLE--`$(id)`'"$(printf 'A%.0s' $(seq 1 40))"
 
 echo "[3/6] pushing as an SRT caller from inside the compose network"
 # Marker written BEFORE the push, so step 5 can tell this session's segments
