@@ -33,6 +33,19 @@ rtmp {
 
         application owner {
             live on;
+            # PUBLISH is gated by on_publish below. PLAY was not gated at all
+            # until 2026-08-11, and this port is published on all interfaces:
+            # anyone who could reach :1935 could pull the pre-transcode master
+            # - 4096x2048 H.264 at ~5.5 Mbit/s plus all 16 AAC channels - with
+            # no credential, verified from a laptop against the reference box.
+            # It left no trace either: access_log is off in this block and
+            # nginx-rtmp logs play at info level, so fail2ban's jail, which
+            # keys on /auth publish rejections, never saw it.
+            # Nothing in this project plays from here (the relay below is a
+            # server-side push, and the guest application has carried this same
+            # directive alongside its own push since it was written), so denial
+            # is total rather than an allowlist.
+            deny play all;
             # auth against the local http block below; nginx-rtmp passes
             # ?call=publish&name=<stream>&token=<arg from the publish URL>...
             on_publish http://127.0.0.1:8080/auth;
