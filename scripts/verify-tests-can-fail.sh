@@ -60,6 +60,18 @@ ENTRIES=(
 # CAUGHT FOR THE WRONG REASON, which is what sent me here. A mutation must break
 # exactly one thing, or it proves nothing about the assertion aimed at it.
 "cap|services/srt-gateway/gateway.py@@t.replace('name or \"\")[:32]', 'name or \"\")');;telemetry/collect.py@@t.replace('name or \"\")[:32])', 'name or \"\"))')|srt-gateway,telemetry|./scripts/test-srt-ingest.sh|sanitised streamid is"
+# The guest suite's IN-input asserts the name shown on /api/live, which is
+# TELEMETRY's sanitiser (collect.py _guest_sanitize) - IN-input drives the
+# notify path directly, so the gateway is not involved at all. Removing that
+# cap must make it fail.
+#
+# Its CSV assertion is NOT separately provable and that is a property of the
+# system, not an omission: collect.py writes _guest["name"], the same already
+# sanitised value, so no product mutation can make the CSV disagree with
+# /api/live while leaving /api/live correct. What that assertion really proves
+# is that the persisted row is THIS session's, which is worth having and is
+# what it was rewritten for on 2026-08-11.
+"guestcap|telemetry/collect.py@@t.replace('name or \"\")[:32]) or \"guest\"', 'name or \"\")) or \"guest\"')|telemetry|./scripts/test-guest-endpoint.sh|/api/live name is"
 )
 
 if [ -n "${LIST:-}" ]; then
@@ -96,6 +108,29 @@ restore_all() {
 }
 REBUILT=()
 trap restore_all EXIT
+
+await_guest_slot() {
+    local i st g
+    for i in $(seq 1 40); do
+        st=$(docker compose exec -T rtmp-ingest wget -qSO- --timeout=5 \
+            "http://telemetry:8090/rtmp/guest/publish?app=guest&name=canfailprobe&addr=203.0.113.251" 2>&1 \
+            | awk '/HTTP\//{print $2; exit}')
+        if [ "$st" = "201" ]; then
+            docker compose exec -T rtmp-ingest wget -qO- --timeout=5 \
+                "http://telemetry:8090/rtmp/guest/done?app=guest&name=canfailprobe&addr=203.0.113.251" >/dev/null 2>&1
+            # RELEASING IS NOT FREEING: /done opens GUEST_GRACE_S during which
+            # the slot is still reserved for this probe to reconnect.
+            g=$(curl -s --max-time 5 http://127.0.0.1:8090/api/live \
+                | python3 -c 'import json,sys;print((json.load(sys.stdin).get("endpoint") or {}).get("grace_s") or 120)' 2>/dev/null)
+            echo "  guest slot claimable; waiting out its ${g:-120}s grace"
+            sleep $(( ${g:-120} + 25 ))
+            return 0
+        fi
+        sleep 15
+    done
+    echo "  WARNING: guest slot never became claimable; the run below may fail for that reason"
+    return 1
+}
 
 PASS=0; MISS=0
 for e in "${ENTRIES[@]}"; do
@@ -148,6 +183,15 @@ PY
         docker compose build "$s" >/dev/null 2>&1 && docker compose up -d --no-deps "$s" >/dev/null 2>&1
     done
     sleep 8
+
+    # A suite that claims the guest slot cannot start while the slot is held,
+    # and "held" is invisible in the obvious places: endpoint.state reads free
+    # while both a cooldown AND a reconnect grace can still be armed. Four
+    # attempts at an unrelated proof died on this in one day. Probe by actually
+    # claiming, then wait out the grace that releasing the probe creates.
+    case "$suite" in
+        *guest-endpoint*|*srt-ingest*) await_guest_slot ;;
+    esac
 
     out=$($suite 2>&1); rc=$?
     for pair in "${PAIRS[@]}"; do git checkout -- "${pair%%@@*}" 2>/dev/null || true; done
