@@ -8,14 +8,22 @@
 # is actually live rather than on a refused one.
 #
 # Needs the compose stack already running with GUEST_ENABLED=1 and
-# SRT_ENABLED=1 (see .env.example). GUEST_GW_SECRET is optional on this route:
-# the guest gateway takes the RTMP republish hop by default
-# (GUEST_SRT_DIRECT=0), which is exactly the route this test asserts, and
-# telemetry honours the gateway's ?realip= attribution without a secret. It is
-# NOT optional for the direct path - an unauthenticated gateway refuses guests
-# there. The SRT caller runs inside the
-# compose network using the gateway's own image, so the host needs no
-# libsrt-enabled ffmpeg.
+# SRT_ENABLED=1 (see .env.example).
+#
+# WHICH ROUTE THIS EXERCISES IS NOT FIXED, and the header used to claim it was.
+# It runs whatever GUEST_SRT_DIRECT says and now prints which. .env.example
+# ships 0, the RTMP republish hop; the reference box runs 1, direct to earshot.
+# So on that box this suite had been exercising the direct path while its own
+# header asserted the other one. That difference matters for more than accuracy:
+# only the republish route puts the guest's name into a URL, so only there is
+# there a sanitiser to assert (see the gateway-sanitiser block below).
+#
+# GUEST_GW_SECRET is optional on the republish route, where telemetry honours
+# the gateway's ?realip= attribution without one. It is NOT optional for the
+# direct path, where an unauthenticated gateway refuses guests.
+#
+# The SRT caller runs inside the compose network using the gateway's own image,
+# so the host needs no libsrt-enabled ffmpeg.
 #
 # Ends the session with the dashboard kill, which leaves the standard
 # operator-kill cooldown (GUEST_COOLDOWN_S, default 300 s) on the guest slot.
@@ -186,6 +194,65 @@ esac
 [ "${#SIDNAME}" -le 32 ] || fail "sanitised streamid is ${#SIDNAME} chars, cap is 32"
 [ "$SIDNAME" != "$HOSTILE_SID" ] || fail "the raw hostile streamid reached the arbiter unsanitised"
 echo "  adopted: hostile streamid sanitised to '$SIDNAME' and live"
+
+# THE GATEWAY'S OWN SANITISER, asserted where telemetry cannot mask it.
+#
+# Everything above reads /api/live, which is TELEMETRY's view, and telemetry
+# sanitises independently (collect.py _guest_sanitize). So those assertions
+# prove the invariant holds end to end without proving which layer enforces it -
+# demonstrated on 2026-08-11, when neutering the gateway's cap alone left the
+# suite green because telemetry's cap still applied.
+#
+# This one reads the name from RTMP-INGEST's stat page. Telemetry is not in that
+# path: the gateway interpolates its own sanitised name straight into
+#     rtmp://rtmp-ingest:1935/guest/{name}?realip=...&gw={GW_SECRET}
+# so the gateway's sanitize() is the ONLY thing standing between a caller's
+# streamid and an internal URL carrying the shared secret. A '?' or '&' surviving
+# into that name is query injection against an authenticated endpoint, and until
+# now nothing asserted it.
+# Which route is live decides where the name is observable, and the two differ
+# in whether the risk exists at all. On the REPUBLISH route the gateway builds
+#     rtmp://rtmp-ingest:1935/guest/{name}?realip=...&gw={GW_SECRET}
+# so an unsanitised name is query injection against an authenticated endpoint.
+# On the DIRECT route (gateway.py:248) it dials tcp://earshot:<port> and the name
+# is never used, so there is nothing to inject into. .env.example ships
+# GUEST_SRT_DIRECT=0, so the DEFAULT deployment is the one carrying the risk.
+# Read from the RUNNING gateway, not from the compose file or .env. The
+# operator-facing knob is GUEST_SRT_DIRECT, but docker-compose.yml:503 maps it to
+# SRT_DIRECT inside the service, so `docker compose config | grep
+# GUEST_SRT_DIRECT` matches nothing and a first attempt silently took the wrong
+# branch. The container's own env is the only place that cannot disagree with
+# what is actually running.
+GUEST_DIRECT=$(docker inspect "${PROJECT}-srt-gateway-1" \
+    --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+    | grep -m1 '^SRT_DIRECT=' | cut -d= -f2 | tr -d '[:space:]')
+GUEST_DIRECT=${GUEST_DIRECT:-0}
+
+if [ "$GUEST_DIRECT" = "1" ]; then
+    echo "  gateway sanitiser: NOT asserted - this stack runs GUEST_SRT_DIRECT=1, where"
+    echo "    the gateway dials earshot by address and never puts the name in a URL."
+    echo "    The republish route, which .env.example ships as the default, is the one"
+    echo "    with the injection surface; run this suite with GUEST_SRT_DIRECT=0 to cover it."
+else
+    ING_NAME=$(docker compose exec -T telemetry sh -c \
+        'curl -s --max-time 4 http://rtmp-ingest:8080/stat' 2>/dev/null | python3 -c '
+import sys, re
+x = sys.stdin.read()
+app = re.search(r"<name>guest</name>(.*?)</application>", x, re.S)
+if app:
+    names = re.findall(r"<stream>.*?<name>([^<]*)</name>.*?<publishing/>", app.group(1), re.S)
+    print(names[0] if names else "")
+' 2>/dev/null)
+    if [ -z "$ING_NAME" ]; then
+        fail "could not read the publishing stream name from rtmp-ingest; the gateway sanitiser assertion cannot be made"
+    else
+        case "$ING_NAME" in
+            *[!A-Za-z0-9_-]*) fail "the GATEWAY sanitiser let characters outside the allowlist into the republish URL: '$ING_NAME'" ;;
+        esac
+        [ "${#ING_NAME}" -le 32 ] || fail "the GATEWAY sanitiser let a ${#ING_NAME}-char name into the republish URL, cap is 32"
+        echo "  gateway's own sanitiser: rtmp-ingest sees '$ING_NAME' (telemetry not in this path)"
+    fi
+fi
 
 echo "[4/6] verifying 16-ch DASH output (manifest + per-channel tones)"
 # Poll rather than sleep a flat 10 s. Segments are 2 s, so two of them is the
