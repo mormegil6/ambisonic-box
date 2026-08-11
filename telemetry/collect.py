@@ -316,6 +316,12 @@ def encoder(ps, publishing):
         _enc_prev[0], _enc_prev[1] = now, media
     return {"speed": sp, "speed_now": rate,
             "behind": rate is not None and rate < ENCODER_MIN}
+# NOTE for anything rendering these: `speed` is ffmpeg's LIFETIME AVERAGE and
+# `speed_now` is the media-time advance per wall-clock second, which is what
+# `behind` is computed from. They diverge during a restart or a stall, and an
+# alert once read "encoder behind realtime (1.05x)" - a sentence that
+# contradicts itself, because it quoted the average while the verdict came from
+# the instantaneous rate. Show the number the verdict used, or show both.
 
 # HISTORY, not the current rule: until 2026-08-09 a viewer was somebody
 # FETCHING SEGMENTS, not somebody holding a connection.
@@ -2934,7 +2940,7 @@ def evaluate_alerts(s):
         "services_down":  (bool(down), "service(s) unhealthy: " + ", ".join(down), "all services healthy again", None, None),
         "disk_full":      (d is not None and d >= DISK_FULL_PCT, f"disk {d}% full", "disk usage back to normal", d, "max"),
         "overheat":       (t is not None and t >= TEMP_CRIT_C, f"CPU {t}°C, at/above the alert threshold", "CPU temp back below 100°C", t, "max"),
-        "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed']}x) on {_pub}", "encoder keeping up again", s["encoder"]["speed"], "min"),
+        "encoder_behind": (s["encoder"]["behind"], f"encoder behind realtime ({s['encoder']['speed_now']}x now, {s['encoder']['speed']}x lifetime avg) on {_pub}", "encoder keeping up again", s["encoder"]["speed_now"], "min"),
         "stream_stalled": (stalled, f"{_pub} publishing but segments {st['segment_age_s']}s stale", "stream flowing again", st["segment_age_s"], "max"),
         "tunnel_down":    (bool(s.get("tunnel")) and s["tunnel"]["connected"] is False, "cloudflared tunnel DISCONNECTED: box healthy but unreachable from outside", "tunnel reconnected", (s.get("tunnel") or {}).get("conns"), "min"),
         "backup_stale":   (bool(s.get("backup")) and s["backup"]["stale"], f"telemetry backup STALE: last successful pull {(s.get('backup') or {}).get('age_h')} h ago (limit {BACKUP_MAX_AGE_H} h)", "backup pulls resumed", (s.get("backup") or {}).get("age_h"), "max"),
