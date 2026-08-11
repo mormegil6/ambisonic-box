@@ -37,13 +37,21 @@ cd "$(dirname "$0")/.."
 
 FILTER="${1:-}"
 
-# id | file to mutate | python expression rewriting the text | service to rebuild | suite | what the suite must say
+# id | file@@expr[;;file@@expr...] | service[,service...] | suite | what the suite must say
+#
+# Several pairs are allowed because some invariants are defended in more than one
+# layer, and a single-file mutation then proves nothing: the 32-character cap on
+# a guest name is applied by BOTH the gateway and telemetry, so removing either
+# alone leaves the other enforcing it and the suite stays green. That is defence
+# in depth rather than a defect, but it means the honest mutation is "remove the
+# invariant everywhere" - otherwise the entry reports a miss that is really a
+# redundancy.
 #
 # The rewrite runs as: text = <expr>, with `t` bound to the original text.
 # Keep each mutation MINIMAL and obviously wrong; a subtle one that the suite
 # legitimately cannot see teaches nothing.
 ENTRIES=(
-"play|services/rtmp-ingest/nginx.conf.template|t.replace('            deny play all;\n', '')|rtmp-ingest|./scripts/test-pipeline.sh|UNAUTHENTICATED PLAY SUCCEEDED"
+"play|services/rtmp-ingest/nginx.conf.template@@t.replace('            deny play all;\n', '')|rtmp-ingest|./scripts/test-pipeline.sh|UNAUTHENTICATED PLAY SUCCEEDED"
 # Drops ONLY the length cap, leaving the character allowlist intact. The first
 # version of this entry neutered the whole sanitiser, which put raw URL syntax
 # into the RTMP republish target: the republish then failed, the session died
@@ -51,14 +59,15 @@ ENTRIES=(
 # instead of on the assertion under test. The harness reported that honestly as
 # CAUGHT FOR THE WRONG REASON, which is what sent me here. A mutation must break
 # exactly one thing, or it proves nothing about the assertion aimed at it.
-"cap|services/srt-gateway/gateway.py|t.replace('name or \"\")[:32]', 'name or \"\")')|srt-gateway|./scripts/test-srt-ingest.sh|sanitised streamid is"
+"cap|services/srt-gateway/gateway.py@@t.replace('name or \"\")[:32]', 'name or \"\")');;telemetry/collect.py@@t.replace('name or \"\")[:32])', 'name or \"\"))')|srt-gateway,telemetry|./scripts/test-srt-ingest.sh|sanitised streamid is"
 )
 
 if [ -n "${LIST:-}" ]; then
     printf '%-10s %-46s %s\n' ID MUTATES SUITE
     for e in "${ENTRIES[@]}"; do
-        IFS='|' read -r id file _ _ suite _ <<<"$e"
-        printf '%-10s %-46s %s\n' "$id" "$file" "$suite"
+        IFS='|' read -r id muts _ suite _ <<<"$e"
+        files=$(printf '%s' "$muts" | sed 's/;;/\n/g' | sed 's/@@.*//' | paste -sd, -)
+        printf '%-10s %-46s %s\n' "$id" "$files" "$suite"
     done
     exit 0
 fi
@@ -90,14 +99,20 @@ trap restore_all EXIT
 
 PASS=0; MISS=0
 for e in "${ENTRIES[@]}"; do
-    IFS='|' read -r id file expr svc suite expect <<<"$e"
+    IFS='|' read -r id muts svcs suite expect <<<"$e"
     [ -n "$FILTER" ] && case "$id" in *"$FILTER"*) ;; *) continue ;; esac
 
-    echo "=== $id: mutating $file, expecting $suite to fail ==="
-    [ -f "$file" ] || { echo "  SKIP: $file missing"; continue; }
+    echo "=== $id: mutating $(printf '%s' "$muts" | sed 's/;;/\n/g' | sed 's/@@.*//' | paste -sd, -), expecting $suite to fail ==="
 
-    RESTORE+=("$file"); REBUILT+=("$svc")
-    if ! python3 - "$file" "$expr" <<'PY'
+    applied=1
+    # ';;' as the pair separator: the mutation expressions contain commas, and
+    # splitting on those produced a mangled listing on the first attempt.
+    PAIRS=(); while IFS= read -r line; do [ -n "$line" ] && PAIRS+=("$line"); done < <(printf '%s' "$muts" | sed 's/;;/\n/g')
+    for pair in "${PAIRS[@]}"; do
+        file=${pair%%@@*}; expr=${pair#*@@}
+        [ -f "$file" ] || { echo "  SKIP: $file missing"; applied=0; break; }
+        RESTORE+=("$file")
+        python3 - "$file" "$expr" <<'PY' || { applied=0; break; }
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]); t = p.read_text()
 out = eval(sys.argv[2], {"t": t})
@@ -107,19 +122,26 @@ if out == t:
     sys.exit(3)
 p.write_text(out)
 PY
-    then
+    done
+    if [ "$applied" -ne 1 ]; then
         echo "  FAIL: could not apply the mutation (stale entry) - counted as a miss"
-        MISS=$((MISS+1)); git checkout -- "$file" 2>/dev/null || true; continue
+        MISS=$((MISS+1))
+        for pair in "${PAIRS[@]}"; do git checkout -- "${pair%%@@*}" 2>/dev/null || true; done
+        continue
     fi
 
-    docker compose build "$svc" >/dev/null 2>&1 \
-        && docker compose up -d --no-deps "$svc" >/dev/null 2>&1
-    sleep 6
+    IFS=',' read -ra SVCS <<<"$svcs"
+    for s in "${SVCS[@]}"; do
+        REBUILT+=("$s")
+        docker compose build "$s" >/dev/null 2>&1 && docker compose up -d --no-deps "$s" >/dev/null 2>&1
+    done
+    sleep 8
 
     out=$($suite 2>&1); rc=$?
-    git checkout -- "$file" 2>/dev/null || true
-    docker compose build "$svc" >/dev/null 2>&1 \
-        && docker compose up -d --no-deps "$svc" >/dev/null 2>&1
+    for pair in "${PAIRS[@]}"; do git checkout -- "${pair%%@@*}" 2>/dev/null || true; done
+    for s in "${SVCS[@]}"; do
+        docker compose build "$s" >/dev/null 2>&1 && docker compose up -d --no-deps "$s" >/dev/null 2>&1
+    done
 
     if [ "$rc" -eq 0 ]; then
         echo "  *** NOT CAUGHT: $suite passed with the product deliberately broken."
