@@ -178,6 +178,63 @@ jobs:
             echo "::endgroup::"
           done
 
+  defaults:
+    name: the shipped default is what the docs say
+    # Cheap and per-push ON PURPOSE. Every other job here sets GUEST_ENABLED=1
+    # because they exercise the guest endpoint, and both real deployments run it
+    # enabled, so until 2026-08-11 nothing anywhere executed the default that
+    # every clone inherits. A CI runner IS a fresh clone, which makes this the
+    # natural place for it: no override, no .env beyond what setup.sh writes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: generate a real .env
+        run: ./scripts/setup.sh
+
+      - name: no guest override may leak in
+        run: |
+          # If setup.sh or a future change ever writes GUEST_ENABLED=1, this job
+          # would still pass while testing the wrong thing. Fail loudly instead.
+          if grep -qE '^GUEST_ENABLED=1' .env; then
+            echo "::error::.env enables guests; this job only means something on the default"
+            exit 1
+          fi
+          echo "default posture: GUEST_ENABLED is $(grep -E '^GUEST_ENABLED=' .env || echo 'unset')"
+
+      - name: build images (warm cache from the build workflow)
+        uses: docker/bake-action@v7
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
+            hoast-player.tags=ambi-box-hoast-player:latest
+
+      - name: start the stack with no overrides
+        run: |
+          docker compose up -d rtmp-ingest telemetry earshot
+          for i in $(seq 1 30); do
+            curl -sf --max-time 2 http://127.0.0.1:8090/api/live >/dev/null && break
+            sleep 2
+          done
+
+      - name: test-defaults.sh
+        run: ./scripts/test-defaults.sh
+
+      - name: diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs rtmp-ingest --tail 40 || true
+          docker compose logs telemetry --tail 20 || true
+
   guest:
     name: guest endpoint suite
     # long and stateful: nightly, or asked for explicitly
