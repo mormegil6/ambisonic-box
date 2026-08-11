@@ -72,6 +72,26 @@ ENTRIES=(
 # is that the persisted row is THIS session's, which is worth having and is
 # what it was rewritten for on 2026-08-11.
 "guestcap|telemetry/collect.py@@t.replace('name or \"\")[:32]) or \"guest\"', 'name or \"\")) or \"guest\"')|telemetry|./scripts/test-guest-endpoint.sh|/api/live name is"
+# ---- SAMPLE, 2026-08-11: are the OTHER assertions real? ----------------------
+# 126 `fail` calls exist across the suites; before this, three were proven able
+# to fail. Four of the handful anyone had actually examined turned out to assert
+# nothing. These three sample the most load-bearing claims left - the ones the
+# product is actually about - to see whether that rate holds.
+
+# THE central product claim: 16 channels arrive in their own slots. Swaps ch0
+# and ch1 in earshot's RTMP-path transcode, naming all sixteen outputs so the
+# other fourteen are untouched and the failure is an ORDER fault rather than
+# fourteen silent channels.
+"order|services/earshot/src/nginx-transcoder/nginx-no-ssl.conf@@t.replace('-c:a libopus', '-af \"pan=16c' + chr(124) + chr(124).join(['c0=c1','c1=c0','c2=c2','c3=c3','c4=c4','c5=c5','c6=c6','c7=c7','c8=c8','c9=c9','c10=c10','c11=c11','c12=c12','c13=c13','c14=c14','c15=c15']) + '\" -c:a libopus')|earshot|./scripts/test-pipeline.sh|channel order did NOT survive"
+
+# The codec policy the whole project is named for.
+"opus|services/earshot/src/nginx-transcoder/nginx-no-ssl.conf@@t.replace('-c:a libopus -mapping_family 255', '-c:a aac')|earshot|./scripts/test-pipeline.sh|manifest lacks Opus audio"
+
+# A SECURITY property: with the arbiter down, a guest publish must be REFUSED,
+# not admitted. guest-http.conf already has @guest_tolerate for the update path,
+# where tolerating a 502 is correct; pointing publish at it too turns fail-closed
+# into fail-open, changing exactly one behaviour.
+"failclosed|services/rtmp-ingest/guest-http.conf@@t.replace('    proxy_read_timeout 15s;    # on_publish is held during loop handover\n}', '    proxy_read_timeout 15s;    # on_publish is held during loop handover\n    error_page 502 504 = @guest_tolerate;\n}', 1)|rtmp-ingest|./scripts/test-direct-session.sh|fail-closed"
 )
 
 if [ -n "${LIST:-}" ]; then
