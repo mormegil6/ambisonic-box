@@ -16,8 +16,7 @@ git submodule update --init
 ./scripts/setup.sh                      # writes .env + generates YOUR OWN publish key
 cp /path/to/demo.mp4 content/demo.mp4   # H.264 + 16-ch AAC; see .env.example
 docker compose up -d --build
-# then open http://localhost:8080 in your browser
-# (Earshot monitor: http://localhost:8081/webtools)
+# then open http://localhost:8090 - the dashboard links to the other two
 ```
 
 **On Windows the setup line is `.\setup.cmd`** (or double-click it in Explorer), and everything else is identical. Check [Requirements](#requirements) first: Docker Desktop needs WSL2 and CPU virtualisation enabled in the BIOS. Type the leading `.\`, the one spelling both cmd.exe and PowerShell accept, and do **not** substitute `bash scripts/setup.sh`: Git's installer puts `cmd\` on PATH and not `bin\`, so `bash` there is the WSL launcher in `System32` and that command reaches a different machine. The block below avoids `&&` because Windows PowerShell 5.1, the one in the Start menu, rejects it.
@@ -29,6 +28,16 @@ git submodule update --init
 .\setup.cmd
 docker compose up -d --build
 ```
+
+**Three local addresses, and the first one is enough:**
+
+| | Address | What it is |
+|---|---|---|
+| **Dashboard** | <http://localhost:8090> | service health, stream detail, and links to the other two in its top-right corner |
+| Player | <http://localhost:8080> | the 360 viewer, binaural in the browser |
+| Earshot monitor | <http://localhost:8081/webtools> | the 16 individual channel faders and live DASH detail |
+
+Every port the stack opens, and which are meant to be public, is in [docs/ENDPOINTS.md](docs/ENDPOINTS.md).
 
 `content/demo.mp4` is optional: without it, and with the default `DEMO_CONTENT=1`, loop-source synthesises a spherical placeholder on first start, a test pattern with a 440 Hz source orbiting the listener in 3rd-order Ambisonics, so looking around audibly works. Set `DEMO_CONTENT=0` to skip the synthesis; preparing a real master, and every variable the stack reads, is in [`.env.example`](.env.example).
 
