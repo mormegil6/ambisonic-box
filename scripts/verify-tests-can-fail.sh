@@ -66,7 +66,7 @@ if [ -n "${LIST:-}" ]; then
     printf '%-10s %-46s %s\n' ID MUTATES SUITE
     for e in "${ENTRIES[@]}"; do
         IFS='|' read -r id muts _ suite _ <<<"$e"
-        files=$(printf '%s' "$muts" | sed 's/;;/\n/g' | sed 's/@@.*//' | paste -sd, -)
+        files=$(printf '%s' "$muts" | awk '{gsub(/;;/,"\n"); print}' | sed 's/@@.*//' | paste -sd, -)
         printf '%-10s %-46s %s\n' "$id" "$files" "$suite"
     done
     exit 0
@@ -102,12 +102,24 @@ for e in "${ENTRIES[@]}"; do
     IFS='|' read -r id muts svcs suite expect <<<"$e"
     [ -n "$FILTER" ] && case "$id" in *"$FILTER"*) ;; *) continue ;; esac
 
-    echo "=== $id: mutating $(printf '%s' "$muts" | sed 's/;;/\n/g' | sed 's/@@.*//' | paste -sd, -), expecting $suite to fail ==="
+    echo "=== $id: mutating $(printf '%s' "$muts" | awk '{gsub(/;;/,"\n"); print}' | sed 's/@@.*//' | paste -sd, -), expecting $suite to fail ==="
 
     applied=1
     # ';;' as the pair separator: the mutation expressions contain commas, and
     # splitting on those produced a mangled listing on the first attempt.
-    PAIRS=(); while IFS= read -r line; do [ -n "$line" ] && PAIRS+=("$line"); done < <(printf '%s' "$muts" | sed 's/;;/\n/g')
+    #
+    # Split with parameter expansion, NOT `sed 's/;;/\n/g'`. BSD sed does not
+    # turn \n in the replacement into a newline, so on macOS that silently
+    # yielded ONE pair and the second layer was never mutated - which the
+    # harness then reported as NOT CAUGHT, blaming the assertion for a bug in
+    # itself. These scripts run on the Mac too.
+    PAIRS=(); rest=$muts
+    while [ -n "$rest" ]; do
+        case "$rest" in
+            *";;"*) PAIRS+=("${rest%%;;*}"); rest=${rest#*;;} ;;
+            *)      PAIRS+=("$rest"); rest= ;;
+        esac
+    done
     for pair in "${PAIRS[@]}"; do
         file=${pair%%@@*}; expr=${pair#*@@}
         [ -f "$file" ] || { echo "  SKIP: $file missing"; applied=0; break; }
