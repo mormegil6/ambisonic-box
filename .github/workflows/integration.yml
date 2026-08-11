@@ -219,7 +219,7 @@ jobs:
 
       - name: start the stack with no overrides
         run: |
-          docker compose up -d rtmp-ingest telemetry earshot
+          docker compose up -d rtmp-ingest telemetry earshot hoast-player
           for i in $(seq 1 30); do
             curl -sf --max-time 2 http://127.0.0.1:8090/api/live >/dev/null && break
             sleep 2

@@ -17,6 +17,12 @@
 # Runs against a stack brought up with the defaults. Cheap: no guest cycles, no
 # media, just the assertions that the off-branch is genuinely off.
 #
+# These assertions need no mutation entry to prove they can fail, because the
+# two real configurations are each other's negative control: the reference box
+# runs guests ON and VOD ON, where every check below inverts - /vod/ answers
+# 200, /vod-dash/ 403, the nav pill is present and the guest application exists.
+# Measured on the box 2026-08-11.
+#
 # Usage: ./scripts/test-defaults.sh
 # Exit: 0 the defaults hold, 1 an assertion failed, 2 precondition.
 set -uo pipefail
@@ -42,11 +48,11 @@ if [ "${eff:-0}" = "1" ]; then
     echo "bring the stack up without that override and re-run" >&2
     exit 2
 fi
-echo "[1/4] stack is running the default (GUEST_ENABLED=${eff:-unset})"
+echo "[1/5] stack is running the default (GUEST_ENABLED=${eff:-unset})"
 
 # 1. The claim in README.md's configuration table, in the rendered config that
 #    nginx actually loads - not the template, and not the file on disk.
-echo "[2/4] the guest application does not exist in the ingest config"
+echo "[2/5] the guest application does not exist in the ingest config"
 if docker compose exec -T rtmp-ingest sh -c 'cat /run/nginx/nginx.conf 2>/dev/null' 2>/dev/null \
         | grep -qE '^\s*application\s+guest\s*\{'; then
     bad "a 'guest' application IS declared in the running nginx config"
@@ -56,7 +62,7 @@ fi
 
 # 2. And it is refused in practice, not merely absent from a file. An RTMP
 #    publish to /guest must not be accepted.
-echo "[3/4] a guest publish is refused"
+echo "[3/5] a guest publish is refused"
 if docker compose run --rm --no-deps -T --entrypoint ffmpeg loop-source \
         -hide_banner -loglevel error -f lavfi -i "sine=d=1" -c:a aac -t 1 \
         -f flv "rtmp://rtmp-ingest:1935/guest/probe" >/dev/null 2>&1; then
@@ -68,7 +74,7 @@ fi
 # 3. Nothing about guests leaks into what the box reports. The private page and
 #    the curated public one are separate surfaces; check the one that is meant
 #    to be publishable.
-echo "[4/4] the status surfaces carry no guest trace"
+echo "[4/5] the status surfaces carry no guest trace"
 live=$(curl -s --max-time 5 "$TEL/api/live" 2>/dev/null)
 if [ -z "$live" ]; then
     bad "telemetry did not answer; cannot check the status surface"
@@ -83,6 +89,35 @@ except Exception:
         off|MISSING) ok "endpoint reports '$st' (not advertised)" ;;
         *)           bad "endpoint state is '$st' with guests disabled; it should be off/absent" ;;
     esac
+fi
+
+# 4. VOD is the other opt-in feature, off by default, and nothing in this repo
+#    referenced VOD_ENABLED at all before 2026-08-11 - no script, no workflow,
+#    on either branch. The off-branch matters more than it looks: the 404s are
+#    explicit STUBS, because without them /vod-dash/ falls through to
+#    `location /` and serves the mounted tree with default MIME types, no
+#    Expose-Headers and no Cache-Control (see 15-vod-enabled.sh). So "absent"
+#    and "404" are different outcomes here, and only one of them is safe.
+echo "[5/5] VOD is off and leaves no route behind"
+PLAYER=http://127.0.0.1:8080
+if ! curl -sf --max-time 5 "$PLAYER/" >/dev/null 2>&1; then
+    bad "hoast-player did not answer on 8080; cannot check the VOD routes"
+else
+    for path in /vod/ /vod-dash/ ; do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$PLAYER$path" 2>/dev/null)
+        if [ "$code" = "404" ]; then
+            ok "$path returns 404"
+        else
+            bad "$path returns $code, expected 404 (a fall-through would serve the mounted tree unguarded)"
+        fi
+    done
+    # the nav pill is stripped from the served page, so the feature leaves no
+    # visible trace either
+    if curl -s --max-time 5 "$PLAYER/" 2>/dev/null | grep -q 'href="/vod/"'; then
+        bad "the served page still advertises a VOD link"
+    else
+        ok "no VOD link on the served page"
+    fi
 fi
 
 echo
