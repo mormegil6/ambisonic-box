@@ -378,7 +378,6 @@ services:
       # string. Unset is the normal case and falls back to that file, which is
       # why a plain `docker compose up` still reports something truthful.
       - AMBI_VERSION=${AMBI_VERSION:-}
-      - FFMPEG_FLAGS=${FFMPEG_FLAGS:-}   # so it can report resolution/bitrate
       - BOT_TOKEN=${BOT_TOKEN:-}         # optional: Telegram alerts (unset = disabled)
       - CHAT_ID=${CHAT_ID:-}
       # On-demand source: stop the loop after this many minutes with nobody

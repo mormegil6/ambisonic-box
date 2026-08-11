@@ -41,7 +41,6 @@ DASH     = Path(os.environ.get("TEL_DASH", "/dash"))          # shared dash-outp
 THERMAL  = os.environ.get("TEL_THERMAL", "/sys/class/thermal/thermal_zone0/temp")  # container sees host sysfs
 DISKPATH = os.environ.get("TEL_DISK", "/host/root")           # host / mounted ro (optional)
 EARSHOT  = os.environ.get("TEL_EARSHOT", "http://earshot/stat")
-FFMPEG   = os.environ.get("FFMPEG_FLAGS", "")                 # to report resolution/bitrate
 PORT     = int(os.environ.get("TEL_PORT", "8090"))
 INTERVAL = int(os.environ.get("TEL_INTERVAL", "60"))
 BOT      = os.environ.get("BOT_TOKEN", "").strip()
