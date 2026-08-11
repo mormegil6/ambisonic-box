@@ -2472,7 +2472,12 @@ def guest_report(reporter_ip, reporter_cc):
         pass
     if alert:
         elapsed = dur_short(now - start) if start else "?"
-        started = datetime.fromtimestamp(start).astimezone().isoformat(timespec="seconds") if start else "?"
+        # Same shape as the footer's Report Date, and local time like it: an ISO
+        # string with a +00:00 offset next to a footer reading local time made
+        # one message carry two clocks, two hours apart, with only the offset to
+        # tell you. TZ is set on the container so both are the deployment's own
+        # time (see docker-compose.yml).
+        started = datetime.fromtimestamp(start).astimezone().strftime("%Y-%m-%d %H:%M:%S") if start else "?"
         # no dashboard mention in the body: the telegram() tail appends the
         # actual link, and its 8090-dedup guard must not be tripped here
         telegram(f"guest stream REPORTED: '{name}' from {addr} ({pub_cc})\n"
