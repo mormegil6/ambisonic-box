@@ -740,6 +740,11 @@ ing_claim() {  # ing_claim <raw-name> <addr>; echoes the HTTP status
 }
 wait_for "$label: slot free before the hostile claim" 90 st_is free \
     || fail "$label: slot not free, a refusal here would be ambiguous"
+# Snapshot the CSV length BEFORE the claim, so assertion 4 below can tell this
+# session's row from every earlier one.
+csv0=$(docker compose exec -T telemetry sh -c \
+    'wc -l < /data/guest_sessions.csv 2>/dev/null || echo 0' 2>/dev/null | tr -d '\r ')
+csv0=${csv0:-0}
 st=$(ing_claim "$HOSTILE" 203.0.113.99)
 if [ "$st" = "201" ]; then
     got=$(ep_name)
@@ -765,17 +770,44 @@ ing_done() {
 ing_done "${got:-$HOSTILE}" 203.0.113.99
 
 # 4. the persisted row must be clean too: /api/live is rendered with
-#    textContent, but the CSV is read by whatever anyone points at it later
+#    textContent, but the CSV is read by whatever anyone points at it later.
+#
+# This read used to be `tail -1` taken as soon as the slot left live, and it
+# was checking the WRONG ROW. The row is only appended when the session
+# actually ends - reason "grace expired" - which is GUEST_GRACE_S after the
+# publish stops, so at that moment the last line still belongs to the previous
+# case. Both the 2026-08-11 nightly and a box run reported `CSV row records
+# 'ra'`, i.e. this assertion passed against a name from a different test while
+# appearing to vouch for the hostile one.
+#
+# Two things fix it. Wait for the row instead of sampling, and identify it by
+# POSITION rather than by name: `tail -n +N` from the pre-case line count, so
+# only rows this case produced are considered. Name alone is not enough - the
+# CSV already holds several rows with the same sanitised name from earlier
+# runs, which is exactly the collision that would let a stale row satisfy this.
 st_not_live() { [ "$(ep_state)" != "live" ]; }
 wait_for "$label: slot leaves live" 60 st_not_live || true
-csv_name=$(docker compose exec -T telemetry sh -c 'tail -1 /data/guest_sessions.csv 2>/dev/null' 2>/dev/null | cut -d, -f2)
-if [ -n "$csv_name" ]; then
+
+csv_rows() { docker compose exec -T telemetry sh -c \
+    'wc -l < /data/guest_sessions.csv 2>/dev/null || echo 0' 2>/dev/null | tr -d '\r '; }
+new_row() { [ "$(csv_rows)" -gt "${csv0:-0}" ]; }
+
+# The append lands one grace window after the publish ends, so this has to
+# outlast TG_GRACE with room for the collect cycle that notices.
+if wait_for "$label: session recorded in guest_sessions.csv" $((TG_GRACE + 45)) new_row; then
+    csv_line=$(docker compose exec -T telemetry sh -c \
+        "tail -n +$((csv0 + 1)) /data/guest_sessions.csv 2>/dev/null" 2>/dev/null | head -1)
+    csv_name=$(printf '%s' "$csv_line" | cut -d, -f2)
     case "$csv_name" in
         *[!A-Za-z0-9_-]*) fail "$label: guest_sessions.csv name carries characters outside the allowlist: '$csv_name'" ;;
-        *) log "$label: CSV row records '$csv_name'" ;;
     esac
+    [ "${#csv_name}" -le 32 ] || fail "$label: CSV name is ${#csv_name} chars, cap is 32"
+    # and it must be THIS session's row, not one that merely looks clean
+    [ "$csv_name" = "$got" ] \
+        || fail "$label: CSV row is '$csv_name', expected this session's '$got'"
+    log "$label: CSV row records '$csv_name' (reason: $(printf '%s' "$csv_line" | cut -d, -f6))"
 else
-    log "$label: no CSV row yet (session may still be draining); /api/live assertions stand"
+    fail "$label: session never reached guest_sessions.csv; the persisted-row assertion cannot be made"
 fi
 if [ "$FAILS" -eq "$fails0" ]; then
     row "$label: hostile stream name sanitised to '$got' - allowlist and 32-char cap held at /api/live and in the CSV"
