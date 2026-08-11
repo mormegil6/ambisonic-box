@@ -333,6 +333,27 @@ while :; do
        [ -n "$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream*' -newer "$marker" -print -quit)" ]; then
         t_first=$(( $(date +%s) - push_start ))
         log "manifest + first chunk after ${t_first}s"
+
+        # ------------------------------------ unauthenticated PLAY must fail ---
+        # Publishing to /owner has always needed a token. PLAYING from it needed
+        # NOTHING until 2026-08-11, and :1935 is published on all interfaces, so
+        # anyone who could reach the port pulled the pre-transcode master - 4K
+        # H.264 plus all 16 AAC channels, better than anything the DASH path
+        # serves - with no credential and no log line. Verified from a laptop
+        # against the reference box before `deny play all;` closed it.
+        #
+        # Asserted HERE, inside the first-segment block, because that is the one
+        # moment this script can prove a publisher is live. A play attempt with
+        # nothing publishing fails for the wrong reason, and a test that cannot
+        # tell "denied" from "nothing to play" is the exact shape of the three
+        # vacuous assertions this suite spent 2026-08-10 removing.
+        if docker compose run --rm --no-deps -T --entrypoint ffmpeg loop-source \
+                -hide_banner -loglevel error -rw_timeout 10000000 \
+                -i "rtmp://rtmp-ingest:1935/owner/${TEST_STREAM}" \
+                -t 1 -f null - >/dev/null 2>&1; then
+            fail "UNAUTHENTICATED PLAY SUCCEEDED on /owner: the contribution master is readable by anyone who can reach :1935 (expected 'deny play all;' in services/rtmp-ingest/nginx.conf.template)"
+        fi
+        log "unauthenticated play refused while a publisher was live"
         break
     fi
     kill -0 "$push_pid" 2>/dev/null || fail "push exited before any segment appeared (auth or relay problem?)"
