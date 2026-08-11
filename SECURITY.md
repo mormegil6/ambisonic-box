@@ -40,7 +40,7 @@ Not because these do not matter, but because a report here cannot fix them:
 
 ## Supported versions
 
-Pre-1.0, so only the current `main` and the most recent tag receive fixes. There are no maintained release branches, and no backports to earlier tags.
+Only the current `main` and the most recent tag receive fixes. There are no maintained release branches, and no backports to earlier tags.
 
 ## What this project already does
 
