@@ -85,8 +85,20 @@ def sh(cmd, t=12):
 def now_iso():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
-def docker_ps():
-    out = sh(f'docker ps --filter "label=com.docker.compose.project={PROJECT}" --format "{{{{json .}}}}"')
+def docker_ps(include_stopped=False):
+    """Compose-managed containers. include_stopped adds `-a`.
+
+    The health path needs the stopped ones. Without `-a`, `docker ps` returns
+    only what is RUNNING, and services() emits one row per returned row, so a
+    container that exits does not become "down" - it VANISHES from the list,
+    and services_down, which is `any not healthy`, sees an empty set and stays
+    quiet. The alert therefore fired for a merely unhealthy service and was
+    silent for a dead one, which is the worse failure. Observed on the box on
+    2026-08-11 with loop-source exited and the services list empty.
+    source_start already carried its own `-a` variant for the same reason.
+    """
+    flag = "-a " if include_stopped else ""
+    out = sh(f'docker ps {flag}--filter "label=com.docker.compose.project={PROJECT}" --format "{{{{json .}}}}"')
     rows = []
     for line in out.splitlines():
         try:
@@ -94,6 +106,29 @@ def docker_ps():
         except Exception:
             pass
     return rows
+
+_expected_cache = [0.0, ()]
+
+def expected_services():
+    """Services compose says exist for THIS configuration, minus the ones
+    services() deliberately does not police.
+
+    Asked of compose rather than hardcoded, so an install without the owner
+    override does not get a permanent false alarm for srt-gateway-owner, and
+    so a profile-gated service (shaka) is absent exactly when it is inactive.
+    Cached for a minute: it is a subprocess, and it changes only when the
+    compose files do.
+    """
+    now = time.time()
+    if now - _expected_cache[0] < 60 and _expected_cache[1]:
+        return _expected_cache[1]
+    out = sh("docker compose config --services")
+    names = tuple(n for n in (l.strip() for l in out.splitlines())
+                  if n and n not in SERVICES_UNPOLICED
+                  and not (n == "srt-gateway" and not SRT_ENABLED))
+    if names:                      # a failed call must not empty the set
+        _expected_cache[0], _expected_cache[1] = now, names
+    return _expected_cache[1]
 
 def svc_label(row):
     for kv in (row.get("Labels", "") or "").split(","):
@@ -113,7 +148,7 @@ def services(ps):
         if "com.docker.compose.oneoff=False" not in (r.get("Labels", "") or ""):
             continue
         name = svc_label(r)
-        if name in ("telemetry", "loop-source", "shaka"):   # self + non-core live path
+        if name in SERVICES_UNPOLICED:                      # self + non-core live path
             continue
         # srt-gateway runs even with SRT_ENABLED=0 (it just never binds the
         # UDP port), and a green pill for a service that is deliberately doing
@@ -127,6 +162,15 @@ def services(ps):
                   "starting" if "starting" in status else "")
         rows.append({"name": name, "state": state, "health": health,
                      "healthy": state == "running" and health not in ("unhealthy", "starting")})
+    # A service compose declares but docker knows nothing about - never created,
+    # or `docker rm`'d - produces no row above at all, so it would still be
+    # invisible even with -a. Synthesise one so it reads as down rather than as
+    # absent, which is the whole point of this function.
+    seen = {r["name"] for r in rows}
+    for name in expected_services():
+        if name not in seen:
+            rows.append({"name": name, "state": "missing", "health": "",
+                         "healthy": False})
     return rows
 
 def container_named(ps, service):
@@ -752,6 +796,13 @@ TEL_SRT_GW_HOST = os.environ.get("TEL_SRT_GW_HOST", "srt-gateway")
 # compose injects SRT_ENABLED=${SRT_ENABLED:-1} here too, so under the shipped
 # stack this reads True unless the operator sets 0.
 SRT_ENABLED = os.environ.get("SRT_ENABLED", "0") == "1"
+
+# Services the health path deliberately does not police, and why:
+#   telemetry   is this process; if it were down nothing would be reporting
+#   loop-source is STOPPED on purpose by auto-idle whenever nobody is watching,
+#               so "not running" is its normal resting state, not a fault
+#   shaka       is offline tooling on a compose profile, never in the live path
+SERVICES_UNPOLICED = ("telemetry", "loop-source", "shaka")
 INGEST_STAT   = os.environ.get("TEL_INGEST", "http://rtmp-ingest:8080/stat")
 # What version is actually running. AMBI_VERSION wins so CI and a developer can
 # inject an exact `git describe`; the shipped VERSION file is the fallback so a
@@ -2947,7 +2998,10 @@ def history():
 
 def collect_once():
     ps = docker_ps()
-    svcs = services(ps)
+    # services() gets its own -a listing rather than reusing `ps`: everything
+    # else here (viewers, the source-container lookups) means RUNNING when it
+    # says containers, and widening the shared list would quietly change those.
+    svcs = services(docker_ps(include_stopped=True))
     strm = stream_state()
     fmt = stream_format()
     per_viewer = (fmt["video_bitrate"] or 0) + (fmt["audio_bitrate"] or 0)   # what ONE client pulls
