@@ -176,6 +176,19 @@ shared_up() {
     docker rm -f guestpush-shared >/dev/null 2>&1 || true
     docker run -d --rm --network "$PUSH_NET" --name guestpush-shared \
         --entrypoint sleep "$PUSH_IMG" 900 >/dev/null
+    # `docker run -d` returns when the container is CREATED, not when it can
+    # accept an exec. Reading straight through was a race: on 2026-08-12 two CI
+    # cases (T3-reconnect, BN-ban) died on `exec: ""` because the lookup below
+    # came back empty and the suite reported "no ffmpeg inside the shared pusher
+    # image" - about an image that has ffmpeg at /usr/local/bin/ffmpeg and had
+    # just been used successfully by ten A-cycles. Wait for the container to be
+    # running before asking it anything. Same shape as the guest-handover race
+    # fixed the same day: a one-shot check straight after an async docker call.
+    ready_end=$(( $(date +%s) + 20 ))
+    while [ "$(docker inspect -f '{{.State.Running}}' guestpush-shared 2>/dev/null)" != "true" ]; do
+        [ "$(date +%s)" -ge "$ready_end" ] && { log "shared pusher never reached running state"; return 1; }
+        sleep 0.3
+    done
     SHARED_IP=$(docker inspect -f \
         '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' guestpush-shared)
     [ -n "$SHARED_IP" ] || { log "could not read the shared pusher's address"; return 1; }
@@ -186,10 +199,25 @@ shared_up() {
     # binary is right there. A hardcoded path was the previous fix and it broke
     # the Pi 4 run on 2026-08-10 the other way round. Ask the container, then
     # fall back to probing the usual locations.
-    SHARED_FF=$(docker exec guestpush-shared sh -c \
-        'command -v ffmpeg || for p in /usr/local/bin/ffmpeg /usr/bin/ffmpeg /opt/ffmpeg/bin/ffmpeg; do [ -x "$p" ] && { echo "$p"; break; }; done' \
-        2>/dev/null | tr -d '\r' | head -1)
-    [ -n "$SHARED_FF" ] || { log "no ffmpeg inside the shared pusher image"; return 1; }
+    # Retried for the same reason, and because 2>/dev/null turns a transient
+    # exec failure into an empty string indistinguishable from a real absence.
+    SHARED_FF=""
+    ff_end=$(( $(date +%s) + 15 ))
+    while : ; do
+        SHARED_FF=$(docker exec guestpush-shared sh -c \
+            'command -v ffmpeg || for p in /usr/local/bin/ffmpeg /usr/bin/ffmpeg /opt/ffmpeg/bin/ffmpeg; do [ -x "$p" ] && { echo "$p"; break; }; done' \
+            2>/dev/null | tr -d '\r' | head -1)
+        [ -n "$SHARED_FF" ] && break
+        [ "$(date +%s)" -ge "$ff_end" ] && break
+        sleep 0.5
+    done
+    if [ -z "$SHARED_FF" ]; then
+        # Say what was actually observed rather than asserting the image is at
+        # fault, which is the claim that misdirected this for a run.
+        log "no ffmpeg found in the shared pusher after 15s (state: $(docker inspect -f '{{.State.Status}}' guestpush-shared 2>/dev/null)); the lookup said:"
+        docker exec guestpush-shared sh -c 'command -v ffmpeg; ls -l /usr/local/bin/ffmpeg' 2>&1 | sed 's/^/      | /'
+        return 1
+    fi
     log "shared pusher up at $SHARED_IP (ffmpeg at $SHARED_FF)"
 }
 shared_push() {  # shared_push <name> <seconds> - starts, does not wait
