@@ -1546,6 +1546,34 @@ def _earshot_unwound(deadline_s):
     return False
 
 
+def _handover_settled(deadline_s):
+    """Both halves of "the loop is gone", sharing ONE budget. Returns
+    (settled, reason) so a refusal can say which half failed.
+
+    The container half used to be a single shot taken the instant `docker stop`
+    returned, while only the earshot half was allowed to wait. That is not
+    symmetric, and the asymmetry is a real race: `docker stop` returning means
+    the daemon has reaped the process, not that `docker ps` has stopped listing
+    the container, and the gap widens on a loaded host. When earshot was already
+    unwound - the common case, since the loop's relay usually drops first - the
+    earshot half returned on its first iteration and the container half fired
+    microseconds later, so a handover could be refused with essentially its
+    whole budget unspent. CI failed 2 of 10 cycles that way (2026-08-12),
+    reporting "timed out after 0.1s" against a 7.5 s budget, which is not a
+    timeout and sent the diagnosis toward slow runners for a day.
+    """
+    end = time.time() + deadline_s
+    if not _earshot_unwound(deadline_s):
+        return False, "earshot still had a publisher"
+    while True:
+        still = source_container(running_only=True)
+        if not still:
+            return True, ""
+        if time.time() >= end:
+            return False, f"loop container {still} still running"
+        time.sleep(0.2)
+
+
 def guest_publish(name, addr):
     """on_publish for the guest app. 2xx accepts; anything else rejects."""
     if not GUEST_ENABLED:
@@ -1618,7 +1646,7 @@ def guest_publish(name, addr):
     _hand_t0 = time.time()
     with _start_lock:
         source_stop("guest handover", kill_after_s=3)
-        settled = _earshot_unwound(HANDOVER_S) and not source_container(running_only=True)
+        settled, why = _handover_settled(HANDOVER_S)
     _hand_s = time.time() - _hand_t0
     if not settled:
         # could not clear the slot in time: refuse this publish but leave the
@@ -1629,7 +1657,7 @@ def guest_publish(name, addr):
                           grace_started=time.time())
             _guest_save()
             _grace_timer_arm(GUEST_GRACE_S)
-        print(f"guest handover timed out after {_hand_s:.1f}s "
+        print(f"guest handover gave up after {_hand_s:.1f}s: {why} "
               f"(budget: docker stop <=3.5s + unwind {HANDOVER_S}s); "
               f"slot in grace ({name} from {addr})", flush=True)
         _refresh_pub_endpoint()
