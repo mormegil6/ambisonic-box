@@ -448,6 +448,41 @@ if [ -f content/demo.mp4 ]; then
     esac
 fi
 
+# ---------------------------------- the MASTER's GOP, under passthrough ------
+# Under -c:v copy earshot never re-encodes video, so its -g never applies and the
+# DASH muxer can only close a video segment on a keyframe the CONTRIBUTION
+# encoder already placed. Segment duration is therefore whatever the master's GOP
+# is, and -seg_duration becomes a floor rather than the value it looks like.
+#
+# Measured 2026-08-12: a master re-encoded for colour range was written without
+# -g, so x264 used its default 250-frame keyint and the live path served 8.342 s
+# video segments against 2 s audio - quadrupling live latency and coarsening DVR
+# seeking, while every document still said 2 s. The master it replaced had 2.002 s
+# keyframes, so this was a regression, and nothing in the suite could see it.
+#
+# Only meaningful under passthrough: with the VP9 policy earshot re-encodes and
+# its own -g governs, whatever the master looks like.
+if [ -f content/demo.mp4 ] && [ "$VIDEO_CODEC" != "vp09" ]; then
+    seg_target=$(printf '%s\n' "$FFMPEG_FLAGS" \
+                 | grep -oE '\-seg_duration[[:space:]]+[0-9.]+' | awk '{print $2}' | head -1)
+    seg_target=${seg_target:-2}
+    # ffprobe is not in the earshot image; ffmpeg's showinfo gives the same thing.
+    # Take the LARGEST gap in the window: a duplicate keyframe at t=0 or an extra
+    # one at a scene cut can only make a gap smaller, never larger than the GOP.
+    gop=$( { docker run --rm -v "$PWD/content:/c:ro" --entrypoint ffmpeg ambi-box-earshot:local \
+               -hide_banner -v info -t 40 -i /c/demo.mp4 \
+               -vf "select=eq(pict_type\,I),showinfo" -an -f null - 2>&1 \
+             | grep -oE 'pts_time:[0-9.]+' | cut -d: -f2 \
+             | awk 'NR>1{d=$1-p; if(d>m) m=d} {p=$1} END{printf "%.3f", m+0}'; } || true )
+    if [ -n "$gop" ] && awk -v g="$gop" 'BEGIN{exit !(g>0)}'; then
+        if awk -v g="$gop" -v s="$seg_target" 'BEGIN{exit !(g > s*1.10)}'; then
+            fail "content/demo.mp4 has a ${gop}s GOP but -seg_duration is ${seg_target}s, and the codec policy is passthrough. earshot cannot close a segment between the master's keyframes, so delivered video segments will be ${gop}s, not ${seg_target}s. Re-encode the master with -g \$(2 x fps) -keyint_min the same -sc_threshold 0"
+        else
+            log "master GOP ${gop}s fits the ${seg_target}s segment target"
+        fi
+    fi
+fi
+
 # ---------------------------------- delivered video colour range -------------
 # The one bug that escaped this project into production was full-range (pc) VP9:
 # it broke the dash.js/MSE player with PIPELINE_ERROR_DECODE on real GPU
