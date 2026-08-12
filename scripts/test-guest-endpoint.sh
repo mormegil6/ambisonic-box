@@ -177,13 +177,13 @@ shared_up() {
     docker run -d --rm --network "$PUSH_NET" --name guestpush-shared \
         --entrypoint sleep "$PUSH_IMG" 900 >/dev/null
     # `docker run -d` returns when the container is CREATED, not when it can
-    # accept an exec. Reading straight through was a race: on 2026-08-12 two CI
-    # cases (T3-reconnect, BN-ban) died on `exec: ""` because the lookup below
-    # came back empty and the suite reported "no ffmpeg inside the shared pusher
-    # image" - about an image that has ffmpeg at /usr/local/bin/ffmpeg and had
-    # just been used successfully by ten A-cycles. Wait for the container to be
-    # running before asking it anything. Same shape as the guest-handover race
-    # fixed the same day: a one-shot check straight after an async docker call.
+    # accept an exec, so ask it nothing until it is running. This was FIRST
+    # committed as the cause of the 2026-08-12 T3-reconnect/BN-ban failures. It
+    # was not: the diagnostic it added showed "state: running" with the binary
+    # genuinely absent, because PUSH_IMG was being picked nondeterministically
+    # (see where it is derived). Kept because the race is real in principle and
+    # the wait is cheap, but it fixed nothing that day - the honest record
+    # matters more here than a tidy story.
     ready_end=$(( $(date +%s) + 20 ))
     while [ "$(docker inspect -f '{{.State.Running}}' guestpush-shared 2>/dev/null)" != "true" ]; do
         [ "$(date +%s)" -ge "$ready_end" ] && { log "shared pusher never reached running state"; return 1; }
@@ -336,7 +336,16 @@ wait_for "loop live" 60 is_live || pre "demo loop never became live"
 # with a user-configured subnet.
 PUSH_NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' \
     "$(docker compose ps -q telemetry)" 2>/dev/null)
-PUSH_IMG=$(docker compose config --images loop-source 2>/dev/null | head -1)
+# `docker compose config --images loop-source` LOOKS like it names one service's
+# image. It does not filter, and its order is not stable: sampled ten times on
+# one host it gave ambi-box-earshot:local six times and ambi-box-rtmp-ingest
+# four, so `head -1` was a coin flip. rtmp-ingest is nginx and carries no ffmpeg,
+# which made the shared pusher unusable in roughly one run in three and was
+# reported as "no ffmpeg inside the shared pusher image" (2026-08-12,
+# T3-reconnect and BN-ban). Read the image the loop-source container is ACTUALLY
+# running, exactly as PUSH_NET above reads its network: one container, one answer.
+PUSH_IMG=$(docker inspect -f '{{.Config.Image}}' \
+    "$(docker compose ps -aq loop-source 2>/dev/null | head -1)" 2>/dev/null)
 [ -n "$PUSH_NET" ] && [ -n "$PUSH_IMG" ] \
     || pre "could not derive the pusher network/image (net='$PUSH_NET' img='$PUSH_IMG')"
 
