@@ -732,11 +732,23 @@ HOSTILE='<script>alert(1)</script>";DROP--`$(id)`'"'"'x'"$(printf 'A%.0s' $(seq 
 # (guest-http.conf.in proxies /guest/publish to $arbiter/rtmp$request_uri),
 # and every byte of the name is percent-encoded so nothing is reinterpreted on
 # the way. test-srt-ingest.sh covers the streamid side.
-ing_claim() {  # ing_claim <raw-name> <addr>; echoes the HTTP status
+# Echoes the HTTP status; the whole reply is left in ING_RAW for diagnostics.
+#
+# The status is taken from "HTTP/<ver> <code>" WHEREVER it sits on the line,
+# not from field 2. Field 2 is the code only when the status line begins the
+# line, and on the first nightly run in CI it did not: the suite reported
+# "hostile name refused outright (HTTP HTTP/1.0)", which is not a status, and
+# then threw away the reply that would have said what actually happened. A
+# parse that can print a protocol version where a status code belongs cannot
+# distinguish a refusal from a misread, which is the one thing this case exists
+# to tell apart.
+ing_claim() {  # ing_claim <raw-name> <addr>
     local enc; enc=$(printf %s "$1" | od -An -tx1 | tr -d '\n ' | sed 's/\(..\)/%\1/g')
-    docker compose exec -T rtmp-ingest wget -qSO- --timeout=5 \
-        "http://telemetry:8090/rtmp/guest/publish?app=guest&name=${enc}&addr=$2" 2>&1 \
-        | awk '/HTTP\//{print $2; exit}'
+    ING_RAW=$(docker compose exec -T rtmp-ingest wget -qSO- --timeout=5 \
+        "http://telemetry:8090/rtmp/guest/publish?app=guest&name=${enc}&addr=$2" 2>&1)
+    printf '%s\n' "$ING_RAW" | awk '
+        match($0, /HTTP\/[0-9.]+[[:space:]]+[0-9][0-9][0-9]/) {
+            s = substr($0, RSTART, RLENGTH); print substr(s, length(s) - 2); exit }'
 }
 wait_for "$label: slot free before the hostile claim" 90 st_is free \
     || fail "$label: slot not free, a refusal here would be ambiguous"
@@ -745,6 +757,7 @@ wait_for "$label: slot free before the hostile claim" 90 st_is free \
 csv0=$(docker compose exec -T telemetry sh -c \
     'wc -l < /data/guest_sessions.csv 2>/dev/null || echo 0' 2>/dev/null | tr -d '\r ')
 csv0=${csv0:-0}
+got=          # so a refused claim reports below instead of tripping `set -u`
 st=$(ing_claim "$HOSTILE" 203.0.113.99)
 if [ "$st" = "201" ]; then
     got=$(ep_name)
@@ -759,7 +772,10 @@ if [ "$st" = "201" ]; then
     #    indistinguishable in the CSV and the dashboard
     [ -n "$got" ] || fail "$label: name sanitised away to nothing (telemetry should fall back to 'guest')"
 else
-    fail "$label: hostile name refused outright (HTTP $st); it must be sanitised and admitted"
+    fail "$label: hostile name refused outright (HTTP ${st:-no status parsed}); it must be sanitised and admitted"
+    # Without this the next occurrence is as undiagnosable as the first was.
+    log "$label: the arbiter's reply in full:"
+    printf '%s\n' "$ING_RAW" | sed 's/^/      | /'
 fi
 # End the session the same way nginx-rtmp would, so the slot is not left held.
 ing_done() {
@@ -803,8 +819,8 @@ if wait_for "$label: session recorded in guest_sessions.csv" $((TG_GRACE + 45)) 
     esac
     [ "${#csv_name}" -le 32 ] || fail "$label: CSV name is ${#csv_name} chars, cap is 32"
     # and it must be THIS session's row, not one that merely looks clean
-    [ "$csv_name" = "$got" ] \
-        || fail "$label: CSV row is '$csv_name', expected this session's '$got'"
+    [ "$csv_name" = "${got:-}" ] \
+        || fail "$label: CSV row is '$csv_name', expected this session's '${got:-<claim was refused, so there is no expected name>}'"
     log "$label: CSV row records '$csv_name' (reason: $(printf '%s' "$csv_line" | cut -d, -f6))"
 else
     fail "$label: session never reached guest_sessions.csv; the persisted-row assertion cannot be made"
