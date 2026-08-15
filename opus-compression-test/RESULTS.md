@@ -49,6 +49,10 @@ AMBIQUAL `LQ` (listening quality) and `LA` (localisation), both 0-1, higher is b
 | live concert | full band with audience | +0.0043 | +0.0080 | +0.0004 | −0.0011 |
 | outdoor ambience | quarry, no dominant source | +0.0091 | +0.0171 | +0.0056 | +0.0093 |
 
+![Change in AMBIQUAL LQ and LA per excerpt at compression levels 5 and 0, against level 10. Every excerpt except solo piano sits inside a shaded band drawn at the largest non-piano excursion; piano extends well past it in both metrics.](compression-level-2026-08.png)
+
+*The band is the metric's own noise on this material, not a confidence interval: it is drawn at the largest excursion among the excerpts that moved **up** when the encoder was asked to do less work, which cannot be a real gain. Piano is the only excerpt that leaves it. Regenerate with `python3 scripts/plot-opus-compression.py 2026-08`.*
+
 **Piano is the only excerpt that degrades, and the effect is real but modest.** Every other item moved *up* at level 5, which cannot be a genuine quality gain from spending less encoder effort. That upward spread is therefore the metric's noise on this material, and it is worth using as a yardstick rather than ignoring: the largest non-piano excursion is +0.0091 LQ and +0.0171 LA. Piano's losses are **1.8x and 2.2x** those figures respectively.
 
 So the honest statement is not "piano measurably degrades" but "piano is the only item that moves in the direction a real effect would, and it moves about twice as far as the noise". That is suggestive, consistent with theory - sparse transient tonal material is exactly where encoder search effort should matter and dense broadband material masks its own artifacts - and short of proof. Five excerpts, one window each, no repeats, no confidence intervals.
@@ -59,7 +63,7 @@ So the honest statement is not "piano measurably degrades" but "piano is the onl
 
 **The decisive argument is the CPU one, not the quality one.** The trade on offer is 0.9 % of a core. Even if the quality effect were exactly zero, there is nothing here worth changing a default for: the Opus encode is already an order of magnitude cheaper than the AAC re-encode this project removed to reclaim 59 %.
 
-The quality evidence points the same way without having to carry the argument. Piano is the single most common content type in the corpus this stack was built for - 8 of 23 sessions - so the one material that plausibly loses is the material that matters most here.
+The quality evidence points the same way without having to carry the argument. Piano is the single most common content type in the corpus this stack was built for, 8 of its 23 sessions (the corpus is published separately, [10.5281/zenodo.21789163](https://doi.org/10.5281/zenodo.21789163)), so the one material that plausibly loses is the material that matters most here.
 
 This is not "safe to lower, take the win". There was no win to take.
 

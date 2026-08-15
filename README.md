@@ -62,9 +62,9 @@ If setup or the first `docker compose up` fails, the exact error strings are in 
 
 <!-- Diagram source + generator: docs/architecture/ (edit architecture.mmd, run ./build.sh). -->
 
-**What your encoder sends, and what the box does with it.** Whichever route you use, the stream arrives as H.264 video and AAC audio, because that is what OBS can send. From earshot onward the audio is always 16-channel Opus and is never downmixed: 3rd-order Ambisonics, ACN/SN3D, end to end.
+**What your encoder sends, and what the box does with it.** Whichever route you use, the stream arrives as H.264 video and AAC audio, because that is what OBS can send. From earshot onward the audio is Opus and is never downmixed: the channel count that arrives is the channel count delivered, 16 for 3rd order (the canonical configuration, ACN/SN3D) and 4 for 1st.
 
-The two SRT routes differ in one step. A **guest** stream has its four tracks combined into one 16-channel AAC stream and handed on over RTMP, which is where guests are authorised, counted, time-limited and cut off; guests can take the direct route too (`GUEST_SRT_DIRECT=1`), keeping every one of those controls and dropping only the re-encode. Your **own** stream skips it by default: the four tracks pass untouched to earshot, which combines them and converts to Opus in one operation, so the audio is compressed once on the way in rather than twice.
+Both SRT routes work the same way; what differs is which default ships. Your **own** stream goes direct by default (`SRT_DIRECT=1`): the four tracks pass untouched to earshot, which combines them and converts to Opus in one operation, so the audio is compressed once on the way in rather than twice. A **guest** stream instead has its four tracks combined into one 16-channel AAC stream and handed on over RTMP, which is where guests are authorised, counted, time-limited and cut off. The same direct route is available for guests and the operator enables it with `GUEST_SRT_DIRECT=1` (off by default), which keeps every one of those controls and drops only the re-encode.
 
 **Why 16 channels and not 25**, and the two candidate routes past that ceiling, are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). The short version: ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 and 16 pass while 9 and 25 are refused. That binds the AAC contribution leg only - the on-demand path never touches AAC and is 4th-order verified end to end.
 
@@ -111,7 +111,7 @@ Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the sam
 | | SRT (recommended) | RTMP (legacy) |
 |---|---|---|
 | Sender | stock OBS, macOS or Windows | OBS Music Edition, Windows only |
-| Audio | one 4-channel track (1st order) or four (3rd order), detected from the stream | one 16-channel AAC track |
+| Audio | one 4-channel track (1st order) or four (3rd order), detected from the stream | one AAC track, 4 or 16 channels, passed straight through (a single track, so there is nothing to detect) |
 | Endpoint | `srt://<box>:8891?streamid=owner&passphrase=…` | `rtmp://<box>:1935/owner`, stream key `RTMP_OWNER_KEY` |
 
 Run `./scripts/setup.sh` first (`.\setup.cmd` on Windows). It generates your own key and passphrase and **prints the full SRT URL with the passphrase already filled in** - paste that rather than retyping it. Lost it? `docker compose exec srt-gateway-owner printenv SRT_OWNER_PASSPHRASE`.
@@ -137,7 +137,7 @@ Custom Output (FFmpeg) lives on the *Recording* tab even though it streams to a 
 
 Both guides also carry the settings that are **exact rather than indicative** - `4.0` and never `7.1`, plain `aac` and never `mp2` or `aac_at`, `latency` in microseconds, `pkt_size=1128` through a tunnel, and the leading space that silently turns the URL into a filename. Each was established by pushing a per-channel tone ladder through real hardware, because each obvious-looking alternative fails **without any error**.
 
-Channel counts: 4 and 16 pass through as they are, a 2nd-order source must be zero-padded to 16 by the sender, and stereo or mono produces no output at all. Why 16 is the ceiling today, and what would lift it, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). Bitrate guidance, and the honest caveat that no transparency measurement exists for AAC-coded ambisonics, is in [docs/BITRATE.md](docs/BITRATE.md).
+Channel counts: 4 and 16 pass through as they are, a 2nd-order source must be zero-padded to 16 by the sender, and stereo or mono produces no output at all. Why 16 is the ceiling today, and what would lift it, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). Bitrate guidance, and the honest caveat that no *published* transparency measurement exists for AAC-coded *higher-order* ambisonics, is in [docs/BITRATE.md](docs/BITRATE.md).
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is what the bundled player requests. `DASH_NAME` is independent of your keys, so rotating a credential never moves the manifest URL.
 
@@ -158,7 +158,7 @@ One guest at a time, admitted by an arbiter in `telemetry` that also holds the s
 
 **Off by default:** the stack's purpose is live streaming, VOD is opt-in. Set `VOD_ENABLED=1` to serve the on-demand page at `/vod/`; disabled, the `/vod/` and `/vod-dash/` routes return 404.
 
-Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay that shows where each read is supposed to come from, so a listener can hear whether the delivered audio still agrees with the picture) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips), and only the generators and the player wiring are tracked. With `VOD_ENABLED=1` the two masters are fetched once on first start (~185 MB, in the background, SHA-256 verified against pinned hashes, fail-soft). Those masters are the **input to packaging, not the served clips**: run `scripts/encode-vod-ladder.sh` then `scripts/package-vod-dash.sh` to produce `content/vod/dash/`, or point `vodBase` in `brand.json` at a host that already mirrors that tree. Without one of the two, `/vod/` loads and every clip fetch 404s against an empty directory.
+Two reference clips are published: `directions` (a 360 orientation test, spoken direction reads panned in third-order Ambisonics under an energy-visualisation overlay that shows where each read is supposed to come from, so a listener can hear whether the delivered audio still agrees with the picture) and `colortones` (a colour-and-tone A/V-sync pattern). No media is committed here - the masters, the 8K test card and the caption sidecars ship as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips), and only the generators and the player wiring are tracked. With `VOD_ENABLED=1` the two masters are fetched once on first start (~185 MB, in the background, SHA-256 verified against pinned hashes, fail-soft). Those masters are the **input to packaging, not the served clips**: run `scripts/encode-vod-ladder.sh` then `scripts/package-vod-dash.sh` to produce `content/vod/dash/`, or point `vodBase` in `brand.json` at a host already serving that same packaged `vod/dash/` tree, typically an object-storage bucket under a `vod-dash/` prefix ([docs/VOD.md](docs/VOD.md) has the bucket recipe, CORS included). Without one of the two, `/vod/` loads and every clip fetch 404s against an empty directory.
 
 Generation, packaging, the 360 test card and its projection check, captions, headset playback and serving VOD from object storage: [docs/VOD.md](docs/VOD.md).
 
@@ -190,8 +190,9 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 | `scripts/test-pipeline.sh` | synthetic end-to-end test: 16 sine channels + test video pushed through ingest auth, asserts live 16-ch Opus DASH appears with the video codec the effective `FFMPEG_FLAGS` implies; also guards that README, `.env.example` and the compose fallback agree. PASS/FAIL |
 | `scripts/make-lipsync-scene.sh` | cut a GOP-matched, tv-range transient excerpt for by-ear lip-sync judging |
 | `scripts/package-dash-variants.sh` | package a WebM master into 0.5/1/2/4 s DASH variants for the comparison page (`lip-sync-test/index.html`) |
-| `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants |
+| `scripts/measure-lipsync.js` | headless-Chromium A/V measurement over the packaged variants ([results](lip-sync-test/RESULTS.md)) |
 | `scripts/plot-segment-tradeoff.py` | regenerate the segment-duration trade-off figure |
+| `scripts/plot-opus-compression.py` | regenerate the compression-level quality figure |
 | `scripts/measure-opus-compression.sh` | libopus `-compression_level` A/B on real ambisonic material, scored with AMBIQUAL ([results](opus-compression-test/RESULTS.md)) |
 | `scripts/pick-excerpt.py` | choose a measurement excerpt by content - level, spectral flatness, steadiness - rather than by a fixed offset |
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
