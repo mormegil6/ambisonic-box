@@ -194,6 +194,8 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 | `scripts/plot-segment-tradeoff.py` | regenerate the segment-duration trade-off figure |
 | `scripts/plot-opus-compression.py` | regenerate the compression-level quality figure |
 | `scripts/measure-opus-compression.sh` | libopus `-compression_level` A/B on real ambisonic material, scored with AMBIQUAL ([results](opus-compression-test/RESULTS.md)) |
+| `scripts/measure-aac-bitrate.sh` | contribution AAC bitrate ladder on real ambisonic material, scored with AMBIQUAL ([results](aac-bitrate-test/RESULTS.md)) |
+| `scripts/plot-aac-bitrate.py` | regenerate the AAC bitrate-vs-quality figure |
 | `scripts/pick-excerpt.py` | choose a measurement excerpt by content - level, spectral flatness, steadiness - rather than by a fixed offset |
 | `scripts/smoke-hoast360.js` | headless-browser smoke test of the patched player |
 
@@ -254,7 +256,8 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
-- [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - the whole saving is 0.9 % of a core, and solo piano is the one material that measurably loses
+- [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - the whole saving is 0.9 % of a core, and solo piano i
+- [aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): where the contribution leg's 96 kbit/s/channel setting actually sits, measured against AMBIQUAL rather than assumed from borrowed convention. The AAC-then-Opus cascade a viewer receives flattens 1.6-1.96x slower than the AAC leg alone from 64 to 128, and the gap is already open by 96 - contribution bitrate is not underspents the one material that measurably loses
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
 - [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it
