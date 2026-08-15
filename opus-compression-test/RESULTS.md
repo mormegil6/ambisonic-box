@@ -1,6 +1,6 @@
 # libopus `-compression_level` on 16-channel ambisonics: measurement results
 
-**Date:** 2026-08-10 · **Host:** MacBook (arm64, macOS) · **Encoder:** `libopus`, `-mapping_family 255`, `-b:a 1536k` (96 kbit/s per channel, the production setting) · **Metric:** [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual) · **Material:** five excerpts (30 s, 20 s for the shortest source) from the [HOA seven-year corpus](https://doi.org/10.5281/zenodo.21789163)
+**Date:** 2026-08-10 · **Host:** MacBook (arm64, macOS) · **Encoder:** `libopus`, `-mapping_family 255`, `-b:a 1536k` (96 kbit/s per channel, the production setting) · **Metric:** [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual) · **Material:** five excerpts (30 s, 20 s for the shortest source) from the [HOA seven-year corpus](https://doi.org/10.34808/w8bx-2094)
 
 ## The question
 
@@ -10,7 +10,7 @@ So: what does level 5 actually save, and what does it cost?
 
 ## Answer
 
-**Leave it unset.** There is no meaningful CPU to reclaim - the whole saving is 0.9 % of a core - and the one material that shows any degradation is solo piano, the most common content type in the corpus this stack serves.
+**Leave it unset.** There is no meaningful CPU to reclaim - the whole saving is 0.9 % of a core - and the one material that shows any degradation is solo piano, the most common content type in the corpus this stack was built for.
 
 ## Method
 
@@ -63,7 +63,7 @@ So the honest statement is not "piano measurably degrades" but "piano is the onl
 
 **The decisive argument is the CPU one, not the quality one.** The trade on offer is 0.9 % of a core. Even if the quality effect were exactly zero, there is nothing here worth changing a default for: the Opus encode is already an order of magnitude cheaper than the AAC re-encode this project removed to reclaim 59 %.
 
-The quality evidence points the same way without having to carry the argument. Piano is the single most common content type in the corpus this stack was built for, 8 of its 23 sessions (the corpus is published separately, [10.5281/zenodo.21789163](https://doi.org/10.5281/zenodo.21789163)), so the one material that plausibly loses is the material that matters most here.
+The quality evidence points the same way without having to carry the argument. Piano is the single most common content type in the corpus this stack was built for, 8 of its 23 sessions (the corpus is published separately, [10.34808/w8bx-2094](https://doi.org/10.34808/w8bx-2094)), so the one material that plausibly loses is the material that matters most here.
 
 This is not "safe to lower, take the win". There was no win to take.
 
@@ -73,4 +73,4 @@ This is not "safe to lower, take the win". There was no win to take.
 - Measured on arm64 macOS. The CPU fractions will differ on the Pi 4, but the *ratio* between settings is a property of the encoder, and 5.6 % of a core has a long way to fall before it competes with anything else in the pipeline.
 - **Choose excerpts by content, not by clock.** A fixed 60 s offset put the live-concert excerpt squarely in the pre-concert audience (spectral flatness 0.33 at −49 dBFS) and left the ambience one 66 % near-silent. Both were re-cut with [`scripts/pick-excerpt.py`](../scripts/pick-excerpt.py), which scores sliding windows on level, spectral flatness and steadiness; the concert moved from −49.5 dBFS / flatness 0.33 to −18.4 / 0.083. Selection is part of the method, not a detail, and the first pass got it wrong.
 - **AMBIQUAL as published does not run.** `calculate_ambiqual` references `n_channels`, which no longer exists after a rename to `n_channels_ref`/`n_channels_deg`, so it raises `NameError` on the first channel. Patched locally to `min(n_channels_ref, n_channels_deg)`, which is what the downstream NaN handling already assumes: same count means nothing was lost (fill 1.0), ref-HOA against deg-FOA means channels were lost (fill 0.1). Its pinned `numpy==1.23.5` also has no wheel for current Python; `numpy>=1.26,<2` works and stays on the 1.x API the code predates.
-- The source audio is not in this repository. The corpus is published separately ([10.5281/zenodo.21789163](https://doi.org/10.5281/zenodo.21789163)); point the harness at any 16-channel ACN/SN3D material to reproduce the shape of the result.
+- The source audio is not in this repository. The corpus is published separately ([10.34808/w8bx-2094](https://doi.org/10.34808/w8bx-2094)); point the harness at any 16-channel ACN/SN3D material to reproduce the shape of the result.
