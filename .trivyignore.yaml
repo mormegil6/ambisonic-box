@@ -1,0 +1,67 @@
+# Bounded CVE waivers. Wired ONLY into the `scan telemetry` step in
+# .github/workflows/security.yml, deliberately not applied to the other images:
+# a waiver that quietly covers every scan is how a gate stops being a gate.
+#
+# WHY THESE EXIST
+# telemetry drives the mounted docker socket, so telemetry/Dockerfile installs
+# docker-ce-cli. That CLI is written in Go and statically links the Go standard
+# library, so Trivy reports the Go stdlib as a component of this image. On
+# 2026-08-15 eight HIGH CVEs stood against the linked stdlib (v1.26.5), all
+# fixed in Go 1.26.6, and `security` went red on a documentation commit that
+# could not have touched the image. Nothing here regressed; the vulnerability
+# database moved.
+#
+# THERE IS NO FIX TO APPLY YET, and that was measured rather than assumed:
+# rebuilding with --pull --no-cache on 2026-08-15 produced docker-ce-cli 29.7.2
+# (up from 29.7.1) and Trivy still reported all eight. Docker has not published
+# a CLI built on patched Go. When they do, a rebuild clears this file's reason
+# to exist.
+#
+# WHY THIS IS PROPORTIONATE, not just convenient. Every one of these needs the
+# program to parse hostile input over a network: HTTP/2 framing, TLS KeyUpdate,
+# DNS records, XML, URLs, ASN.1, HTML templates. This CLI speaks to a local unix
+# socket owned by the host and issues local API calls. The vulnerable code paths
+# are present but not reachable in this deployment. That is the same distinction
+# scripts/scan-gateway.sh already draws between reachable and merely installed
+# CVEs, and it is a statement about severity here, not a claim that they are
+# harmless in general.
+#
+# HOW TO RETIRE IT
+#   docker compose build --pull --no-cache telemetry
+#   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy \
+#     image --severity HIGH,CRITICAL --ignore-unfixed ambi-box-telemetry:local
+# If that is clean, delete this file and the `trivyignores:` line that points at
+# it. Do not extend the dates without repeating the rebuild test.
+#
+# THE FIELD IS `expired_at`, NOT `expiredAt`. Verified against trivy on
+# 2026-08-15, because the difference is silent and dangerous: with the camelCase
+# spelling the entry still parses and still suppresses, but the expiry is never
+# honoured, so a waiver written that way never expires and nothing ever says so.
+#   expired_at, date in future -> suppressed
+#   expired_at, date in past   -> finding returns   (correct)
+#   expiredAt,  date in past   -> still suppressed  (silently permanent)
+vulnerabilities:
+  - id: CVE-2026-33818
+    statement: "Go stdlib in docker-ce-cli. encoding/asn1; this CLI parses no attacker-supplied ASN.1, it talks to a local unix socket. Fixed in Go 1.26.6, no rebuilt CLI published as of 2026-08-15."
+    expired_at: 2026-09-15
+  - id: CVE-2026-39821
+    statement: "Go stdlib in docker-ce-cli. x/net/idna; no untrusted hostname parsing on the local socket path. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-46600
+    statement: "Go stdlib in docker-ce-cli. x/net/dns/dnsmessage; the CLI resolves nothing hostile, it connects to /var/run/docker.sock. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-56853
+    statement: "Go stdlib in docker-ce-cli. net/http HTTP/2 DoS; requires an unencrypted HTTP/2 peer, which a unix-socket API client does not have. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-56858
+    statement: "Go stdlib in docker-ce-cli. html/template XSS; this CLI renders no HTML. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-56859
+    statement: "Go stdlib in docker-ce-cli. encoding/xml recursion DoS; the docker API is JSON, no XML is parsed. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-56860
+    statement: "Go stdlib in docker-ce-cli. net/url quadratic path parsing; inputs are locally constructed API paths, not remote URLs. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15
+  - id: CVE-2026-56862
+    statement: "Go stdlib in docker-ce-cli. crypto/tls KeyUpdate DoS; no TLS on a unix socket. Fixed in Go 1.26.6."
+    expired_at: 2026-09-15

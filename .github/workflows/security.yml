@@ -92,6 +92,12 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
 
+      # trivyignores is set HERE ONLY. telemetry ships docker-ce-cli for the
+      # mounted socket, so Trivy sees the Go stdlib linked into that binary and
+      # reports Go CVEs against this image; .trivyignore.yaml waives eight of
+      # them until 2026-09-15, with the reachability argument and the retirement
+      # test written out in the file. Scoping it to this step keeps the waiver
+      # from silently covering the other three images.
       - name: scan telemetry
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -100,6 +106,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
           exit-code: '1'
+          trivyignores: .trivyignore.yaml
 
       - name: scan srt-gateway
         uses: aquasecurity/trivy-action@v0.36.0
