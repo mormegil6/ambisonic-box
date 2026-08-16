@@ -90,16 +90,16 @@ for ax, metric, title in (
     ax.grid(True, alpha=0.3)
     ax.set_xticks(RATES)
 
-# A real legend per panel, not large bold floating text: both curves start low
-# at rate=32, so the upper-left corner is untouched by either line or band on
-# both panels. Repeated on both, not shared at figure level, so each panel
-# stays legible standalone.
+# One legend, on ax2 only - matches plot-bamq.py's convention (also one
+# legend, also the right-hand panel), and both panels here are the same two
+# series, so repeating it on ax1 was pure redundancy, not independent
+# standalone legibility. Upper-left: both curves start low at rate=32, so
+# that corner is untouched by either line or band on either panel.
 handles = [Line2D([], [], marker=MARKER[c], color=COL[c], lw=2, ms=6,
                    label=LABEL[c])
            for c in ("aac", "cascade")]
-for ax in (ax1, ax2):
-    ax.legend(handles=handles, loc="upper left", fontsize=8, framealpha=0.9,
-               handletextpad=0.6)
+ax2.legend(handles=handles, loc="upper left", fontsize=8, framealpha=0.9,
+           handletextpad=0.6)
 
 for ax in (ax1, ax2):
     ylo, _ = ax.get_ylim()
