@@ -43,7 +43,6 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 | Chromium | `DirectOpusAudioDecoding`, a field trial rolling out in Chrome 151, breaks every Opus decode above 2 channels in both `decodeAudioData` and MSE. Reproduces in Brave and Edge when the feature is forced on, so it is Chromium code rather than Chrome packaging. Full write-up and workaround: [CHROME-MULTICHANNEL-OPUS.md](CHROME-MULTICHANNEL-OPUS.md) | Writing a minimal standalone reproduction before filing |
 | thomasdeppisch/hoast360 | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real decode probe that also distinguishes the Chrome field-trial failure from a browser that genuinely cannot decode Opus | The Chromium filing above, so the browser-specific advice can cite a tracked issue |
 | Dash-Industry-Forum/dash.js | Two crash guards: `TimelineSegmentsGetter` assumes a `SegmentTimeline` that a live MPD refresh can race, and the embedded-captions path assumes ISOBMFF and crashes on WebM segments when a CEA-608 descriptor is present | Locating the equivalent code in dash.js's real source tree; the local fix is against the prebuilt bundle |
-| jfujita/videojs-http-source-selector | Quality menu never deselects the previous rung on click, and can open with nothing selected at all | Nothing, ready to send |
 
 ## Not upstreamable
 
