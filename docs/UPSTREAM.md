@@ -27,6 +27,7 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#62](https://github.com/EnvelopSound/Earshot/pull/62) | CI: make the workflows run again (actions v4, Compose v2, failure diagnostics) |
 | thomasdeppisch/videojs-xr | [#28](https://github.com/thomasdeppisch/videojs-xr/pull/28) | Mobile orientation controls, renderer sizing and a three.js deprecation: `Math.clamp` does not exist, `rotateLeft`/`rotateUp` are not exposed on the OrbitControls instance (which kills the render loop on any device with an orientation sensor), `Quaternion.inverse()` is deprecated, and the mono renderer is never resized after a zero-size init |
 | thomasdeppisch/hoast360 | [#30](https://github.com/thomasdeppisch/hoast360/pull/30) | Resume the AudioContext on the combined-MPD path, which was silent on every browser enforcing the autoplay policy |
+| thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
 
 ## Reported to browsers
 
@@ -41,7 +42,6 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 |---|---|---|
 | Chromium | `DirectOpusAudioDecoding`, a field trial rolling out in Chrome 151, breaks every Opus decode above 2 channels in both `decodeAudioData` and MSE. Reproduces in Brave and Edge when the feature is forced on, so it is Chromium code rather than Chrome packaging. Full write-up and workaround: [CHROME-MULTICHANNEL-OPUS.md](CHROME-MULTICHANNEL-OPUS.md) | Writing a minimal standalone reproduction before filing |
 | thomasdeppisch/hoast360 | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real decode probe that also distinguishes the Chrome field-trial failure from a browser that genuinely cannot decode Opus | The Chromium filing above, so the browser-specific advice can cite a tracked issue |
-| thomasdeppisch/hoast360 | `HoastLoader.concatBuffers()` reads source channel 0 for every destination channel in a higher-order group, so 10 of 12 third-order filter channels get the wrong decoding filter. Measured at up to 14.7 dB error on a tone ladder and worse than any codec condition tested in `aac-bitrate-test/RESULTS.md` | Nothing, ready to send |
 | Dash-Industry-Forum/dash.js | Two crash guards: `TimelineSegmentsGetter` assumes a `SegmentTimeline` that a live MPD refresh can race, and the embedded-captions path assumes ISOBMFF and crashes on WebM segments when a CEA-608 descriptor is present | Locating the equivalent code in dash.js's real source tree; the local fix is against the prebuilt bundle |
 | jfujita/videojs-http-source-selector | Quality menu never deselects the previous rung on click, and can open with nothing selected at all | Nothing, ready to send |
 
