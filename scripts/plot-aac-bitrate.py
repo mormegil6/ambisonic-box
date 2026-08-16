@@ -15,20 +15,21 @@ made and for the same reason: five excerpts, one window each, no repeats, so a
 band communicates the real spread honestly rather than implying a confidence
 interval that is not there.
 
-Colour pair (#2980b9 aac, #c0392b cascade) reused from the two existing
-figures rather than a fresh choice, and validated before reuse rather than
-assumed: `node scripts/validate_palette.js "#2980b9,#c0392b" --mode light` in
-the dataviz skill passes lightness, chroma, CVD separation (deltaE 21.0
-deutan) and contrast.
+Colour is shared across the whole figure family: green (#27ae60) is the AAC
+leg, blue (#2980b9) is the cascade, and the same pair (plus red for the
+decoder defect, which never appears here) is used in plot-bamq.py for the same
+two conditions, so a colour means the same thing in both figures. Validated as
+the triple it is used as elsewhere, not assumed: `node
+scripts/validate_palette.js "#27ae60,#2980b9,#c0392b" --mode light` in the
+dataviz skill passes lightness, chroma and CVD separation (worst pair deltaE
+20.3 deutan); it WARNs on green's own contrast against the light surface
+(2.8:1) and asks for "relief", which the legend and marker shape both already
+provide - colour is never the only way a series is identified here.
 
 Marker shape (circle AAC alone, square cascade) matches plot-bamq.py's
-convention, so the two figures share a visual vocabulary for the same two
-conditions. Colour does NOT also match plot-bamq.py, deliberately: there,
-blue covers every codec condition as one family and red is reserved for the
-anomalous decoder defect, because the point of that figure is "codec
-conditions cluster, the defect does not." Here aac and cascade ARE the two
-things being compared, so collapsing them into one hue would erase the
-comparison the figure exists to show.
+convention too, so chain identity is carried twice (colour and shape) in both
+figures - deliberate redundancy for CVD/grayscale/print robustness, not left
+over from an earlier version.
 """
 import csv
 import re
@@ -68,7 +69,7 @@ def series(chain, metric):
         hi.append(max(vals))
     return mean, lo, hi
 
-COL = {"aac": "#c0392b", "cascade": "#2980b9"}
+COL = {"aac": "#27ae60", "cascade": "#2980b9"}
 MARKER = {"aac": "o", "cascade": "s"}   # matches plot-bamq.py's chain shapes
 LABEL = {"aac": "AAC alone", "cascade": "AAC then Opus (cascade)"}
 
