@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>HOAST360 binauralizer</title></head>
+<body>
+<script type="module">
+// Renders a 16-channel ambisonic WAV to binaural stereo through HOAST360's
+// OWN decoder - the real HOASTloader + HOASTBinDecoder, same IRs, same
+// convolver topology the player uses - so the render under test is the shipped
+// listening chain rather than a generic ambisonic decoder.
+//
+// Uses the CORRECTED loader (getChannelData(j)); see the comment in
+// HoastLoader.js. Binauralizing through the buggy decode would confound a
+// codec-bitrate question with a decode defect.
+import HOASTloader from '../hoast360/dependencies/HoastLoader.js';
+import HOASTBinDecoder from '../hoast360/dependencies/HoastBinauralDecoder.js';
+
+const ORDER = 3;
+const NCH = 16;
+
+// Minimal WAV reader: the study's files are all PCM, and decodeAudioData would
+// resample to the context rate, which is exactly what we want here anyway.
+async function loadAmbi(ctx, url) {
+    const ab = await (await fetch(url)).arrayBuffer();
+    return await ctx.decodeAudioData(ab);
+}
+
+// mode 'fixed'  - the loader as corrected: each filter channel is its own.
+// mode 'buggy'  - reproduces upstream's concat (source channel 0 for every
+//                 destination in a group), so the defect can be MEASURED rather
+//                 than only described, for the upstream report.
+window.binauralize = async function (url, mode = 'fixed') {
+    // Probe context only to load/decode the IRs.
+    const probe = new OfflineAudioContext(2, 1024, 48000);
+    const { foa, hoa, loader } = await new Promise((resolve) => {
+        const l = new HOASTloader(probe, ORDER, '../hoast360/irs/hoast_o' + ORDER + '.wav',
+            (foa, hoa) => resolve({ foa, hoa, loader: l }));
+        l.load();
+    });
+
+    let hoaUse = hoa;
+    if (mode === 'buggy') {
+        const bufs = loader.buffers;
+        let hoalen = 0;
+        for (let i = 1; i < loader.nChGroups; i++) hoalen = Math.max(hoalen, bufs[i].length);
+        hoaUse = probe.createBuffer(NCH - 4, hoalen, bufs[1].sampleRate);
+        for (let i = 1; i < loader.nChGroups; i++)
+            for (let j = 0; j < bufs[i].numberOfChannels; j++)
+                hoaUse.getChannelData((i - 1) * 8 + j).set(bufs[i].getChannelData(0));
+    } else if (mode !== 'fixed') {
+        throw new Error('unknown mode: ' + mode);
+    }
+
+    const input = await loadAmbi(probe, url);
+    if (input.numberOfChannels !== NCH)
+        throw new Error(`expected ${NCH} channels, got ${input.numberOfChannels} in ${url}`);
+
+    const ctx = new OfflineAudioContext(2, input.length, input.sampleRate);
+    const dec = new HOASTBinDecoder(ctx, ORDER);
+    dec.updateFilters(foa, hoaUse);
+
+    // Re-create the buffer in the render context (buffers are context-bound).
+    const src = ctx.createBufferSource();
+    const buf = ctx.createBuffer(NCH, input.length, input.sampleRate);
+    for (let c = 0; c < NCH; c++) buf.getChannelData(c).set(input.getChannelData(c));
+    src.buffer = buf;
+    src.channelCount = NCH;
+    src.channelCountMode = 'explicit';
+    src.channelInterpretation = 'discrete';
+    src.connect(dec.in);
+    dec.out.connect(ctx.destination);
+    src.start();
+
+    const out = await ctx.startRendering();
+    return {
+        sampleRate: out.sampleRate,
+        length: out.length,
+        // Transfer as plain arrays; node writes the WAV.
+        left: Array.from(out.getChannelData(0)),
+        right: Array.from(out.getChannelData(1)),
+    };
+};
+</script>
+</body>
+</html>
