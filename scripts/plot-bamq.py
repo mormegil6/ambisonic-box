@@ -7,6 +7,16 @@ Reads aac-bitrate-test/bamq.tsv. Two panels, both showing the same comparison
 on different axes: binQ (BAM-Q's binaural quality, 100 = no difference) and
 ILDdiff (interaural level difference error, higher = worse).
 
+Both axes read in their own natural ascending order - binQ does NOT have its
+axis reversed to force "worse" onto a common side. An earlier version did
+invert it so both panels agreed that worse sits to the right; reversing a
+numeric axis (100...94 left to right) is a known misreading trap - a reader's
+default assumption is that numbers increase left to right, and the axis label
+already states which end is which ("100 = no binaural difference"), so the
+inversion bought a cross-panel visual rule at the cost of a genuinely riskier
+axis. The two panels now disagree on which side is worse; that is accepted
+rather than hidden, and stated in the caption.
+
 DESIGN CHOICE. The four codec conditions stay in ONE hue rather than four
 colours - the argument is not "which bitrate wins" (that is the sibling
 figure's job) but "every codec condition clusters, and the decoder defect sits
@@ -50,9 +60,9 @@ CODEC_LABEL = {"aac96": "AAC 96", "aac128": "AAC 128",
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.8))
 
-for ax, key, label, invert in (
-    (ax1, "binQ", "BAM-Q binQ   (100 = no binaural difference)", True),
-    (ax2, "ILDdiff", "ILD error   (higher = worse)", False),
+for ax, key, label in (
+    (ax1, "binQ", "BAM-Q binQ   (100 = no binaural difference)"),
+    (ax2, "ILDdiff", "ILD error   (higher = worse)"),
 ):
     for y, item in enumerate(ITEMS):
         vals = [float(rows[f"{item}_{c}"][key]) for c in CODEC]
@@ -69,8 +79,6 @@ for ax, key, label, invert in (
     ax.set_xlabel(label)
     ax.grid(True, axis="x", alpha=0.3)
     ax.invert_yaxis()
-    if invert:
-        ax.invert_xaxis()   # worse to the right on both panels
 
 ax2.set_xscale("log")
 # Explicit decade ticks: matplotlib's default log minor labels overlapped into
@@ -99,7 +107,8 @@ ax2.legend(handles=handles, loc="lower left", fontsize=7.5, framealpha=0.92,
 fig.text(0.5, 0.015,
          "Same source material throughout. Codec conditions compare the corrected decode of the reference against the\n"
          "corrected decode of coded audio; the defect compares the corrected decode against upstream's decode of the SAME\n"
-         "uncoded reference, so no codec loss is involved in the red point. Worse is to the right on both panels.",
+         "uncoded reference, so no codec loss is involved in the red point. Each axis reads in its own natural direction -\n"
+         "see the axis label for which way is worse; the two panels do not agree on a side, on purpose (see the script).",
          ha="center", va="bottom", fontsize=8, style="italic", linespacing=1.5)
 
 fig.tight_layout(rect=(0, 0.14, 1, 1))

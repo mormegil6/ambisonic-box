@@ -19,9 +19,16 @@ Colour pair (#2980b9 aac, #c0392b cascade) reused from the two existing
 figures rather than a fresh choice, and validated before reuse rather than
 assumed: `node scripts/validate_palette.js "#2980b9,#c0392b" --mode light` in
 the dataviz skill passes lightness, chroma, CVD separation (deltaE 21.0
-deutan) and contrast. Direct-labelled rather than legend-only, since two
-series with an obvious visual difference (solid mean + band) reads faster with
-a label at the line than a legend box.
+deutan) and contrast.
+
+Marker shape (circle AAC alone, square cascade) matches plot-bamq.py's
+convention, so the two figures share a visual vocabulary for the same two
+conditions. Colour does NOT also match plot-bamq.py, deliberately: there,
+blue covers every codec condition as one family and red is reserved for the
+anomalous decoder defect, because the point of that figure is "codec
+conditions cluster, the defect does not." Here aac and cascade ARE the two
+things being compared, so collapsing them into one hue would erase the
+comparison the figure exists to show.
 """
 import csv
 import re
@@ -44,6 +51,7 @@ MEASURED = sys.argv[1]
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 rows = list(csv.DictReader(open("aac-bitrate-test/results.tsv"), delimiter="\t"))
 RATES = sorted(set(int(r["kbps_per_ch"]) for r in rows))
@@ -61,6 +69,7 @@ def series(chain, metric):
     return mean, lo, hi
 
 COL = {"aac": "#c0392b", "cascade": "#2980b9"}
+MARKER = {"aac": "o", "cascade": "s"}   # matches plot-bamq.py's chain shapes
 LABEL = {"aac": "AAC alone", "cascade": "AAC then Opus (cascade)"}
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6), sharex=True)
@@ -73,7 +82,7 @@ for ax, metric, title in (
         mean, lo, hi = series(chain, metric)
         c = COL[chain]
         ax.fill_between(RATES, lo, hi, color=c, alpha=0.15, zorder=1)
-        ax.plot(RATES, mean, "o-", color=c, lw=2, ms=5, zorder=3)
+        ax.plot(RATES, mean, marker=MARKER[chain], color=c, lw=2, ms=6, zorder=3)
     ax.set_xlabel("Contribution AAC bitrate (kbit/s per channel)")
     ax.set_ylabel(f"AMBIQUAL {metric}")
     ax.set_title(title)
@@ -81,15 +90,16 @@ for ax, metric, title in (
     ax.grid(True, alpha=0.3)
     ax.set_xticks(RATES)
 
-# Direct labels beside the last point on BOTH panels, not a legend box: two
-# series, obvious visual separation (band + line), and each panel stays
-# legible on its own rather than depending on the other panel's key.
-for ax, metric in ((ax1, "LQ"), (ax2, "LA")):
-    for chain in ("aac", "cascade"):
-        mean, _, _ = series(chain, metric)
-        ax.annotate(LABEL[chain], (RATES[-1], mean[-1]),
-                     textcoords="offset points", xytext=(6, (6 if chain == "aac" else -14)),
-                     fontsize=8, color=COL[chain], fontweight="bold")
+# A real legend per panel, not large bold floating text: both curves start low
+# at rate=32, so the upper-left corner is untouched by either line or band on
+# both panels. Repeated on both, not shared at figure level, so each panel
+# stays legible standalone.
+handles = [Line2D([], [], marker=MARKER[c], color=COL[c], lw=2, ms=6,
+                   label=LABEL[c])
+           for c in ("aac", "cascade")]
+for ax in (ax1, ax2):
+    ax.legend(handles=handles, loc="upper left", fontsize=8, framealpha=0.9,
+               handletextpad=0.6)
 
 for ax in (ax1, ax2):
     ylo, _ = ax.get_ylim()
