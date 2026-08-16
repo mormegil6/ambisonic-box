@@ -33,7 +33,7 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 | Where | What |
 |---|---|
 | [Chromium 537235698](https://issues.chromium.org/issues/537235698) | Chromium's MSE does not apply a video track's empty-edit (`elst`) presentation offset while Firefox does, so identical fMP4 bytes play in sync in one engine and ~1.7 s out in the other. Filed as an interoperability question. Minimal reproduction: [mse-edit-list-repro](https://github.com/mormegil6/mse-edit-list-repro) |
-| W3C media-and-entertainment 377 | The same divergence raised for spec clarification, alongside the Chromium filing |
+| [w3c/media-source#377](https://github.com/w3c/media-source/issues/377) | The same divergence raised against the MSE spec: empty-edit (`elst media_time = -1`) handling diverges across engines and from non-MSE playback in the same engine |
 
 ## Prepared, not sent
 
