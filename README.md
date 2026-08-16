@@ -244,7 +244,6 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 
 ## Documentation
 
-- Measurement notes: some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here: the segment-duration study in [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md), the Opus `-compression_level` study in [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md), and the A/V-sync instruments in [tests/av-sync/README.md](tests/av-sync/README.md), all listed below.
 - [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md): why the live path stops at 16 channels, what is already 4th-order verified, and the two routes past the AAC ceiling
 - [docs/BITRATE.md](docs/BITRATE.md): contribution bitrate, audio and video, with the published anchors
 - [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md): the guest session rules in full, and the `SRT_MODE=owner` route
@@ -255,13 +254,18 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
-- [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
-- [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - the whole saving is 0.9 % of a core, and solo piano i
-- [aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): where the contribution leg's 96 kbit/s/channel setting actually sits, measured against AMBIQUAL rather than assumed from borrowed convention. The AAC-then-Opus cascade a viewer receives flattens 1.6-1.96x slower than the AAC leg alone from 64 to 128, and the gap is already open by 96 - contribution bitrate is not underspents the one material that measurably loses
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
 - [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it
 - [.env.example](.env.example): configuration reference, including how to prepare `content/demo.mp4`
+
+## Measurements
+
+Some measured results behind this README (transcode thermals, the bitrate and temperature ladder, codec constraints, AV1 viability) are being written up for publication and are not in the repo; this README will carry the citation and the tagged commit once the papers are out. Studies that are finished and justify a decision the stack actually made do ship here, with their raw data and regeneration scripts:
+
+- [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
+- [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - there is no meaningful CPU to reclaim (0.9 % of a core), and solo piano is the one material that shows any degradation
+- [aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): where the contribution leg's 96 kbit/s/channel setting actually sits, measured against AMBIQUAL and, as a second opinion in a different domain, BAM-Q. The AAC-then-Opus cascade a viewer receives flattens 1.6-1.96x slower than the AAC leg alone from 64 to 128, and the gap is already open by 96. Building the binaural render for BAM-Q also surfaced and fixed a real defect in HOAST360's decoding-filter loading, upstream since 2020, that cost more than any codec setting tested
 
 ## License
 
