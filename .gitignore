@@ -53,3 +53,14 @@ docs/PLAN.md
 
 # history backups: never commit these, they carry pre-rewrite history
 *.bundle
+
+# measurement scratch: excerpts, per-condition encodes, binaural renders.
+# Regenerable from the corpus + harness; the deliverables (results.tsv,
+# bamq.tsv, the figures) are committed, these are not. opus-compression-test's
+# equivalent work dir was left untracked with no gitignore entry and was later
+# lost to manual cleanup, which is why the AAC study's item mapping had to be
+# recovered from session transcripts - explicit entries this time.
+aac-bitrate-test/work/
+aac-bitrate-test/binaural/
+aac-bitrate-test/run.log
+opus-compression-test/work/
