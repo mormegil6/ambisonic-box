@@ -254,6 +254,8 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
+- [docs/UPSTREAM.md](docs/UPSTREAM.md): bugs this stack found and sent back to the projects they belong to, merged and open, plus the ones still prepared and unsent
+- [docs/CHROME-MULTICHANNEL-OPUS.md](docs/CHROME-MULTICHANNEL-OPUS.md): a Chrome experiment that breaks every Opus decode above 2 channels, why the usual isolation steps do not find it, and the one-flag workaround
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
 - [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it

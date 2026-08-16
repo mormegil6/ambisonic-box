@@ -46,6 +46,8 @@ preferred-citation:
   url: "https://www.aes.org/e-lib/browse.cfm?elib=22204"
 
 # TODO, publication roadmap: this file currently offers ONE citable work, the 2023 AES paper, which is the right reference for the toolchain's ORIGIN but not for what this repository has become. The containerisation itself, the browser interop findings and the Phase 5 A/V-sync measurements all postdate it, so while it is the only entry, someone citing "the interop finding" will cite the 2023 paper by default because there is nothing else to point at.
-#   - add the IEEE MultiMedia paper once accepted
+#   - the browser-interop / A/V-sync paper is unplaced: IEEE MultiMedia
+#     rejected it; a CACM resubmission is being considered (editor contacted,
+#     no submission yet). Add once it has a home.
 #   - add the toolchain paper (Huddersfield) once it exists
 # CFF allows only one `preferred-citation`, so additional works belong under a `references:` list, with preferred-citation reassigned to whichever paper best matches what the repository is by then.
