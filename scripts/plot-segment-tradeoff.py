@@ -57,20 +57,24 @@ buf_lo = [0.4, 3, 9, 15]              # buffer depth band, seconds
 buf_hi = [0.6, 5, 12, 20]
 buf_mid = [(a + b) / 2 for a, b in zip(buf_lo, buf_hi)]
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 6), sharex=True)
+# Left-right, not top-bottom: matches the other figures in this repo
+# (plot-opus-compression.py, plot-aac-bitrate.py, plot-bamq.py), all 1x2.
+# This one was the odd one out at 2x1.
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.8))
 
 ax1.plot(seg, bitrate, "o-", color="#c0392b", lw=2, ms=7)
 ax1.set_ylabel("Effective video bitrate (Mbps)")
-ax1.set_title("DASH segment-duration trade-off (4K VP9, combined-MPD)")
+ax1.set_title("Effective video bitrate")
 ax1.grid(True, alpha=0.3)
 
 ax2.fill_between(seg, buf_lo, buf_hi, color="#2980b9", alpha=0.25)
 ax2.plot(seg, buf_mid, "o-", color="#2980b9", lw=2, ms=7)
 ax2.set_ylabel("Playback buffer depth (s)")
-ax2.set_xlabel("Segment duration (s)")
+ax2.set_title("Playback buffer depth")
 ax2.grid(True, alpha=0.3)
 
 for ax in (ax1, ax2):
+    ax.set_xlabel("Segment duration (s)")
     ax.set_xscale("log", base=2)
     ax.set_xticks(seg)
     ax.set_xticklabels([f"{s:g}" for s in seg])
@@ -85,12 +89,12 @@ ax2.annotate("2 s: chosen", (2, buf_mid[2]),
              textcoords="offset points", xytext=(10, -20),
              fontsize=9, color="#1e7e34")
 
-fig.text(0.5, 0.005,
-         "A/V offset: 0 ms at every duration (combined-MPD single clock). "
-         "Buffer shown as min-max band, not error bars.",
-         ha="center", fontsize=8, style="italic")
+fig.text(0.5, 0.02,
+         "DASH segment-duration trade-off, 4K VP9, combined-MPD.\n"
+         "A/V offset: 0 ms at every duration (single media-element clock). Buffer shown as min-max band, not error bars.",
+         ha="center", va="bottom", fontsize=8, style="italic", linespacing=1.5)
 
-fig.tight_layout(rect=(0, 0.03, 1, 1))
+fig.tight_layout(rect=(0, 0.12, 1, 1))
 # PNG for inline markdown / quick view; SVG (vector) for web pages and print.
 for ext, kw in (("png", {"dpi": 160}), ("svg", {})):
     out = f"lip-sync-test/segment-tradeoff-{MEASURED}.{ext}"

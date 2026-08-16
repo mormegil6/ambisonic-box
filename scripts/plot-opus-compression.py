@@ -85,13 +85,14 @@ ax2.set_title("Piano is the only excerpt outside the noise band")
 ax1.legend(loc="upper left", fontsize=8, framealpha=0.9)
 
 # One text block, not two: separate fig.text calls do not know about each
-# other's extents and silently overprinted when the wording grew.
+# other's extents and silently overprinted when the wording grew. Line breaks
+# are placed by hand to keep each line's WIDTH roughly even - `ha="center"`
+# centers each line independently, so four lines of uneven length (as an
+# earlier version had) reads as ragged/zigzagged rather than as one block.
 fig.text(0.5, 0.015,
-         "Shaded band = largest excursion among the non-piano excerpts "
-         f"(±{noise_LQ:.4f} LQ, ±{noise_LA:.4f} LA).\n"
-         "Those excerpts moved UP at lower effort, which cannot be a real gain, so the band is\n"
-         "the metric's noise on this material, not a confidence interval.\n"
-         "16-channel Opus, -b:a 1536k, scored with AMBIQUAL.",
+         f"Shaded band = largest excursion among the non-piano excerpts (±{noise_LQ:.4f} LQ, ±{noise_LA:.4f} LA).\n"
+         "Those excerpts moved UP at lower effort, which cannot be a real gain, so the band is the metric's noise\n"
+         "on this material, not a confidence interval. 16-channel Opus, -b:a 1536k, scored with AMBIQUAL.",
          ha="center", va="bottom", fontsize=8, style="italic", linespacing=1.5)
 
 fig.tight_layout(rect=(0, 0.22, 1, 1))

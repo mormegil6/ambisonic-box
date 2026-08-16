@@ -97,10 +97,13 @@ for ax in (ax1, ax2):
                 textcoords="offset points", xytext=(4, 4),
                 fontsize=8, color="#2c3e50")
 
+# Line break placed to keep both lines a similar WIDTH: ha="center" centers
+# each line independently, so a short line beside a long one reads as ragged
+# rather than as one centered block (the fix applied across every figure's
+# caption tonight - see plot-opus-compression.py for the fuller note).
 fig.text(0.5, 0.02,
-         "Bold line = mean across 5 excerpts; band = min-max range\n"
-         "(no repeats, so this is spread, not a confidence interval). "
-         f"{min(RATES)}-{max(RATES)} kbit/s/channel, 16-ch AAC via the earshot contribution encoder.",
+         "Bold line = mean across 5 excerpts; band = min-max range (no repeats, so this is spread,\n"
+         f"not a confidence interval). {min(RATES)}-{max(RATES)} kbit/s/channel, 16-ch AAC via the earshot contribution encoder.",
          ha="center", va="bottom", fontsize=8, style="italic", linespacing=1.4)
 
 fig.tight_layout(rect=(0, 0.13, 1, 1))
