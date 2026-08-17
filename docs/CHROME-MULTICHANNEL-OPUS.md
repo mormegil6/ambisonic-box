@@ -58,4 +58,8 @@ The reproduction, the full browser matrix (Chrome, Brave, Edge and Firefox, with
 
 https://github.com/mormegil6/opus-multichannel-repro
 
+It is filed with Chromium as https://issues.chromium.org/issues/547065816, as a
+regression: decoding of Opus beyond 8 channels was added deliberately in M62,
+and this trial withdraws it.
+
 One point from that matrix belongs here, because it is not about Chrome: **Safari fails this content regardless**, including the stereo control, which is unrelated to this experiment and is instead WebKit's long-standing trouble with Opus in WebM (webkit.org bugs 238546, 245428, 226922). No flag changes that one.
