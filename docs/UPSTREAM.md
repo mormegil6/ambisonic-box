@@ -21,12 +21,12 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#64](https://github.com/EnvelopSound/Earshot/pull/64) | Resume the AudioContext from the gain slider's `onChange` (a real user gesture) instead of a `window` click listener. Supersedes [#26](https://github.com/EnvelopSound/Earshot/pull/26) (closed), which diagnosed the bug correctly in 2021 but leaked a listener on every re-render. Closes [#13](https://github.com/EnvelopSound/Earshot/issues/13) ("No audio playback in Chrome"), open since 2021 and previously misdiagnosed in that thread as an HTTPS/CDN problem |
 | EnvelopSound/Earshot | [#58](https://github.com/EnvelopSound/Earshot/pull/58) | Floor DASH `suggestedPresentationDelay` to avoid live-join gap-jumps |
 | EnvelopSound/Earshot | [#59](https://github.com/EnvelopSound/Earshot/pull/59) | Decouple the DASH manifest filename from the RTMP stream key |
+| EnvelopSound/Earshot | [#60](https://github.com/EnvelopSound/Earshot/pull/60) | Raise RTMP `max_message` so 4K keyframes are not dropped |
 
 ## Open
 
 | Project | PR | What |
 |---|---|---|
-| EnvelopSound/Earshot | [#60](https://github.com/EnvelopSound/Earshot/pull/60) | Raise RTMP `max_message` so 4K keyframes are not dropped |
 | thomasdeppisch/videojs-xr | [#28](https://github.com/thomasdeppisch/videojs-xr/pull/28) | Mobile orientation controls, renderer sizing and a three.js deprecation: `Math.clamp` does not exist, `rotateLeft`/`rotateUp` are not exposed on the OrbitControls instance (which kills the render loop on any device with an orientation sensor), `Quaternion.inverse()` is deprecated, and the mono renderer is never resized after a zero-size init |
 | thomasdeppisch/hoast360 | [#30](https://github.com/thomasdeppisch/hoast360/pull/30) | Resume the AudioContext on the combined-MPD path, which was silent on every browser enforcing the autoplay policy |
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
