@@ -31,6 +31,7 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 | thomasdeppisch/hoast360 | [#30](https://github.com/thomasdeppisch/hoast360/pull/30) | Resume the AudioContext on the combined-MPD path, which was silent on every browser enforcing the autoplay policy |
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
 | thomasdeppisch/hoast360 | [#32](https://github.com/thomasdeppisch/hoast360/pull/32) | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real `decodeAudioData` probe that also names the Chrome field trial (`DirectOpusAudioDecoding`) behind one failure mode it distinguishes. Independent of #30 and #31 |
+| Dash-Industry-Forum/dash.js | [#5104](https://github.com/Dash-Industry-Forum/dash.js/pull/5104) | Guard three unguarded reads that crash on legitimate input: a `SegmentTimeline` that is absent or carries no `S` elements ([#3513](https://github.com/Dash-Industry-Forum/dash.js/issues/3513) and [#2708](https://github.com/Dash-Industry-Forum/dash.js/issues/2708) reported the class years ago, closed without a guard), and the ISOBMFF assumption in `BoxParser.getSamplesInfo` and the CEA-608 path, which WebM segments do not satisfy. Four unit tests, each failing on `development` without the change |
 
 ## Reported to browsers
 
@@ -42,9 +43,7 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 
 ## Prepared, not sent
 
-| Target | What | Blocked on |
-|---|---|---|
-| Dash-Industry-Forum/dash.js | Two crash guards: `TimelineSegmentsGetter` reads a `SegmentTimeline` that may carry no `S` elements, and the embedded-caption path assumes ISOBMFF and crashes on WebM segments when a CEA-608 descriptor is present. Written against current `development` with four unit tests that fail without the change; branch [`guard-live-timeline-and-non-isobmff`](https://github.com/mormegil6/dash.js/tree/guard-live-timeline-and-non-isobmff) | The DASH-IF Feedback Agreement, which their contributing guide requires before review |
+Nothing at the moment.
 
 ## Not upstreamable
 
