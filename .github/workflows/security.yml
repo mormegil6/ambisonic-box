@@ -108,6 +108,11 @@ jobs:
           exit-code: '1'
           trivyignores: .trivyignore.yaml
 
+      # trivyignores is set HERE ONLY, same reasoning as telemetry above.
+      # .trivyignore-srt-gateway.yaml waives CVE-2026-53615 (libblkid, no fixed
+      # package in trixie yet) with a traced dependency chain specific to this
+      # image, kept in its own file rather than telemetry's so this waiver
+      # cannot silently cover the other two images either.
       - name: scan srt-gateway
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -116,6 +121,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
           exit-code: '1'
+          trivyignores: .trivyignore-srt-gateway.yaml
 
       - name: scan hoast-player
         uses: aquasecurity/trivy-action@v0.36.0

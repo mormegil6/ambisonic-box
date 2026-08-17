@@ -1,0 +1,38 @@
+# CVE waiver for srt-gateway only. Wired ONLY into the `scan srt-gateway` step
+# in .github/workflows/security.yml, for the same reason .trivyignore.yaml is
+# scoped to telemetry alone: a waiver that quietly covers every scan is how a
+# gate stops being a gate.
+#
+# CVE-2026-53615 is the same finding as telemetry's (see .trivyignore.yaml),
+# but the reachability argument is NOT the same, and is written out separately
+# here because this image's own Dockerfile calls out libmount specifically as
+# one of the packages actually loaded by the running process ("scan-gateway.sh
+# does this split for you ... those are the ones worth reading"). This is that
+# reading.
+#
+# TRACED on 2026-08-17, against the running container (docker exec, /proc/PID/maps,
+# ldd), not assumed:
+#   libgstsrt.so (the GStreamer SRT plugin) -> libgio-2.0 -> libmount -> libblkid
+# libgio-2.0 links libmount/libblkid unconditionally, for its GUnixMountMonitor
+# feature (desktop auto-mount notifications, driven by watching
+# /proc/self/mountinfo for changes to the process's OWN mount table). Every
+# binary that links GIO inherits this, whether or not the feature is ever used.
+#
+# The load-bearing check: does libsrt-gnutls.so itself - the actual SRT
+# protocol implementation, the one library in this image that parses a
+# stranger's bytes before any authentication - depend on libmount, libblkid,
+# or even libgio? `ldd` says no, on none of the three. The vulnerable code
+# (libblkid/src/partitions/dos.c, the DOS/MBR partition-table parser) sits
+# behind libmount's UUID=/LABEL= device resolution and GIO's mount monitor,
+# neither of which anything in gateway.py, the SRT/RTMP GStreamer pipeline, or
+# ffmpeg ever calls. The container also has a read-only rootfs and no volumes,
+# so its own mount table never changes, and there is no block device for a
+# monitor to probe even if one were triggered.
+#
+# HOW TO RETIRE IT: same as .trivyignore.yaml - rebuild with --pull --no-cache
+# and re-scan; when Debian's trixie mirror ships util-linux 2.41.5-0+deb13u1
+# this clears on its own. Do not extend the date without repeating that check.
+vulnerabilities:
+  - id: CVE-2026-53615
+    statement: "libblkid, pulled in transitively via libgstsrt.so -> libgio-2.0 -> libmount (GIO's GUnixMountMonitor, unconditional on any glib/gio-linked binary). Confirmed libsrt-gnutls.so itself - the pre-auth SRT parser - depends on none of libmount/libblkid/libgio. Read-only rootfs, no volumes, static mount table: nothing here ever exercises the DOS partition-table parser. Fixed in util-linux 2.41.5-0+deb13u1, not yet in trixie's apt mirror as of 2026-08-17."
+    expired_at: 2026-09-15
