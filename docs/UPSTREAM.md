@@ -4,7 +4,7 @@ Bugs found while building this stack are reported to, and fixed in, the projects
 
 It exists for a practical reason as well as a tidy one. Work in this repository is spread across a vendored player, three patched npm packages, a forked media server and a browser bug or two, and without a single list it is genuinely easy to lose track of what has already been submitted and start drafting it twice.
 
-Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the links before quoting any of it.
+Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the links before quoting any of it.
 
 ## Merged
 
@@ -16,6 +16,7 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#56](https://github.com/EnvelopSound/Earshot/pull/56) | nginx: emit relative redirects so a mapped host port survives directory redirects |
 | EnvelopSound/Earshot | [#57](https://github.com/EnvelopSound/Earshot/pull/57) | Allow building without `--enable-nonfree` for a redistributable image |
 | EnvelopSound/Earshot | [#61](https://github.com/EnvelopSound/Earshot/pull/61) | Raise the yarn network timeout so slower hosts can build the webtools image |
+| EnvelopSound/Earshot | [#62](https://github.com/EnvelopSound/Earshot/pull/62) | CI: make the workflows run again (actions v4, Compose v2, failure diagnostics). Restored the pipeline but left `test` red on a pre-existing, unrelated mismatch: the bundled test source is audio-only and the shipped default (`-c:v copy`) needs video. See #63 |
 
 ## Open
 
@@ -24,7 +25,7 @@ Status is as of 2026-08-16. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#58](https://github.com/EnvelopSound/Earshot/pull/58) | Floor DASH `suggestedPresentationDelay` to avoid live-join gap-jumps |
 | EnvelopSound/Earshot | [#59](https://github.com/EnvelopSound/Earshot/pull/59) | Decouple the DASH manifest filename from the RTMP stream key |
 | EnvelopSound/Earshot | [#60](https://github.com/EnvelopSound/Earshot/pull/60) | Raise RTMP `max_message` so 4K keyframes are not dropped |
-| EnvelopSound/Earshot | [#62](https://github.com/EnvelopSound/Earshot/pull/62) | CI: make the workflows run again (actions v4, Compose v2, failure diagnostics) |
+| EnvelopSound/Earshot | [#63](https://github.com/EnvelopSound/Earshot/pull/63) | Test: push a real video track, matching the default `-c:v copy` path, so CI's `test` job goes green again after #62 |
 | thomasdeppisch/videojs-xr | [#28](https://github.com/thomasdeppisch/videojs-xr/pull/28) | Mobile orientation controls, renderer sizing and a three.js deprecation: `Math.clamp` does not exist, `rotateLeft`/`rotateUp` are not exposed on the OrbitControls instance (which kills the render loop on any device with an orientation sensor), `Quaternion.inverse()` is deprecated, and the mono renderer is never resized after a zero-size init |
 | thomasdeppisch/hoast360 | [#30](https://github.com/thomasdeppisch/hoast360/pull/30) | Resume the AudioContext on the combined-MPD path, which was silent on every browser enforcing the autoplay policy |
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
