@@ -40,7 +40,23 @@
 #   expired_at, date in future -> suppressed
 #   expired_at, date in past   -> finding returns   (correct)
 #   expiredAt,  date in past   -> still suppressed  (silently permanent)
+#
+# CVE-2026-53615 is a different component from the Go stdlib entries below:
+# it is libblkid (util-linux), pulled into the telemetry image as ordinary
+# base-layer plumbing on python:3.12-slim/trixie, not because anything here
+# calls it. collect.py's only shell-outs are `docker ...` and `df -P`, which
+# reads via statvfs; nothing in this image runs mount, blkid, fdisk, lsblk,
+# or login. The vulnerable code is the DOS partition-table parser
+# (libblkid/src/partitions/dos.c), reachable only by parsing an actual block
+# device's partition table, which telemetry never does. Confirmed on
+# 2026-08-17 that `--pull --no-cache` does not clear it: installed stays at
+# 1:2.41-5 against a fixed 2.41.5-0+deb13u1, so Debian's trixie security
+# mirror has not shipped the patched package yet. Re-run the same rebuild +
+# scan in the "HOW TO RETIRE IT" block above before extending the date.
 vulnerabilities:
+  - id: CVE-2026-53615
+    statement: "libblkid (util-linux) in the debian base image. Integer overflow in libblkid/src/partitions/dos.c; telemetry never parses a partition table (only `docker` and `df -P`, no mount/blkid/fdisk/lsblk/login). Fixed in util-linux 2.41.5-0+deb13u1, not yet in trixie's apt mirror as of 2026-08-17."
+    expired_at: 2026-09-15
   - id: CVE-2026-33818
     statement: "Go stdlib in docker-ce-cli. encoding/asn1; this CLI parses no attacker-supplied ASN.1, it talks to a local unix socket. Fixed in Go 1.26.6, no rebuilt CLI published as of 2026-08-15."
     expired_at: 2026-09-15
