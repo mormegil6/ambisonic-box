@@ -30,6 +30,7 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 | thomasdeppisch/videojs-xr | [#28](https://github.com/thomasdeppisch/videojs-xr/pull/28) | Mobile orientation controls, renderer sizing and a three.js deprecation: `Math.clamp` does not exist, `rotateLeft`/`rotateUp` are not exposed on the OrbitControls instance (which kills the render loop on any device with an orientation sensor), `Quaternion.inverse()` is deprecated, and the mono renderer is never resized after a zero-size init |
 | thomasdeppisch/hoast360 | [#30](https://github.com/thomasdeppisch/hoast360/pull/30) | Resume the AudioContext on the combined-MPD path, which was silent on every browser enforcing the autoplay policy |
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
+| thomasdeppisch/hoast360 | [#32](https://github.com/thomasdeppisch/hoast360/pull/32) | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real `decodeAudioData` probe that also names the Chrome field trial (`DirectOpusAudioDecoding`) behind one failure mode it distinguishes. Independent of #30 and #31 |
 
 ## Reported to browsers
 
@@ -43,7 +44,6 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 
 | Target | What | Blocked on |
 |---|---|---|
-| thomasdeppisch/hoast360 | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real decode probe that also distinguishes the Chrome field-trial failure from a browser that genuinely cannot decode Opus | The Chromium filing above, so the browser-specific advice can cite a tracked issue |
 | Dash-Industry-Forum/dash.js | Two crash guards: `TimelineSegmentsGetter` reads a `SegmentTimeline` that may carry no `S` elements, and the embedded-caption path assumes ISOBMFF and crashes on WebM segments when a CEA-608 descriptor is present. Written against current `development` with four unit tests that fail without the change; branch [`guard-live-timeline-and-non-isobmff`](https://github.com/mormegil6/dash.js/tree/guard-live-timeline-and-non-isobmff) | The DASH-IF Feedback Agreement, which their contributing guide requires before review |
 
 ## Not upstreamable
