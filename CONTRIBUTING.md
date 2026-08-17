@@ -53,6 +53,7 @@ A docs-only change skips the expensive workflows.
 
 - **`services/earshot/src`** is a vendored copy of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (GPL-2.0). Fixes belong upstream, not here. Patching the vendored copy means the next sync silently reverts you. If upstream is unresponsive and a fix cannot wait, say so in the pull request so the divergence is deliberate and recorded.
 - **`hoast360/`** is a submodule pointing at a separate repository. Player changes go there.
+- Check [docs/UPSTREAM.md](docs/UPSTREAM.md) first. It lists what has already been reported or fixed upstream, in Earshot, HOAST360, and their dependencies, so you do not duplicate work that is already merged, open, or waiting on something outside this repo.
 
 ## Style
 
