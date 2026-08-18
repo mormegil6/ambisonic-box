@@ -23,6 +23,7 @@ Status is as of 2026-08-18. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#59](https://github.com/EnvelopSound/Earshot/pull/59) | Decouple the DASH manifest filename from the RTMP stream key |
 | EnvelopSound/Earshot | [#60](https://github.com/EnvelopSound/Earshot/pull/60) | Raise RTMP `max_message` so 4K keyframes are not dropped |
 | EnvelopSound/Earshot | [#70](https://github.com/EnvelopSound/Earshot/pull/70) | webtools: bump 13 dependencies to patched versions already inside their declared ranges (real CVEs/GHSAs per package, not a routine version chase). Caught two npm-registry-deprecated release traps (`lodash`/`lodash.template` 4.18.0) before they shipped as "fixes". Open alert count: 180 -> 114 across this PR and the 11 Dependabot PRs merged the same day. Five packages from the same alert sweep deliberately excluded - each cascades into further version conflicts and needs its own PR |
+| EnvelopSound/Earshot | [#71](https://github.com/EnvelopSound/Earshot/pull/71) | `.gitattributes` had no `eol` rule for shell scripts, so a Windows checkout with the common `core.autocrlf=true` setting silently CRLF-converts `entrypoint.sh`, and Docker bakes the corrupted script into the image via `COPY`, crashing with `standard_init_linux.go:219: exec user process caused: no such file or directory`. Forces LF for all `*.sh` regardless of checkout platform. Closes [#28](https://github.com/EnvelopSound/Earshot/issues/28), open since 2021 |
 
 ## Open
 
