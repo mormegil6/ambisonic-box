@@ -1,3 +1,6 @@
 [submodule "hoast360"]
 	path = hoast360
 	url = https://github.com/mormegil6/hoast360
+[submodule "services/earshot/src"]
+	path = services/earshot/src
+	url = https://github.com/mormegil6/Earshot
