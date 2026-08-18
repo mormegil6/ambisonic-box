@@ -69,6 +69,7 @@
       .specs .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--body)}
       .specs .v{font-size:15.5px;font-weight:500;margin-top:4px;color:var(--ink)}
       .specs .v small{font-weight:400;color:var(--body)}
+      abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
       cite{font-style:normal;font-family:var(--sans);font-size:14.5px;line-height:1.6;color:var(--ink);
            background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:block}
       cite em{font-style:italic}
@@ -192,7 +193,7 @@
       <div id="overlay">
         <div id="topfill"></div>
         <div id="headers">
-          <span class="kicker" id="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order Ambisonics</span></span>
+          <span class="kicker" id="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order <abbr title="Higher-Order Ambisonics">HOA</abbr></span></span>
           <h1><span id="h1">Ambisonic Box</span></h1>
           <p id="hoast-text">A spatial-audio 360&deg; video stream: third-order Ambisonic sound (16 channels)
              rotated to follow your view and binauralized in real time, delivered live over MPEG-DASH.</p>
@@ -276,7 +277,7 @@
         <p class="lead" id="aboutLead">A Docker toolchain for end-to-end immersive broadcasting: live 360&deg; video with
            Higher-Order Ambisonic audio, built on Envelop Earshot, Shaka Packager and the HOAST360 player.</p>
         <div class="specs">
-          <div class="card"><div class="k">Spatial audio</div><div class="v"><span id="stSpatial">3rd-order Ambisonics</span> <small><span id="stCh">16</span> ch<span id="stConv"> &middot; ACN/SN3D</span></small></div></div>
+          <div class="card"><div class="k">Spatial audio</div><div class="v"><span id="stSpatial">3rd-order <abbr title="Higher-Order Ambisonics">HOA</abbr></span> <small><span id="stCh">16</span> ch<span id="stConv"> &middot; ACN/SN3D</span></small></div></div>
           <div class="card"><div class="k">Video</div><div class="v"><span id="stCodec">360&deg;</span> <small>equirectangular</small></div></div>
           <div class="card"><div class="k">Audio codec</div><div class="v"><span id="stACodec">Opus</span> <small><span id="stCh2">16</span>-channel</small></div></div>
           <div class="card"><div class="k">Delivery</div><div class="v" id="stDelivery">MPEG-DASH <small>live, WebM</small></div></div>
@@ -1096,6 +1097,15 @@
       (function(){
         function dur(s){ if(s==null) return "-"; var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+"d ":"")+(h?h+"h ":"")+m+"m"; }
         function set(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
+        // spatial_audio is server-generated from an integer channel count and a
+        // fixed ordinal-suffix lookup (see telemetry/collect.py) - never externally
+        // supplied text - so splicing in the <abbr> markup here is safe.
+        function setSpatial(id,t){
+          var e=document.getElementById(id); if(!e) return;
+          var m=/^(.*) HOA$/.exec(t||"");
+          if(m){ e.textContent=""; e.appendChild(document.createTextNode(m[1]+" ")); var a=document.createElement("abbr"); a.title="Higher-Order Ambisonics"; a.textContent="HOA"; e.appendChild(a); }
+          else { e.textContent=t; }
+        }
         function poll(){
           fetch("/status/status.json?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
             // Badge and dot come from /api/live when that probe is reachable; this
@@ -1120,9 +1130,9 @@
               set('stCh',s.audio_channels); set('stCh2',s.audio_channels);
               // Only a perfect-square channel count is a full ambisonic set, so
               // anything else drops the order claim and the ACN/SN3D note.
-              set('stSpatial', s.spatial_audio || "Channel-based");
+              setSpatial('stSpatial', s.spatial_audio || "Channel-based");
               set('stConv', s.spatial_audio ? " · ACN/SN3D" : "");
-              set('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
+              setSpatial('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
             }
           }).catch(function(){ set('stViewers',"unavailable"); });
         }
