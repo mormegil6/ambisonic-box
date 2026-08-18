@@ -22,6 +22,7 @@ Status is as of 2026-08-18. Nothing here is auto-generated, so re-check the link
 | EnvelopSound/Earshot | [#58](https://github.com/EnvelopSound/Earshot/pull/58) | Floor DASH `suggestedPresentationDelay` to avoid live-join gap-jumps |
 | EnvelopSound/Earshot | [#59](https://github.com/EnvelopSound/Earshot/pull/59) | Decouple the DASH manifest filename from the RTMP stream key |
 | EnvelopSound/Earshot | [#60](https://github.com/EnvelopSound/Earshot/pull/60) | Raise RTMP `max_message` so 4K keyframes are not dropped |
+| EnvelopSound/Earshot | [#70](https://github.com/EnvelopSound/Earshot/pull/70) | webtools: bump 13 dependencies to patched versions already inside their declared ranges (real CVEs/GHSAs per package, not a routine version chase). Caught two npm-registry-deprecated release traps (`lodash`/`lodash.template` 4.18.0) before they shipped as "fixes". Open alert count: 180 -> 114 across this PR and the 11 Dependabot PRs merged the same day. Five packages from the same alert sweep deliberately excluded - each cascades into further version conflicts and needs its own PR |
 
 ## Open
 
@@ -32,7 +33,6 @@ Status is as of 2026-08-18. Nothing here is auto-generated, so re-check the link
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
 | thomasdeppisch/hoast360 | [#32](https://github.com/thomasdeppisch/hoast360/pull/32) | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real `decodeAudioData` probe that also names the Chrome field trial (`DirectOpusAudioDecoding`) behind one failure mode it distinguishes. Independent of #30 and #31 |
 | Dash-Industry-Forum/dash.js | [#5104](https://github.com/Dash-Industry-Forum/dash.js/pull/5104) | Guard three unguarded reads that crash on legitimate input: a `SegmentTimeline` that is absent or carries no `S` elements ([#3513](https://github.com/Dash-Industry-Forum/dash.js/issues/3513) and [#2708](https://github.com/Dash-Industry-Forum/dash.js/issues/2708) reported the class years ago, closed without a guard), and the ISOBMFF assumption in `BoxParser.getSamplesInfo` and the CEA-608 path, which WebM segments do not satisfy. Four unit tests, each failing on `development` without the change |
-| EnvelopSound/Earshot | [#70](https://github.com/EnvelopSound/Earshot/pull/70) | webtools: bump 13 dependencies to patched versions already inside their declared ranges (real CVEs/GHSAs per package, not a routine version chase). Caught two npm-registry-deprecated release traps (`lodash`/`lodash.template` 4.18.0) before they shipped as "fixes". Five packages from the same alert sweep deliberately excluded - each cascades into further version conflicts and needs its own PR |
 
 ## Reported to browsers
 
