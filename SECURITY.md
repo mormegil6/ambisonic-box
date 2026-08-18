@@ -28,7 +28,7 @@ The parts of this repository that face untrusted input:
 
 Not because these do not matter, but because a report here cannot fix them:
 
-- **`services/earshot/src`** is a vendored copy of [Envelop Earshot](https://github.com/EnvelopSound/Earshot), which is a separate project under GPL-2.0. Report defects in Earshot itself upstream. The same applies to the [patched HOAST360 player](https://github.com/mormegil6/hoast360), which is a submodule.
+- **`services/earshot/src`** is a submodule pointing at a fork of [Envelop Earshot](https://github.com/EnvelopSound/Earshot), which is a separate project under GPL-2.0. Report defects in Earshot itself upstream. The same applies to the [patched HOAST360 player](https://github.com/mormegil6/hoast360), also a submodule.
 
   **Stated plainly, because it is the largest unpatched surface here and it is easy to describe misleadingly:** earshot's runtime image is `alpine:3.11` with `nginx 1.15.1` (2018) and a fork of ffmpeg. Alpine 3.11 reached end of life in **November 2021**, so its security data has stopped and a scanner has little left to report; the `node:12` toolchain sometimes named in this context is a *build* stage that contributes only static files and is not in the shipped image. earshot is also the container that decodes contributor-supplied media, and the least confined one in the stack: it holds capabilities the others drop and cannot run with a read-only root filesystem. Trivy scans it in CI **report-only**, which is a deliberate choice about an image nobody can patch from this repository rather than a claim that it is clean.
 

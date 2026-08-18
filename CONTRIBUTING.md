@@ -51,8 +51,7 @@ A docs-only change skips the expensive workflows.
 
 ## Things that are not ours to change
 
-- **`services/earshot/src`** is a vendored copy of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (GPL-2.0). Fixes belong upstream, not here. Patching the vendored copy means the next sync silently reverts you. If upstream is unresponsive and a fix cannot wait, say so in the pull request so the divergence is deliberate and recorded.
-- **`hoast360/`** is a submodule pointing at a separate repository. Player changes go there.
+- **`services/earshot/src`** and **`hoast360/`** are both submodules - the first a fork of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (GPL-2.0), the second a fork of the HOAST360 player. Fixes go in the fork, not here: a PR against this repo can only bump the pinned commit, never edit source inside either directory. If upstream is unresponsive and a fix cannot wait, it lives in the fork, deliberately and recorded there.
 - Check [docs/UPSTREAM.md](docs/UPSTREAM.md) first. It lists what has already been reported or fixed upstream, in Earshot, HOAST360, and their dependencies, so you do not duplicate work that is already merged, open, or waiting on something outside this repo.
 
 ## Style
@@ -64,4 +63,4 @@ A docs-only change skips the expensive workflows.
 
 ## Licensing
 
-Configuration and orchestration are Apache 2.0. The vendored Earshot fork is GPL-2.0, the HOAST360 player is GPLv3, and the reference media clips are CC BY 4.0 with one documented exception. If a contribution mixes these, say so.
+Configuration and orchestration are Apache 2.0. The Earshot fork is GPL-2.0, the HOAST360 player is GPLv3, and the reference media clips are CC BY 4.0 with one documented exception. If a contribution mixes these, say so.

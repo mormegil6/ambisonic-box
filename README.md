@@ -80,7 +80,7 @@ docker compose config | grep FFMPEG_FLAGS
 |---|---|---|
 | `srt-gateway` | SRT contribution ingest for GUESTS (native OBS multitrack); joins 4x4 to 16-ch, republishes into the guest arbiter. Privilege-separated. The operator's own route runs a second instance, `srt-gateway-owner` on 8891/udp, written by `scripts/setup.sh`, which feeds earshot directly instead. See `SRT_ENABLED` / `GUEST_ENABLED` / `SRT_DIRECT` | 8890/udp |
 | `rtmp-ingest` | RTMP contribution ingest (legacy route); stream-key auth, relay to earshot | 1935 |
-| `earshot` | transcode to 16-ch Opus + video per `FFMPEG_FLAGS` (H.264 passthrough default, VP9 opt-in), live DASH segmenting ([vendored Envelop Earshot](services/earshot/README.md), patched) | 8081 (dev monitor) |
+| `earshot` | transcode to 16-ch Opus + video per `FFMPEG_FLAGS` (H.264 passthrough default, VP9 opt-in), live DASH segmenting ([Envelop Earshot](services/earshot/README.md), submodule of a fork) | 8081 (dev monitor) |
 | `loop-source` | demo contribution encoder: loops `content/demo.mp4` | - |
 | `hoast-player` | viewer origin: patched HOAST360 player + `/dash/` | 8080 |
 | `telemetry` | ops dashboard + breakage-only alerts + curated public status.json ([telemetry/](telemetry/README.md)) | 8090 (bind private) |
@@ -277,7 +277,7 @@ Compose files, service configs and scripts in this repository: **Apache 2.0**. T
 |---|---|
 | **Reference clips and media** shipped as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips): the `directions` and `colortones` clips, the 8K 360 test card, and the caption sidecars | **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** - reuse, remix and redistribute freely, including commercially, with attribution (one disclosed exception in [docs/VOD.md](docs/VOD.md#licence)) |
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
-| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (vendored in `services/earshot/src`, four documented local patches) | GPL |
+| [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (submodule at `services/earshot/src`, tracking [a fork](https://github.com/mormegil6/Earshot)) | GPL |
 | Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |

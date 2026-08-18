@@ -79,10 +79,10 @@ jobs:
             hoast-player.tags=ambi-box-hoast-player:latest
 
       # The four images this project actually controls are gated. earshot is
-      # scanned too but only reported: it is a vendored upstream fork whose
-      # webtools stage sits on node:12.22.1-alpine3.12, so it carries CVEs
-      # nobody can fix from here, and failing on them would train everyone to
-      # ignore this job.
+      # scanned too but only reported: its webtools stage sits on
+      # node:12.22.1-alpine3.12, so it carries CVEs nobody can fix from this
+      # repository (that tree lives in a submoduled fork, not here), and
+      # failing on them would train everyone to ignore this job.
       - name: scan the images we control
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -132,7 +132,7 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
 
-      - name: scan earshot (report only, vendored upstream)
+      - name: scan earshot (report only, submoduled fork)
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:

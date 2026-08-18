@@ -28,7 +28,7 @@ Examples of unacceptable behaviour:
 
 This Code of Conduct applies within all community spaces, which for this project means the GitHub repository: issues, pull requests, discussions and commit comments. It also applies when an individual is officially representing the project in public spaces.
 
-Note that `services/earshot/src` is a vendored copy of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) and `hoast360` is a separate repository. Conduct in those projects is governed by their own communities.
+Note that `services/earshot/src` and `hoast360` are both submodules pointing at separate repositories. Conduct in those projects is governed by their own communities.
 
 ## Enforcement
 
