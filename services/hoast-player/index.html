@@ -193,7 +193,7 @@
       <div id="overlay">
         <div id="topfill"></div>
         <div id="headers">
-          <span class="kicker" id="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order <abbr title="Higher-Order Ambisonics">HOA</abbr></span></span>
+          <span class="kicker" id="kicker">Live 360&deg; &middot; <span id="stKicker">3rd-order Ambisonics</span></span>
           <h1><span id="h1">Ambisonic Box</span></h1>
           <p id="hoast-text">A spatial-audio 360&deg; video stream: third-order Ambisonic sound (16 channels)
              rotated to follow your view and binauralized in real time, delivered live over MPEG-DASH.</p>
@@ -1097,14 +1097,21 @@
       (function(){
         function dur(s){ if(s==null) return "-"; var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+"d ":"")+(h?h+"h ":"")+m+"m"; }
         function set(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
-        // spatial_audio is server-generated from an integer channel count and a
-        // fixed ordinal-suffix lookup (see telemetry/collect.py) - never externally
-        // supplied text - so splicing in the <abbr> markup here is safe.
-        function setSpatial(id,t){
+        // Only the spec card abbreviates "Ambisonics" to "HOA" (its subtext line
+        // wraps otherwise; the kicker overlay has no such constraint and shows
+        // the full word). spatial_audio is server-generated from an integer
+        // channel count and a fixed ordinal-suffix lookup (see
+        // telemetry/collect.py) - never externally supplied text - so splicing
+        // in the <abbr> markup here is safe. "HOA" (Higher-Order Ambisonics)
+        // means order >= 2; 1st-order keeps the full word.
+        function setSpecSpatial(id,t){
           var e=document.getElementById(id); if(!e) return;
-          var m=/^(.*) HOA$/.exec(t||"");
-          if(m){ e.textContent=""; e.appendChild(document.createTextNode(m[1]+" ")); var a=document.createElement("abbr"); a.title="Higher-Order Ambisonics"; a.textContent="HOA"; e.appendChild(a); }
-          else { e.textContent=t; }
+          var m=/^(\d+)(st|nd|rd|th)-order Ambisonics$/.exec(t||"");
+          if(m && m[1]!=="1"){
+            e.textContent=""; e.appendChild(document.createTextNode(m[1]+m[2]+"-order "));
+            var a=document.createElement("abbr"); a.title="Higher-Order Ambisonics"; a.textContent="HOA";
+            e.appendChild(a);
+          } else { e.textContent=t; }
         }
         function poll(){
           fetch("/status/status.json?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
@@ -1130,9 +1137,9 @@
               set('stCh',s.audio_channels); set('stCh2',s.audio_channels);
               // Only a perfect-square channel count is a full ambisonic set, so
               // anything else drops the order claim and the ACN/SN3D note.
-              setSpatial('stSpatial', s.spatial_audio || "Channel-based");
+              setSpecSpatial('stSpatial', s.spatial_audio || "Channel-based");
               set('stConv', s.spatial_audio ? " · ACN/SN3D" : "");
-              setSpatial('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
+              set('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
             }
           }).catch(function(){ set('stViewers',"unavailable"); });
         }

@@ -2662,10 +2662,7 @@ def stream_format():
                     n = r - 1
                     suffix = {1: "st", 2: "nd", 3: "rd"}.get(n, "th")
                     out["ambisonic_order"] = n
-                    # "HOA" (Higher-Order Ambisonics) conventionally means order >= 2;
-                    # 1st-order (B-format) isn't "higher-order", so it keeps the full name.
-                    label = "Ambisonics" if n == 1 else "HOA"
-                    out["spatial_audio"] = f"{n}{suffix}-order {label}"
+                    out["spatial_audio"] = f"{n}{suffix}-order Ambisonics"
         return out
     except Exception:
         return out
