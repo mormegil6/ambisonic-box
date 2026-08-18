@@ -4,7 +4,7 @@ Bugs found while building this stack are reported to, and fixed in, the projects
 
 It exists for a practical reason as well as a tidy one. Work in this repository is spread across a vendored player, three patched npm packages, a forked media server and a browser bug or two, and without a single list it is genuinely easy to lose track of what has already been submitted and start drafting it twice.
 
-Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the links before quoting any of it.
+Status is as of 2026-08-18. Nothing here is auto-generated, so re-check the links before quoting any of it.
 
 ## Merged
 
@@ -32,6 +32,7 @@ Status is as of 2026-08-17. Nothing here is auto-generated, so re-check the link
 | thomasdeppisch/hoast360 | [#31](https://github.com/thomasdeppisch/hoast360/pull/31) | `HoastLoader.concatBuffers()` reads source channel 0 for every destination in a higher-order group, so 10 of 12 third-order filter channels load the wrong decoding filter. Measured in [aac-bitrate-test/RESULTS.md](../aac-bitrate-test/RESULTS.md) |
 | thomasdeppisch/hoast360 | [#32](https://github.com/thomasdeppisch/hoast360/pull/32) | Replace the Opus support probe, which tests `canPlayType('audio/ogg; codecs="opus"')` for a container this player never streams, with a real `decodeAudioData` probe that also names the Chrome field trial (`DirectOpusAudioDecoding`) behind one failure mode it distinguishes. Independent of #30 and #31 |
 | Dash-Industry-Forum/dash.js | [#5104](https://github.com/Dash-Industry-Forum/dash.js/pull/5104) | Guard three unguarded reads that crash on legitimate input: a `SegmentTimeline` that is absent or carries no `S` elements ([#3513](https://github.com/Dash-Industry-Forum/dash.js/issues/3513) and [#2708](https://github.com/Dash-Industry-Forum/dash.js/issues/2708) reported the class years ago, closed without a guard), and the ISOBMFF assumption in `BoxParser.getSamplesInfo` and the CEA-608 path, which WebM segments do not satisfy. Four unit tests, each failing on `development` without the change |
+| EnvelopSound/Earshot | [#70](https://github.com/EnvelopSound/Earshot/pull/70) | webtools: bump 13 dependencies to patched versions already inside their declared ranges (real CVEs/GHSAs per package, not a routine version chase). Caught two npm-registry-deprecated release traps (`lodash`/`lodash.template` 4.18.0) before they shipped as "fixes". Five packages from the same alert sweep deliberately excluded - each cascades into further version conflicts and needs its own PR |
 
 ## Reported to browsers
 
