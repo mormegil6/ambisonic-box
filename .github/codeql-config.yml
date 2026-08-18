@@ -1,13 +1,17 @@
 name: ambisonic-box CodeQL scope
 
 # Scope CodeQL to code this project can actually act on. Same rule the rest of
-# the automation uses: vendored upstream and the player submodule are read, not
-# maintained, here - alerts against them cannot be fixed in this repository and
-# would train everyone to ignore the Security tab.
+# the automation uses: submodule content is read, not maintained, here -
+# alerts against it cannot be fixed in this repository and would train
+# everyone to ignore the Security tab. This is belt-and-braces rather than
+# load-bearing: `git ls-files`-based tooling never descends into submodule
+# content regardless, and neither this workflow's checkout nor CodeQL's own
+# scan initializes submodules here - but an explicit ignore survives that
+# assumption changing later, which a silent absence would not.
 paths-ignore:
-  # vendored Envelop Earshot fork, including its 2020-era React webtools tree
+  # the Envelop Earshot fork (mormegil6/Earshot)
   - services/earshot/src
-  # the patched HOAST360 player is a separate repository (a submodule)
+  # the patched HOAST360 player (mormegil6/hoast360)
   - hoast360
   # generated/minified output, not sources
   - '**/dist'
