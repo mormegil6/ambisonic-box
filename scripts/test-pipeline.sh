@@ -396,28 +396,33 @@ log "chunks written: stream0=$chunks_v stream1=$chunks_a"
 # satisfies all of it. Order is the property the whole exercise exists to
 # protect - it is what ACN/SN3D means in practice - and the SRT harness has
 # asserted it while this one, which runs on every PR, did not.
-init_a="$OUTPUT_DIR/init-stream1.webm"
-chunk_a=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream1-*' -newer "$marker" \
+# The audio init segment's EXTENSION follows the container, which follows the
+# video codec: .webm on the VP9 path, .m4s under -dash_segment_type mp4 (the
+# H.264 passthrough default). Glob for it rather than naming one, so this check
+# does not silently stop finding it the next time the container changes - which
+# is exactly what it did when the passthrough path moved to fMP4.
+init_a=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'init-stream1.*' ! -name '*.tmp' | head -1)
+chunk_a=$(find "$OUTPUT_DIR" -maxdepth 1 -name 'chunk-stream1-*' ! -name '*.tmp' -newer "$marker" \
           | sort | tail -2 | head -1)
 if [ ! -f "$init_a" ] || [ -z "$chunk_a" ]; then
     fail "cannot check channel order: no init segment or no fresh audio chunk"
 fi
-cat "$init_a" "$chunk_a" > "$OUTPUT_DIR/.tone.webm"
+cat "$init_a" "$chunk_a" > "$OUTPUT_DIR/.tone.seg"
 # The earshot image's ffmpeg, not the host's: CI has none, and this is the same
 # fallback test-srt-ingest.sh and make-demo-loop.sh use.
 docker run --rm -v "$PWD/$OUTPUT_DIR:/o" --entrypoint ffmpeg ambi-box-earshot:local \
-    -v error -i /o/.tone.webm -ss 0.5 -t 1.5 -f s16le -c:a pcm_s16le - \
+    -v error -i /o/.tone.seg -ss 0.5 -t 1.5 -f s16le -c:a pcm_s16le - \
     > "$OUTPUT_DIR/.tone.pcm" 2>"$OUTPUT_DIR/.tone.err" || true
 if [ ! -s "$OUTPUT_DIR/.tone.pcm" ]; then
     head -3 "$OUTPUT_DIR/.tone.err" >&2 || true
-    rm -f "$OUTPUT_DIR/.tone.webm" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
+    rm -f "$OUTPUT_DIR/.tone.seg" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
     fail "could not decode the DASH audio to check channel order"
 fi
 set +e
 python3 scripts/check-tones.py 16 48000 200 100 2 < "$OUTPUT_DIR/.tone.pcm"
 tone_rc=$?
 set -e
-rm -f "$OUTPUT_DIR/.tone.webm" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
+rm -f "$OUTPUT_DIR/.tone.seg" "$OUTPUT_DIR/.tone.pcm" "$OUTPUT_DIR/.tone.err"
 case "$tone_rc" in
     0) log "channel order survived the RTMP path: all 16 tones in their own channels" ;;
     2) fail "decoded the WRONG STREAM, not an order fault: the audio checked was not this test's ladder" ;;

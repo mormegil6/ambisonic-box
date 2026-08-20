@@ -7,7 +7,9 @@
 # path - it cannot ingest a 16-channel live stream.
 #
 # The RTMP contribution leg is H.264 + 16-ch AAC (PCE) by protocol necessity;
-# VP9/Opus/WebM applies from earshot's transcode onward. See .env.example.
+# from earshot's transcode onward audio is always 16-ch Opus and the DASH
+# container follows the video codec: fMP4 .m4s for BOTH tracks under the
+# passthrough default, all-WebM under VP9. Never mixed. See .env.example.
 
 name: ambi-box
 
@@ -67,9 +69,14 @@ services:
       # Video codec policy (audio is always 16-ch Opus, hardcoded upstream).
       # Default: video passthrough. This is the configuration the deployment
       # actually runs and the one the thermal numbers were measured on (39 %
-      # CPU / 57.7 C on a 2012 quad-core test host). Video segments are then .m4s/.mp4
-      # while audio stays Opus/WebM; hoast-player already serves both
-      # (services/hoast-player/nginx.conf) and telemetry globs both.
+      # CPU / 57.7 C on a 2012 quad-core test host). -dash_segment_type mp4
+      # is part of that default: the segment container follows the video
+      # codec's native container and audio follows video, so a manifest is
+      # never mixed. Under passthrough BOTH tracks are fMP4 .m4s (video/mp4
+      # avc1 plus audio/mp4 opus, i.e. Opus in fMP4, not WebM); the VP9 line
+      # in .env.example pairs with -dash_segment_type webm and both tracks are
+      # WebM there. hoast-player serves either
+      # (services/hoast-player/nginx.conf) and telemetry globs either.
       # With no -g at this stage the GOP is whatever the contribution encoder
       # sends. -seg_duration 2 is LOAD-BEARING, not tuning: an earlier version
       # of this comment claimed that omitting it made segments follow the
@@ -102,7 +109,7 @@ services:
       # (README, .env.example, scripts/test-pipeline.sh) must reference or
       # derive from this line, never restate it - they drifted apart once
       # and the shipped stack failed its own test as a result.
-      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -seg_duration 2 -max_muxing_queue_size 1000 -c:v copy}
+      - FFMPEG_FLAGS=${FFMPEG_FLAGS:--window_size 100 -seg_duration 2 -max_muxing_queue_size 1000 -c:v copy -dash_segment_type mp4}
     volumes:
       # WIPED ON EVERY START. The entrypoint clears /opt/data/dash so a restart
       # begins a fresh DASH timeline (see services/earshot/README.md 2), and the

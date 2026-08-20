@@ -224,9 +224,13 @@ def segment_age():
     """Age of the freshest segment of the STALEST track.
 
     Globbing chunk-stream*.webm alone is wrong whenever the video is
-    stream-copied: ffmpeg's dash muxer writes H.264 as fragmented MP4
-    (chunk-stream0-*.m4s) and only the Opus audio stays WebM, so a *.webm glob
-    watches the audio and calls a stalled video encoder live. Taking the max
+    stream-copied: the segment container follows the video codec's native one
+    and audio follows video, so under -dash_segment_type mp4 ffmpeg's dash
+    muxer writes BOTH tracks as fragmented MP4 (chunk-stream0-*.m4s video,
+    chunk-stream1-*.m4s Opus-in-fMP4), and a *.webm glob matches nothing at
+    all: a live stream reads as offline and the stall alert can never fire.
+    VP9 puts both tracks back in WebM, which is why all three extensions get
+    swept. Taking the max
     across representations means either track going quiet marks the stream down.
     """
     newest = {}

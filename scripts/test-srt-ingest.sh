@@ -261,15 +261,17 @@ echo "[4/6] verifying 16-ch DASH output (manifest + per-channel tones)"
 SEGDEADLINE=60
 t0=$(date +%s)
 while :; do
-    INIT=output/init-stream1.webm
+    # Glob the extension: the container follows the video codec (.m4s under the
+    # committed -c:v copy + -dash_segment_type mp4 default, .webm under VP9).
+    INIT=$(find output -maxdepth 1 -name 'init-stream1.*' ! -name '*.tmp' | head -1)
     # -newer "$SEGMARK": only chunks this session produced. Without it the poll
     # matches the demo loop's leftovers on its first iteration and the whole
     # tone check runs against the wrong stream, reporting a channel-ORDER fault
     # for a perfectly good SRT session. That is what CI did on 2026-08-10, and
     # the giveaway in the log was "segments after 0s".
-    FRESH=$(find output -maxdepth 1 -name 'chunk-stream1-*.webm' -newer "$SEGMARK" 2>/dev/null | wc -l | tr -d ' ')
+    FRESH=$(find output -maxdepth 1 -name 'chunk-stream1-*' -newer "$SEGMARK" 2>/dev/null | wc -l | tr -d ' ')
     if [ -f "$INIT" ] && [ "$FRESH" -ge 2 ]; then
-        CHUNK=$(find output -maxdepth 1 -name 'chunk-stream1-*.webm' -newer "$SEGMARK" 2>/dev/null \
+        CHUNK=$(find output -maxdepth 1 -name 'chunk-stream1-*' -newer "$SEGMARK" 2>/dev/null \
                 | sort | tail -2 | head -1)
         break
     fi
@@ -284,13 +286,16 @@ MPD=$(ls output/*.mpd 2>/dev/null | head -1)
 [ -n "$MPD" ] || fail "no MPD in output/"
 grep -q 'AudioChannelConfiguration[^/]*value="16"' "$MPD" \
     || fail "manifest does not declare 16 audio channels"
-cat "$INIT" "$CHUNK" > "$WORK/dash-audio.webm"
+# Neutral extension: the segment container follows the video codec policy, so
+# this is fMP4 under the committed -c:v copy default and WebM under the VP9
+# opt-in. ffmpeg probes the content either way, so do not pin it back to .webm.
+cat "$INIT" "$CHUNK" > "$WORK/dash-audio.seg"
 
 # Decode to a file first, and assert it is non-empty, so a decode failure says
 # so instead of arriving at check-tones.py as an empty stream and being reported
 # as a channel-ORDER fault. That misdiagnosis is exactly what happened on
 # 2026-08-10 when this call still required a host ffmpeg.
-ff -v error -i "$FFW/dash-audio.webm" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - \
+ff -v error -i "$FFW/dash-audio.seg" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - \
     > "$WORK/dash.pcm" 2> "$WORK/decode.err" || true
 if [ ! -s "$WORK/dash.pcm" ]; then
     echo "  decoder said:" >&2

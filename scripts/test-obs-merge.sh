@@ -114,13 +114,17 @@ trap restore EXIT
 
 # newest completed audio chunk + its init segment; earshot names audio stream1
 sleep 2
-INIT=output/init-stream1.webm
-CHUNK=$(ls -t output/chunk-stream1-*.webm 2>/dev/null | head -2 | tail -1)
+# Glob the extension: the container follows the video codec (.m4s under the
+# committed -c:v copy + -dash_segment_type mp4 default, .webm under VP9).
+INIT=$(find output -maxdepth 1 -name 'init-stream1.*' ! -name '*.tmp' | head -1)
+CHUNK=$(find output -maxdepth 1 -name 'chunk-stream1-*' ! -name '*.tmp' | sort | tail -2 | head -1)
 [ -f "$INIT" ] && [ -n "$CHUNK" ] || fail "no DASH audio segments appeared in output/"
 grep -q 'AudioChannelConfiguration[^/]*value="16"' "output/${DASH_NAME}.mpd" \
     || fail "manifest does not declare 16 audio channels"
-cat "$INIT" "$CHUNK" > "$WORK/dash-audio.webm"
-ffmpeg -v error -i "$WORK/dash-audio.webm" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - 2>/dev/null \
+# no extension: the container follows FFMPEG_FLAGS (fMP4 under the committed
+# -c:v copy default, WebM under the VP9 opt-in), and ffmpeg probes by content
+cat "$INIT" "$CHUNK" > "$WORK/dash-audio"
+ffmpeg -v error -i "$WORK/dash-audio" -ss 0.2 -t 1.5 -f s16le -c:a pcm_s16le - 2>/dev/null \
     | python3 scripts/check-tones.py 16 \
     || fail "channel order did not survive the pipeline (DASH Opus output)"
 

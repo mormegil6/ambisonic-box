@@ -13,7 +13,13 @@
   document.addEventListener('DOMContentLoaded', attach); attach();
 
   var pad5 = function (n) { return String(n).padStart(5, '0'); };
-  var segUrl = function (n) { return '/dash/chunk-stream1-' + pad5(n) + '.webm'; };
+  // The DASH container follows the video codec: WebM on the VP9 path, fMP4
+  // (.m4s) under -dash_segment_type mp4, which is the committed default. This
+  // meter's timing readers below parse EBML, so it works on the WebM path only;
+  // ensureInit() checks that explicitly rather than letting the EBML scan run
+  // over fMP4 bytes and return a plausible-looking wrong number.
+  var SEG_EXT = '.webm';
+  var segUrl = function (n) { return '/dash/chunk-stream1-' + pad5(n) + SEG_EXT; };
   function videoEl() {
     return document.getElementById('hoast360-player_html5_api') || document.querySelector('video');
   }
@@ -71,7 +77,19 @@
 
   async function ensureInit() {
     if (initBuf) return;
-    initBuf = await fetch('/dash/init-stream1.webm', { cache: 'no-store' }).then(function (r) { return r.arrayBuffer(); });
+    var r = await fetch('/dash/init-stream1' + SEG_EXT, { cache: 'no-store' });
+    if (!r.ok) {
+      throw new Error('avmeter: no /dash/init-stream1' + SEG_EXT + ' (HTTP ' + r.status + '). '
+        + 'This meter reads EBML and needs the WebM path; the stack is probably running the '
+        + 'default -dash_segment_type mp4, whose segments are .m4s. Re-run against a VP9/WebM '
+        + 'deployment, or teach the readers below to parse mdhd/tfdt.');
+    }
+    initBuf = await r.arrayBuffer();
+    var magic = new Uint8Array(initBuf);
+    if (!(magic[0] === 0x1A && magic[1] === 0x45 && magic[2] === 0xDF && magic[3] === 0xA3)) {
+      throw new Error('avmeter: init segment is not EBML/WebM, so the timecode readers below '
+        + 'would scan fMP4 bytes and return a wrong offset rather than fail. Aborting.');
+    }
     tcScale = timecodeScale(initBuf);
   }
 

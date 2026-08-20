@@ -87,7 +87,11 @@ function render(out) {
   add('Stereo Opus (control)', p.opus2.ok, decDetail(p.opus2));
   add('16-channel Opus, 3rd order', p.opus16.ok, decDetail(p.opus16));
   add('25-channel Opus, 4th order', p.opus25.ok, decDetail(p.opus25));
-  add('Streaming support (MSE, WebM Opus)', p.mse.webmOpus === true,
+  // Either container passes: which one the live stream ships is set by
+  // FFMPEG_FLAGS (H.264 passthrough -> Opus-in-fMP4, VP9 -> Opus-in-WebM),
+  // and this page has no way to know which one is running.
+  add('Streaming support (MSE, Opus in WebM or fMP4)',
+      p.mse.webmOpus === true || p.mse.mp4Opus === true,
       'MediaSource: ' + p.mse.present + ' | audio/webm opus: ' + p.mse.webmOpus +
       ' | audio/mp4 opus: ' + p.mse.mp4Opus);
   // Info, not pass/fail: MMS is a Safari-only API and is EXPECTED to be
@@ -102,13 +106,16 @@ function render(out) {
 
   var v = document.getElementById('verdict');
   var canDecode = p.opus16.ok;
-  var canStream = p.mse.webmOpus === true || p.managedMediaSource.webmOpus === true;
+  // Either container counts: the committed default path serves Opus-in-fMP4
+  // (-c:v copy plus -dash_segment_type mp4), the VP9 path serves Opus-in-WebM.
+  var canStream = p.mse.webmOpus === true || p.mse.mp4Opus === true ||
+                  p.managedMediaSource.webmOpus === true || p.managedMediaSource.mp4Opus === true;
   if (canDecode && canStream) {
     v.className = 'verdict ok';
     v.textContent = 'This browser can play the stream: 16-channel Opus decodes and streaming is supported.';
   } else if (canDecode) {
     v.className = 'verdict ok';
-    v.textContent = '16-channel Opus decodes here, but streaming (MSE/MMS with WebM Opus) is not available, so the live player will not run yet.';
+    v.textContent = '16-channel Opus decodes here, but streaming (MSE/MMS with Opus in fMP4 or WebM) is not available, so the live player will not run yet.';
   } else {
     v.className = 'verdict bad';
     v.textContent = 'This browser cannot decode the stream’s 16-channel Opus audio.';
