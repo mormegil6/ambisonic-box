@@ -313,7 +313,7 @@ This repository is the containerised successor of the toolchain described in the
 - atkAudio, [its OBS plugin](https://obsproject.com/forum/resources/atkaudio-plugin.2099/), which is what gets ASIO into OBS on Windows
 - [Shaka project](https://github.com/shaka-project), Shaka Packager
 - [AmbisonicEnergyRenderer](https://github.com/mormegil6/AmbisonicEnergyRenderer), which renders the directional-energy overlay in the `directions` clip from the raw ACN/SN3D signal (spherical-harmonic decode onto a t-design, k-NN inverse-distance gridding, streamed straight into ffmpeg)
-- Gdańsk University of Technology, [Department of Multimedia Systems](https://multimed.org/index_en.html)
+- Gdańsk University of Technology, [Department of Multimedia Systems](https://multimed.org/index_en.html), which hosts this deployment and provides its public network access
 
 ## Contact
 
