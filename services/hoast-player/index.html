@@ -390,7 +390,17 @@
         } catch (e) {}
       }
     </script>
-    <script src="/dist/hoast360.bundle.js?v=2026-08-16c"></script>
+    <!-- ?v= MUST match hoast360.js's BUILD_TAG, and MUST be bumped in the same
+         commit as any bundle rebuild. /dist/ is served by the catch-all location
+         below, which sets no Cache-Control, so browsers fall back to HEURISTIC
+         freshness and may serve a stale bundle without ever revalidating - this
+         string is the only thing that forces a re-fetch. It was missed for rf23
+         (bundle said rf23, this still said 2026-08-16c) and the deploy reached
+         returning visitors only because their browsers happened to revalidate.
+         Naming it after BUILD_TAG rather than a date makes the two impossible to
+         drift apart, and the on-screen badge then tells you which bundle a
+         browser is really running. -->
+    <script src="/dist/hoast360.bundle.js?v=rf23"></script>
     <script>
         var hoast360 = new HOAST360();
 
