@@ -112,7 +112,7 @@ Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the sam
 |---|---|---|
 | Sender | stock OBS, macOS or Windows | OBS Music Edition, Windows only |
 | Audio | one 4-channel track (1st order) or four (3rd order), detected from the stream | one AAC track, 4 or 16 channels, passed straight through (a single track, so there is nothing to detect) |
-| Endpoint | `srt://<box>:8891?streamid=owner&passphrase=…` | `rtmp://<box>:1935/owner`, stream key `RTMP_OWNER_KEY` |
+| Endpoint | `srt://<box>:8891?streamid=owner&passphrase=…` | `rtmp://<box>:1935/owner?token=<RTMP_OWNER_KEY>`, any stream key |
 
 Run `./scripts/setup.sh` first (`.\setup.cmd` on Windows). It generates your own key and passphrase and **prints the full SRT URL with the passphrase already filled in** - paste that rather than retyping it. Lost it? `docker compose exec srt-gateway-owner printenv SRT_OWNER_PASSPHRASE`.
 
