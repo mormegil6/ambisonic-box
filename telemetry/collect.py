@@ -2089,8 +2089,44 @@ def _ingest_owner_name():
     return None
 
 
-def owner_notify(name_arg):
+# Compose's default bridge ranges for this stack. Only used to decide whether
+# an RTMP owner publish stayed inside the box; a deployment on custom networks
+# would fall through and alert, which is the safe direction for a reminder to
+# rotate a credential - a spurious nudge costs a moment, a missed one leaves a
+# cleartext key spent and unrotated.
+_DOCKER_NETS = tuple(ipaddress.ip_network(n) for n in ("172.17.0.0/16",
+                                                      "172.18.0.0/16"))
+
+
+def _rtmp_key_left_the_box(addr):
+    """Did this RTMP publisher's address sit outside the docker network - i.e.
+    did RTMP_OWNER_KEY cross a wire somebody else could listen on?
+
+    Deliberately NOT the `is_private` test used for viewer counting. The campus
+    LAN is RFC1918 and is emphatically not a network this operator controls, so
+    a publish from there HAS spent the key in front of strangers and must
+    nudge. Only loopback and the compose bridges are treated as inside."""
+    try:
+        a = ipaddress.ip_address(addr)
+    except ValueError:
+        return True                      # unparseable: nudge rather than skip
+    if a.is_loopback:
+        return False
+    return not any(a in net for net in _DOCKER_NETS)
+
+
+def owner_notify(name_arg, addr=None):
     """/rtmp/owner/notify: a publish just passed the key check at rtmp-ingest.
+
+    addr is the publisher's address, forwarded by nginx only on the RTMP path
+    (the SRT direct path reaches this through gw_claim and passes none). It
+    exists for ONE reason: RTMP carries the owner key in cleartext, so a
+    publish that crossed a network has spent the key in front of every hop on
+    the way, and the operator should rotate it afterwards. SRT never does -
+    its passphrase is libsrt's AES key and stays on the machine - so an SRT
+    session must not raise this. Neither must the SRT gateway's own republish
+    under SRT_DIRECT=0, which does use RTMP with the token but only over the
+    docker network, hence the internal-address check rather than a flag.
     Three cases:
       - no name forwarded (an older nginx template): the legacy behavior,
         an unconditional preempt-at-takeover
@@ -2153,6 +2189,22 @@ def owner_notify(name_arg):
         with _start_lock:
             source_stop("owner handover", kill_after_s=3)
     threading.Thread(target=_handover, daemon=True).start()
+    # KEY-SPENT ALERT, once per session (this tail runs only on a fresh latch;
+    # reconnects and the direct path's keepalive return above). RTMP has no
+    # TLS, so this publish put RTMP_OWNER_KEY on the wire in cleartext for
+    # every hop between the publisher and this box to read. Rotating
+    # afterwards is the whole mitigation, and the thing most likely to defeat
+    # it is simply forgetting - so the box says so at the moment it happens
+    # rather than relying on the operator to remember days later.
+    if addr and _rtmp_key_left_the_box(addr):
+        telegram(f"🔑 owner published over RTMP from {addr} as '{name_arg}'.\n"
+                 f"RTMP sends RTMP_OWNER_KEY in CLEARTEXT - it has now been "
+                 f"exposed to every hop on that path. Rotate it when this "
+                 f"session ends:\n"
+                 f"  ssh box; cd ~/ambi-box\n"
+                 f"  sed -i \"s|^RTMP_OWNER_KEY=.*|RTMP_OWNER_KEY=$(openssl rand -hex 24)|\" .env\n"
+                 f"  docker compose up -d\n"
+                 f"(SRT does not need this - its passphrase never leaves your machine.)")
     return True
 
 
@@ -3344,7 +3396,8 @@ def serve():
                 return self._json(404, {"error": "not found"})
             if p == "/rtmp/owner/notify":
                 args = urllib.parse.parse_qs(q)
-                owner_notify((args.get("name") or [None])[0])
+                owner_notify((args.get("name") or [None])[0],
+                             (args.get("addr") or [None])[0])
                 return self._json(200, {})
             if p == "/rtmp/owner/done":
                 args = urllib.parse.parse_qs(q)

@@ -183,8 +183,13 @@ http {
             set $arbiter http://telemetry:8090;
             # the name rides along so telemetry can tell the demo loop's own
             # publish (name = DASH_NAME) apart from an EXTERNAL owner;
-            # only the name, never the token, so nothing secret leaves here
-            proxy_pass $arbiter/rtmp/owner/notify?name=$arg_name;
+            # only the name and the publisher's address, never the token, so
+            # nothing secret leaves here. addr is what lets telemetry tell an
+            # RTMP publish that crossed a network from the SRT gateway's own
+            # internal republish under SRT_DIRECT=0 - the first spends the
+            # key over the wire and should prompt a rotation, the second
+            # never leaves the docker network and must not nag.
+            proxy_pass $arbiter/rtmp/owner/notify?name=$arg_name&addr=$arg_addr;
             proxy_read_timeout 3s;
             proxy_intercept_errors on;
             error_page 500 502 503 504 = @owner_authed_fallback;
