@@ -1142,6 +1142,19 @@
             // Spec tiles track the manifest, so a stream of a different ambisonic
             // order or codec pointed at this server describes itself correctly.
             if(s.video_codec) set('stCodec',"360° "+s.video_codec);
+            // Delivery container follows the video codec, the same rule the
+            // encoder applies (H.264 passthrough is packaged as fMP4, VP9 as
+            // WebM), so derive it instead of hardcoding one. A fixed label is
+            // how this card came to claim WebM while the stream was all-fMP4.
+            // Only the literals below are interpolated, never s.video_codec.
+            if(s.video_codec){
+              var vcu=String(s.video_codec).toUpperCase(), cont="";
+              if(vcu.indexOf("VP9")>=0||vcu.indexOf("VP8")>=0) cont="WebM";
+              else if(vcu.indexOf("H.264")>=0||vcu.indexOf("H264")>=0||vcu.indexOf("AVC")>=0||
+                      vcu.indexOf("H.265")>=0||vcu.indexOf("HEVC")>=0) cont="fMP4";
+              var delEl=document.getElementById('stDelivery');
+              if(delEl) delEl.innerHTML='MPEG-DASH <small>live'+(cont?", "+cont:"")+'</small>';
+            }
             if(s.audio_codec) set('stACodec',s.audio_codec);
             if(s.audio_channels){
               set('stCh',s.audio_channels); set('stCh2',s.audio_channels);
