@@ -50,5 +50,5 @@ Not started. Rough shape of the remaining work, in roughly ascending cost:
 
 ## Status
 
-Parked, not scheduled. Nothing is blocked on it: it is not on the v1.0 critical path, and it does not gate the public-announcement decision, which only waits on the beta test or an operator judgement call. It exists at all because a mixed-container bug report from an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)) led to measuring what Safari could and could not decode, not from any request for iOS support. Revisit if that changes.
+Parked, not scheduled. It exists at all because a mixed-container bug report from an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)) led to measuring what Safari could and could not decode, not from any request for iOS support. Nothing about the live stream depends on it. Revisit if that changes.
 
