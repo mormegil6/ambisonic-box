@@ -1,5 +1,9 @@
 # Chrome: multichannel Opus fails to decode (DirectOpusAudioDecoding)
 
+**STATUS 2026-08-21: FIXED UPSTREAM, NOT YET IN ANY RELEASE.** Chromium CL [8266681](https://chromium-review.googlesource.com/c/chromium/src/+/8266681) landed on `main` at position 1683608 on 2026-08-21, marked `Fixed: 547065816`. It repairs the channel-mapping logic in `OpusAudioDecoder` and adds regression tests. It missed the M153 branch point (2026-08-17) by four days, so the first release expected to carry it is **M154, stable 2026-09-22**. Stable Chrome 151 was measured still broken on 2026-08-21.
+
+RETIREMENT TEST, so this page does not outlive the bug: re-run the one-click check below on Chrome M154 or later. If the 16-channel row passes with no flags, delete this document and the workaround it describes. The player's own capability gate needs no change either way, because it probes rather than checking version numbers.
+
 If the player told you that your browser cannot decode multichannel audio and pointed you here, this page explains what is happening and how to fix it.
 
 Short version: it is not your machine, not the stream, and not a missing codec. Chrome is rolling out an experimental audio decoder that breaks Opus above 2 channels. Launching Chrome once with a flag restores it.
@@ -37,6 +41,9 @@ Because this player carries 16-channel Ambisonic audio, that means no audio at a
 This is a browser bug. Nothing in the page can work around it, because feature flags are set in the browser process at launch and a web page cannot read or change them.
 
 ## Why it is easy to misdiagnose
+
+**NOT EVERY multichannel-Opus failure is this bug, and we got that wrong once.** On 2026-08-21 a tester reported the failure on a PICO 4 headset, and it was initially attributed to this field trial. The device's `chrome://version` settled it: **Chromium 105.0.5195.68**, a 2022 build that predates `DirectOpusAudioDecoding` entirely, so the cause there is something else (an old or vendor-restricted Chromium whose multichannel Opus support is simply absent or limited). The symptom is identical from the outside, which is exactly why the version matters. Ask for `chrome://version` before concluding anything: on Chrome 151 through 153 this field trial is the likely cause, and on an old embedded Chromium it cannot be.
+
 
 Every obvious isolation step fails to isolate it, which is worth knowing before you spend an evening on it:
 
