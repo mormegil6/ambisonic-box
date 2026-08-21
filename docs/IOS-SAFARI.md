@@ -50,5 +50,5 @@ Not started. Rough shape of the remaining work, in roughly ascending cost:
 
 ## Status
 
-Not implemented; this document records what has been measured. It started from a mixed-container bug report by an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)), not a request for iOS support.
+Not implemented; this document records what has been measured. Requested directly, in the same week two related Opus problems surfaced: a mixed-container stutter fixed upstream ([EnvelopSound/Earshot#81](https://github.com/EnvelopSound/Earshot/pull/81)), and a Chrome regression breaking multichannel decode above 2 channels ([Chromium 547065816](https://issues.chromium.org/issues/547065816)); both are catalogued in [docs/UPSTREAM.md](UPSTREAM.md). Neither caused this investigation: Safari's gap, described here, is a structural limitation rather than a regression.
 
