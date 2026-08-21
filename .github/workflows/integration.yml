@@ -134,6 +134,11 @@ jobs:
     env:
       GUEST_ENABLED: '1'    # both suites drive the guest route
       SRT_ENABLED: '1'
+      # The SRT suite's kill-based cases arm the operator-kill cooldown on
+      # the slot (its own closing note says so). At the shipped 300 s the
+      # republish leg below would wait five minutes for a claimable slot;
+      # the suite asserts nothing about the duration, so CI shortens it.
+      GUEST_COOLDOWN_S: '2'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -192,12 +197,14 @@ jobs:
         # a finished session does not free the slot, it starts a grace
         # window.
         run: |
-          for _ in $(seq 1 75); do
-            curl -s --max-time 3 http://localhost:8090/api/live | grep -q '"state": "free"' && break
-            sleep 2
-          done
-          curl -s --max-time 3 http://localhost:8090/api/live | grep -q '"state": "free"' \
-            || { echo "::error::guest slot never freed after the first leg"; exit 1; }
+          # Free is NOT the readiness signal: a reconnect grace or an
+          # operator-kill cooldown can still be armed on a free slot (both
+          # halves of this bit the first runs of this step). Claimable means
+          # state free AND no cooldown_s in the answer.
+          ready() { r=$(curl -s --max-time 3 http://localhost:8090/api/live); \
+                    echo "$r" | grep -q '"state": "free"' && ! echo "$r" | grep -q '"cooldown_s"'; }
+          for _ in $(seq 1 75); do ready && break; sleep 2; done
+          ready || { echo "::error::guest slot never became claimable after the first leg"; exit 1; }
           GUEST_SRT_DIRECT=0 docker compose up -d srt-gateway
           ./scripts/test-srt-ingest.sh
           docker compose up -d srt-gateway   # back to the shipped default
