@@ -1,0 +1,178 @@
+name: ghcr-publish
+
+# Publishes every image the stack builds to ghcr.io, both linux/amd64 and
+# linux/arm64 - the Pi 4 is a first-class target, and a pre-built image should
+# not be amd64-only when the project's whole pitch includes Raspberry Pi.
+#
+# Gated to tag pushes (plus manual dispatch), NOT every push to main: unlike
+# arm64.yml, this one does not skip earshot. QEMU-emulating its ffmpeg-from-
+# source compile for arm64 is measured in hours (see arm64.yml's own comment),
+# and that cost is deliberately paid here, on a release cadence, rather than
+# on every commit.
+#
+# Tags and OCI labels come from docker/metadata-action rather than hand-rolled
+# bash, specifically to avoid inventing tag logic that quietly drifts from the
+# well-tested standard. Version tags and `latest` move only on an actual tag
+# PUSH event: a manual dispatch publishes under `manual-<sha>` alone, even
+# when dispatched against a tag ref (which is why the conditions key off
+# event_name, not ref_type - ref_type reads 'tag' for both).
+#
+# ONE-TIME STEP AFTER THE FIRST PUBLISH, and nothing in this file can do it:
+# GHCR creates a personal account's packages PRIVATE on first push, whatever
+# the repo's visibility, so each of the five packages must be flipped to
+# Public once in its own package Settings. Until then this workflow goes
+# green while an anonymous `docker pull` gets an auth error.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/ambisonic-box
+
+jobs:
+  publish:
+    name: publish (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    # 360 IS the hosted-runner hard ceiling, not a margin under it: no real
+    # end-to-end timing of the emulated earshot compile exists yet, so the
+    # first tag (or a dispatch run before it) doubles as that measurement.
+    # If it lands anywhere near the cap, the options are a native arm64
+    # runner or splitting the two platform legs into separate jobs.
+    timeout-minutes: ${{ matrix.service == 'earshot' && 360 || 90 }}
+    # Queue rather than cancel: two tags pushed close together must both
+    # publish, in order, not race each other on one cache scope - and a
+    # half-done publish should never be killed by the next one starting.
+    concurrency:
+      group: ghcr-publish-${{ matrix.service }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: rtmp-ingest
+            context: ./services/rtmp-ingest
+          - service: telemetry
+            context: ./telemetry
+          - service: srt-gateway
+            context: ./services/srt-gateway
+          - service: hoast-player
+            context: .
+            dockerfile: services/hoast-player/Dockerfile
+          - service: earshot
+            context: ./services/earshot/src
+            # Redistributable by default, same as docker-compose.yml's own
+            # default (ENABLE_NONFREE=0) - a published image is public, so
+            # this is not optional here the way a local build's choice is.
+            build-args: |
+              ENABLE_NONFREE=0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # hoast-player's context is the repo root and needs the patched
+          # player, which is a submodule
+          submodules: recursive
+
+      - name: reclaim runner disk
+        if: matrix.service == 'earshot'
+        # A dual-arch from-source ffmpeg build with mode=max caching is a
+        # known way to fill the ~14 GB a hosted runner has free; these
+        # preinstalled toolchains are ~25 GB this job will never touch.
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=tag,enable=${{ github.event_name == 'push' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+            type=sha,prefix=manual-,enable=${{ github.event_name != 'push' }}
+
+      - name: build both platforms (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile || format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: ${{ matrix.build-args || '' }}
+          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=ghcr-${{ matrix.service }}
+
+      # Two gaps the next three steps close, both caught in review: a plain
+      # pull-and-run on an amd64 runner silently checks only the amd64 leg of
+      # a multi-arch manifest, and checking after `push: true` means a
+      # failing image had already been public for the whole gap. So: load
+      # each platform's image out of the build cache (cache hit, near-free;
+      # the loads stay inside the action because a raw `docker buildx build
+      # --cache-from type=gha` in a run step has no runtime token and cannot
+      # reach the cache), run each actual ffmpeg binary - the arm64 one under
+      # the same QEMU that built it - and only push once both pass.
+      - name: load amd64 image for verification
+        if: matrix.service == 'earshot'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/amd64
+          load: true
+          tags: verify-amd64
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
+
+      - name: load arm64 image for verification
+        if: matrix.service == 'earshot'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/arm64
+          load: true
+          tags: verify-arm64
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
+
+      - name: earshot is a redistributable build, BOTH architectures, BEFORE anything is published
+        if: matrix.service == 'earshot'
+        run: |
+          for platform in linux/amd64 linux/arm64; do
+            tag="verify-${platform##*/}"
+            if docker run --rm --platform "$platform" --entrypoint sh "$tag" -c \
+                 'ffmpeg -hide_banner -buildconf 2>&1 | grep -q -- --enable-nonfree'; then
+              echo "::error::earshot ($platform) was built with --enable-nonfree; not publishing"
+              exit 1
+            fi
+            echo "earshot ($platform) ffmpeg is nonfree-free"
+          done
+
+      - name: push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile || format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: ${{ matrix.build-args || '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
