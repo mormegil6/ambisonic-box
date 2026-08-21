@@ -35,6 +35,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad \
         ffmpeg ca-certificates \
+    # Same reason as telemetry/Dockerfile: a Debian security fix can be
+    # published and installable days before it reaches the base image, and the
+    # CVE gate fails on it meanwhile. On 2026-08-21 that was util-linux
+    # 2.41.5-0+deb13u1 against a base still shipping 2.41-5. Costs build
+    # reproducibility, which is the trade taken knowingly.
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -r -u 900 -s /usr/sbin/nologin gateway
