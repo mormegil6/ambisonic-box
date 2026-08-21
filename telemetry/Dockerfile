@@ -12,6 +12,15 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends docker-ce-cli \
  && apt-get purge -y gnupg && apt-get autoremove -y \
+ # Take whatever security updates the base image has not picked up yet. The
+ # base is rebuilt on its own schedule, so a Debian fix can be published and
+ # installable days before it appears in python:*-slim: on 2026-08-21 three
+ # util-linux mount(8) CVEs were fixed in 2.41.5-0+deb13u1 while the base
+ # still shipped 2.41-5, and `security` went red on a docs-only commit for it.
+ # Upgrading here closes that window instead of waiting on the base or waiving
+ # the finding. It costs build reproducibility, which is the honest trade: a
+ # rebuild picks up whatever is current rather than pinning to a known set.
+ && apt-get upgrade -y \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
