@@ -1704,6 +1704,14 @@ def guest_publish(name, addr):
         return 403
     print(f"guest publishing: {name} from {addr}"
           + (" (reconnect)" if resumed_session else ""), flush=True)
+    # LIVE ALERT, once per session (mirrors owner_notify's "once per fresh
+    # latch, not reconnects" rule): a reconnect within grace is the same
+    # session continuing, and alerting on every one would turn a flaky
+    # uplink into a buzz storm. Deliberately no security framing here, unlike
+    # the owner RTMP-key alert next to this function - the guest app holds no
+    # comparable secret to warn about, this is purely "someone is live".
+    if not resumed_session:
+        telegram(f"guest stream '{name}' is live: from {addr}")
     _guest_stall_arm()
     _refresh_pub_endpoint()
     return 201
