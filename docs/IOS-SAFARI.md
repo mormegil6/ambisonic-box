@@ -45,10 +45,10 @@ Not started. Rough shape of the remaining work, in roughly ascending cost:
 - DeviceOrientation permission gating on iOS: small, well-understood pattern (a `requestPermission()` call tied to the existing play gesture).
 - A continuous decode loop instead of "decode five known chunks once": a real piece of work, partially reusable from the segment-parsing code already written for this investigation.
 - **Decouple Safari's audio from dash.js's MSE pipeline**, since dash.js expects to own and append both tracks: new code, likely by intercepting its fragment-loaded events and diverting audio bytes to the WASM decoder instead of letting them reach MSE.
-- **Drift-lock the WASM audio clock against the video element's own clock**: the highest-risk piece, because it is a new synchronisation surface on exactly the subsystem that has already cost this project the most (the rf9 desync investigation, empty-edit-list handling, `wait_key`/`wait_video`). Comparable prior work in this repo (guest direct-to-DASH) was estimated at 2-3 owner-direct days; sync-adjacent work here has a track record of costing more than its first estimate.
+- **Drift-lock the WASM audio clock against the video element's own clock**: the highest-risk piece, because it is a new synchronisation surface on exactly the subsystem that has already produced this project's most expensive bugs (an earlier A/V desync investigation, and separately an MSE empty-edit-list handling gap). Comparable prior work in this repo (the guest direct-to-DASH feature) was originally estimated at 2-3 days and cost more once built; sync work here has a track record of running over its first estimate.
 - Its own verification harness, since nothing in this stack ships unproven: partially reusable from today's Chromium-vs-Safari validation pattern.
 
 ## Status
 
-Parked, not scheduled. It exists at all because a mixed-container bug report from an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)) led to measuring what Safari could and could not decode, not from any request for iOS support. Nothing about the live stream depends on it. Revisit if that changes.
+Not implemented; this document records what has been measured. It started from a mixed-container bug report by an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)), not a request for iOS support.
 
