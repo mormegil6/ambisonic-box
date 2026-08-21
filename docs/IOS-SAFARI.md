@@ -52,4 +52,3 @@ Not started. Rough shape of the remaining work, in roughly ascending cost:
 
 Parked, not scheduled. Nothing is blocked on it: it is not on the v1.0 critical path, and it does not gate the public-announcement decision, which only waits on the beta test or an operator judgement call. It exists at all because a mixed-container bug report from an external tester (see [docs/UPSTREAM.md](UPSTREAM.md)) led to measuring what Safari could and could not decode, not from any request for iOS support. Revisit if that changes.
 
-Raw tester reports and the day-by-day findings live in the private deployment repo (`ios-test-results/`, `docs/PLAN.md`); this file is the durable public summary.
