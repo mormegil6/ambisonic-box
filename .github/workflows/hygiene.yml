@@ -59,6 +59,15 @@ jobs:
         run: |
           python3 - <<'PY'
           import sys, yaml, pathlib
+          # The compose spec defines two YAML tags for override files, `!reset`
+          # and `!override` (docker-compose.pull.yml uses the first to drop
+          # build sections). PyYAML's safe loader rejects unknown tags, so
+          # teach it exactly these two rather than ignoring tags wholesale -
+          # a typoed or hostile tag should still fail the parse.
+          for t in ('!reset', '!override'):
+              yaml.SafeLoader.add_constructor(
+                  t, lambda loader, node: loader.construct_scalar(node)
+                     if isinstance(node, yaml.ScalarNode) else None)
           bad = 0
           for p in list(pathlib.Path('.').rglob('*.yml')) + list(pathlib.Path('.').rglob('*.yaml')):
               if '.git' in p.parts or 'hoast360' in p.parts:
