@@ -82,6 +82,15 @@ if [ "$RELEASE" -eq 1 ]; then
     sed -e "s|^version: .*|version: \"$NEW\"|" \
         -e "s|^date-released: .*|date-released: \"$TODAY\"|" \
         "$CFF_FILE" > "$CFF_FILE.tmp"
+    # The image tag a fresh install pins (scripts/setup.sh PIN_TAG). Releases
+    # only: a -dev version has no published images to point at.
+    SETUP_FILE="scripts/setup.sh"
+    sed -e "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"v$NEW\"|" "$SETUP_FILE" > "$SETUP_FILE.tmp" \
+        && mv "$SETUP_FILE.tmp" "$SETUP_FILE" && chmod +x "$SETUP_FILE"
+    grep -q "^PIN_TAG=\"v$NEW\"" "$SETUP_FILE" || {
+        echo "failed: $SETUP_FILE has no PIN_TAG line to rewrite" >&2
+        exit 1
+    }
 else
     CFF_NOTE="version (date-released left on the last release)"
     sed -e "s|^version: .*|version: \"$NEW\"|" "$CFF_FILE" > "$CFF_FILE.tmp"
@@ -96,6 +105,7 @@ grep -q "^version: \"$NEW\"\$" "$CFF_FILE" || {
 echo "$OLD -> $NEW"
 echo "  $VERSION_FILE"
 echo "  $CFF_FILE: $CFF_NOTE"
+[ "$RELEASE" -eq 1 ] && echo "  scripts/setup.sh: PIN_TAG=v$NEW"
 echo
 
 if [ "$RELEASE" -eq 1 ]; then

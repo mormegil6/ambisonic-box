@@ -168,6 +168,18 @@ jobs:
       - name: test-srt-ingest.sh (a real SRT push, end to end)
         run: ./scripts/test-srt-ingest.sh
 
+      - name: test-srt-ingest.sh on the republish fallback (GUEST_SRT_DIRECT=0)
+        # The shipped default is the direct route (since 2026-08-21, when the
+        # first real third-party session ran it end to end). The republish
+        # fallback keeps coverage here because it is the only route that
+        # interpolates the guest's name into the relay URL, so its sanitiser
+        # must stay exercised even though no default runs it. The suite reads
+        # the gateway's own mode and prints which route it proved.
+        run: |
+          GUEST_SRT_DIRECT=0 docker compose up -d srt-gateway
+          ./scripts/test-srt-ingest.sh
+          docker compose up -d srt-gateway   # back to the shipped default
+
       - name: diagnostics on failure
         if: failure()
         run: |

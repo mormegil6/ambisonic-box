@@ -39,7 +39,7 @@ These scripts run on the maintainer's macOS machine as well as in CI, and macOS 
 
 ## What CI will check
 
-Five workflows, described in [docs/CI.md](docs/CI.md). The ones most likely to surprise a first contribution:
+Five workflows, described in [docs/CI.md](../docs/CI.md). The ones most likely to surprise a first contribution:
 
 - **shell, python and yaml must parse**, and `shellcheck` must be clean at error level.
 - **Retired identifiers must not come back.** A rename in 2026 left stragglers behind three manual sweeps, so a gate now refuses them. It matches uses rather than mentions, so writing about an old name in a comment is fine.
@@ -52,7 +52,7 @@ A docs-only change skips the expensive workflows.
 ## Things that are not ours to change
 
 - **`services/earshot/src`** and **`hoast360/`** are both submodules - the first a fork of [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (GPL-2.0), the second a fork of the HOAST360 player. Fixes go in the fork, not here: a PR against this repo can only bump the pinned commit, never edit source inside either directory. If upstream is unresponsive and a fix cannot wait, it lives in the fork, deliberately and recorded there.
-- Check [docs/UPSTREAM.md](docs/UPSTREAM.md) first. It lists what has already been reported or fixed upstream, in Earshot, HOAST360, and their dependencies, so you do not duplicate work that is already merged, open, or waiting on something outside this repo.
+- Check [docs/UPSTREAM.md](../docs/UPSTREAM.md) first. It lists what has already been reported or fixed upstream, in Earshot, HOAST360, and their dependencies, so you do not duplicate work that is already merged, open, or waiting on something outside this repo.
 
 ## Style
 

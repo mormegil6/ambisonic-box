@@ -8,7 +8,7 @@
 
 So: where does measurable degradation actually begin on this material, and where does 96 sit relative to it?
 
-**What this cannot answer.** This is an objective metric, not a listening test. It can say where AMBIQUAL detects degradation; it cannot establish transparency, which is a subjective ABX threshold. Read it as bounding the question, not closing it.
+**What this cannot answer.** This is an objective metric, not a listening test: it says where the models detect degradation, nothing more. Read it as bounding the question, not closing it.
 
 ## Method
 

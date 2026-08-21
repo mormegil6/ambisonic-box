@@ -502,16 +502,17 @@ services:
       # SRT_OWNER_PASSPHRASE, so the two can never share a value by accident.
       - SRT_GUEST_PASSPHRASE=${SRT_GUEST_PASSPHRASE:-}
       - GUEST_GW_SECRET=${GUEST_GW_SECRET:-}
-      # Direct-to-DASH for GUESTS. Default OFF, unlike the owner route: a
-      # guest is an untrusted stranger, so this only turns on where the
-      # operator has decided the whole session protocol is in place -
-      # telemetry authenticates every claim/beat/done, and earshot's listener
-      # refuses any connection that is not a gateway. With it off, guests take
-      # the RTMP hop exactly as before and nothing here is reachable.
+      # Direct-to-DASH for GUESTS, default ON like the owner route since
+      # 2026-08-21, when the first real third-party session ran it end to
+      # end. Admission is unchanged either way: telemetry authenticates every
+      # claim/beat/done, and earshot's listener refuses any connection that
+      # is not a gateway. GUEST_SRT_DIRECT=0 falls back to the RTMP republish
+      # hop - the older kill path (nginx refuses the next ping) and the one
+      # that shows the publisher in rtmp-ingest's stat page.
       # Requires GUEST_GW_SECRET (the routes fail closed without it) and
       # SRT_DIRECT_LISTENERS=1 on earshot, or the claim succeeds and the dial
       # then hits a port nothing is listening on.
-      - SRT_DIRECT=${GUEST_SRT_DIRECT:-0}
+      - SRT_DIRECT=${GUEST_SRT_DIRECT:-1}
       - XDG_CACHE_HOME=/tmp
     ports:
       # public-intent binding, so it must live in the BASE file: compose

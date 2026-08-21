@@ -7,7 +7,7 @@ body:
       value: |
         Every field here exists because it is something I would otherwise have to ask for, and each round trip costs a day. If you do not know an answer, say so and send it anyway.
 
-        **Do not report a security problem here.** See [SECURITY.md](../blob/main/SECURITY.md).
+        **Do not report a security problem here.** See [SECURITY.md](../blob/main/.github/SECURITY.md).
 
   - type: textarea
     id: what

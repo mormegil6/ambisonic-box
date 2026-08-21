@@ -1,8 +1,8 @@
 name: hygiene
 
 # Fast checks, no image builds. Every one of these guards a mistake this
-# project has actually made - see the CI section of the deployment repo's
-# PLAN.md for which incident each traces back to.
+# project has actually made; docs/CI.md records which incident each
+# traces back to.
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
           done < <(git ls-files '*.sh')
           exit $fail
 
-      - name: shellcheck (errors only for now; tighten later)
+      - name: shellcheck (errors fail, warnings shown)
         run: |
           shellcheck --version
           # services/earshot/src is a submodule now (mormegil6/Earshot fork,
@@ -100,22 +100,13 @@ jobs:
 
       - name: every PULLED image reference actually exists in a registry
         run: |
-          # This step used to check that each service had `build` or `image`,
-          # which `docker compose config --quiet` above already rejects - so it
-          # could not fail, and its name promised a registry check it never
-          # made. It also enumerated only the active profile, so it never saw
-          # shaka's pinned packager at all. Renamed and rewritten to do the
-          # thing it claimed, using the imagetools idiom this file already uses
-          # for the arm64 gate.
-          #
           # Only PULLED images are checked: a service with a `build` section is
           # proven by the build workflow, and its `image:` is just the local tag
           # that build writes. What is left is genuinely third-party and can
           # disappear from a registry without anything here noticing.
           set -u
           fail=0
-          # COMPOSE_PROFILES so the tools-profile services are included; the
-          # previous version's blind spot.
+          # COMPOSE_PROFILES so the tools-profile services (shaka) are included.
           refs=$(COMPOSE_PROFILES=tools docker compose config --format json \
                    | python3 -c '
           import json, sys
@@ -123,7 +114,6 @@ jobs:
           # Tags this repo BUILDS. loop-source reuses earshot`s image with no
           # build section of its own, so "no build key" alone would send a
           # local-only tag to a registry lookup and fail on a healthy repo.
-          # Caught exactly that way while testing this step.
           built = {s["image"] for s in cfg.values() if s.get("build") and s.get("image")}
           for name, svc in cfg.items():
               img = svc.get("image")
@@ -409,7 +399,7 @@ jobs:
               major = 0
           if major >= 1:
               for path, bad, why in [
-                  ("SECURITY.md", "Pre-1.0", "the project is no longer pre-1.0"),
+                  (".github/SECURITY.md", "Pre-1.0", "the project is no longer pre-1.0"),
                   ("README.md",   "pre-release", "the project is no longer a pre-release"),
               ]:
                   f = pathlib.Path(path)

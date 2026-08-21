@@ -1,26 +1,22 @@
 # Run the stack from the pre-built multi-arch images on ghcr.io instead of
 # building locally. This skips the expensive part of a first run - earshot's
-# ffmpeg-from-source compile, which a Raspberry Pi 4 measures in hours - and
-# is the fastest way to a working stack:
+# ffmpeg-from-source compile, which a Raspberry Pi 4 measures in hours.
+#
+# This is the DEFAULT: scripts/setup.sh writes COMPOSE_FILE and AMBI_BOX_TAG
+# into a fresh .env, so plain `docker compose up -d` uses this file with the
+# images of a pinned release. Without setup, the manual form is
 #
 #     docker compose -f docker-compose.yml -f docker-compose.pull.yml up -d
 #
-# or persistently, in .env (add docker-compose.override.yml to the list if
-# your deployment has one - an explicit COMPOSE_FILE list disables its
-# automatic loading):
+# which follows `latest` unless AMBI_BOX_TAG is set. Images are published for
+# linux/amd64 and linux/arm64 by .github/workflows/ghcr-publish.yml on every
+# version tag, with each architecture's ffmpeg verified GPL-clean before
+# anything is pushed.
 #
-#     COMPOSE_FILE=docker-compose.yml:docker-compose.pull.yml
-#
-# AMBI_BOX_TAG pins a release (e.g. AMBI_BOX_TAG=v1.0.0); it follows `latest`
-# when unset. Images are published for linux/amd64 and linux/arm64 by
-# .github/workflows/ghcr-publish.yml on every version tag, with each
-# architecture's ffmpeg verified GPL-clean before anything is pushed.
-#
-# The srt-gateway-owner service that scripts/setup.sh writes into
-# docker-compose.override.yml is not covered here (this file must not create
-# the service for deployments that do not run it). It keeps building locally,
-# which is a small image - or point its `image:` at the same
-# ghcr.io/mormegil6/ambisonic-box/srt-gateway image and drop its `build:`.
+# The srt-gateway-owner service is not covered here (this file must not
+# create the service for deployments that do not run it); setup writes it
+# into docker-compose.override.yml pointing at the published srt-gateway
+# image, so nothing builds in pull mode.
 services:
   earshot:
     image: ghcr.io/mormegil6/ambisonic-box/earshot:${AMBI_BOX_TAG:-latest}

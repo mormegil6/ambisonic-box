@@ -57,7 +57,12 @@ jobs:
           # refs on GitLab that do not exist here, and would try to push every
           # dependabot/* branch into the university instance for no reason.
           git push gitlab "HEAD:refs/heads/main"
-          git push gitlab --tags
+          # --force on tags, deliberately: GitHub is the source of truth, so a
+          # tag that moved here must move on the mirror too. Without it a
+          # re-cut tag wedges every later mirror run with "already exists"
+          # (tags never fast-forward), which is exactly what the v1.0.0
+          # re-tag did on release day. Branch pushes stay unforced.
+          git push gitlab --force --tags
           echo "mirrored $(git rev-parse --short HEAD) to git.pg.edu.pl"
 
       - name: verify the two now agree

@@ -6,9 +6,8 @@ name: ghcr-publish
 #
 # Gated to tag pushes (plus manual dispatch), NOT every push to main: unlike
 # arm64.yml, this one does not skip earshot. QEMU-emulating its ffmpeg-from-
-# source compile for arm64 is measured in hours (see arm64.yml's own comment),
-# and that cost is deliberately paid here, on a release cadence, rather than
-# on every commit.
+# source compile for arm64 cost 1h27m cold on 2026-08-21, and that cost is
+# deliberately paid here, on a release cadence, rather than on every commit.
 #
 # Tags and OCI labels come from docker/metadata-action rather than hand-rolled
 # bash, specifically to avoid inventing tag logic that quietly drifts from the
@@ -17,11 +16,12 @@ name: ghcr-publish
 # when dispatched against a tag ref (which is why the conditions key off
 # event_name, not ref_type - ref_type reads 'tag' for both).
 #
-# ONE-TIME STEP AFTER THE FIRST PUBLISH, and nothing in this file can do it:
-# GHCR creates a personal account's packages PRIVATE on first push, whatever
-# the repo's visibility, so each of the five packages must be flipped to
-# Public once in its own package Settings. Until then this workflow goes
-# green while an anonymous `docker pull` gets an auth error.
+# Package visibility: the five packages were created PUBLIC on first push
+# (2026-08-21), inheriting the repo's visibility. If GHCR ever creates a
+# new one private instead - documented behaviour for some account types -
+# the flip to Public is manual, in that package's own Settings; this
+# workflow goes green either way while an anonymous `docker pull` would
+# get an auth error.
 
 on:
   push:
@@ -40,11 +40,11 @@ jobs:
   publish:
     name: publish (${{ matrix.service }})
     runs-on: ubuntu-latest
-    # 360 IS the hosted-runner hard ceiling, not a margin under it: no real
-    # end-to-end timing of the emulated earshot compile exists yet, so the
-    # first tag (or a dispatch run before it) doubles as that measurement.
-    # If it lands anywhere near the cap, the options are a native arm64
-    # runner or splitting the two platform legs into separate jobs.
+    # 360 IS the hosted-runner hard ceiling, not a margin under it. Measured
+    # 2026-08-21, cold cache: the dual-arch earshot job took 1h27m, about a
+    # quarter of the cap. If that ever drifts near the ceiling, the options
+    # are a native arm64 runner or splitting the platform legs into
+    # separate jobs.
     timeout-minutes: ${{ matrix.service == 'earshot' && 360 || 90 }}
     # Queue rather than cancel: two tags pushed close together must both
     # publish, in order, not race each other on one cache scope - and a
@@ -119,7 +119,7 @@ jobs:
           cache-from: type=gha,scope=ghcr-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=ghcr-${{ matrix.service }}
 
-      # Two gaps the next three steps close, both caught in review: a plain
+      # Two gaps the next three steps close: a plain
       # pull-and-run on an amd64 runner silently checks only the amd64 leg of
       # a multi-arch manifest, and checking after `push: true` means a
       # failing image had already been public for the whole gap. So: load

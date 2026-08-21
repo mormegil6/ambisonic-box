@@ -6,7 +6,7 @@ Every address the stack exposes, what serves it, and whether it is meant to be p
 
 A fair question to ask before `docker compose up`, and the honest answer has two halves.
 
-**Nothing of yours is visible to anyone else.** The player, the operations dashboard and the earshot monitor all bind to `127.0.0.1` only, so nothing outside your own machine can watch, and the stack makes no outbound connection to publish anywhere. Making a demo public is a separate, deliberate act: a reverse proxy or a tunnel you set up yourself.
+**Nothing of yours is visible to anyone else.** The player, the operations dashboard and the Earshot monitor all bind to `127.0.0.1` only, so nothing outside your own machine can watch, and the stack makes no outbound connection to publish anywhere. Making a demo public is a separate, deliberate act: a reverse proxy or a tunnel you set up yourself.
 
 **Three ports do listen on all interfaces**, and it is better to know than to be reassured: `1935/tcp` (RTMP contribution), `8890/udp` (SRT), and `8891/udp` if you ran `scripts/setup.sh`, which writes the owner route. Those are INBOUND - they exist so that you, or a guest you have deliberately enabled, can send a stream IN. Each one is gated: `rtmp-ingest` refuses to start at all while its keys are the placeholders committed to the repository, the owner SRT route is useless without your passphrase, and the guest port admits nobody unless you set `GUEST_ENABLED=1`. They are reachable from your LAN, and from the internet only if you forward them yourself.
 
