@@ -175,7 +175,19 @@ jobs:
         # interpolates the guest's name into the relay URL, so its sanitiser
         # must stay exercised even though no default runs it. The suite reads
         # the gateway's own mode and prints which route it proved.
+        # The first leg's caller holds the slot through the reconnect grace
+        # after it disconnects (a natural stop arms no cooldown, unlike a
+        # kill, which would arm 300 s), so wait for telemetry to report the
+        # slot free before the second claim. This is the documented trap:
+        # a finished session does not free the slot, it starts a grace
+        # window.
         run: |
+          for _ in $(seq 1 75); do
+            curl -s --max-time 3 http://localhost:8090/api/live | grep -q '"state": "free"' && break
+            sleep 2
+          done
+          curl -s --max-time 3 http://localhost:8090/api/live | grep -q '"state": "free"' \
+            || { echo "::error::guest slot never freed after the first leg"; exit 1; }
           GUEST_SRT_DIRECT=0 docker compose up -d srt-gateway
           ./scripts/test-srt-ingest.sh
           docker compose up -d srt-gateway   # back to the shipped default
