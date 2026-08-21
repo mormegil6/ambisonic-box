@@ -1,0 +1,42 @@
+# Run the stack from the pre-built multi-arch images on ghcr.io instead of
+# building locally. This skips the expensive part of a first run - earshot's
+# ffmpeg-from-source compile, which a Raspberry Pi 4 measures in hours - and
+# is the fastest way to a working stack:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.pull.yml up -d
+#
+# or persistently, in .env (add docker-compose.override.yml to the list if
+# your deployment has one - an explicit COMPOSE_FILE list disables its
+# automatic loading):
+#
+#     COMPOSE_FILE=docker-compose.yml:docker-compose.pull.yml
+#
+# AMBI_BOX_TAG pins a release (e.g. AMBI_BOX_TAG=v1.0.0); it follows `latest`
+# when unset. Images are published for linux/amd64 and linux/arm64 by
+# .github/workflows/ghcr-publish.yml on every version tag, with each
+# architecture's ffmpeg verified GPL-clean before anything is pushed.
+#
+# The srt-gateway-owner service that scripts/setup.sh writes into
+# docker-compose.override.yml is not covered here (this file must not create
+# the service for deployments that do not run it). It keeps building locally,
+# which is a small image - or point its `image:` at the same
+# ghcr.io/mormegil6/ambisonic-box/srt-gateway image and drop its `build:`.
+services:
+  earshot:
+    image: ghcr.io/mormegil6/ambisonic-box/earshot:${AMBI_BOX_TAG:-latest}
+    build: !reset null
+  loop-source:
+    # reuses the earshot image, same as the base file
+    image: ghcr.io/mormegil6/ambisonic-box/earshot:${AMBI_BOX_TAG:-latest}
+  rtmp-ingest:
+    image: ghcr.io/mormegil6/ambisonic-box/rtmp-ingest:${AMBI_BOX_TAG:-latest}
+    build: !reset null
+  hoast-player:
+    image: ghcr.io/mormegil6/ambisonic-box/hoast-player:${AMBI_BOX_TAG:-latest}
+    build: !reset null
+  telemetry:
+    image: ghcr.io/mormegil6/ambisonic-box/telemetry:${AMBI_BOX_TAG:-latest}
+    build: !reset null
+  srt-gateway:
+    image: ghcr.io/mormegil6/ambisonic-box/srt-gateway:${AMBI_BOX_TAG:-latest}
+    build: !reset null

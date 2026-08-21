@@ -47,6 +47,22 @@ Every port the stack opens, and which are meant to be public, is in [docs/ENDPOI
 
 If setup or the first `docker compose up` fails, the exact error strings are in [Troubleshooting](#troubleshooting).
 
+### Pre-built images: skip the build entirely
+
+Every release publishes all the stack's images to ghcr.io for linux/amd64 and linux/arm64, with each architecture's ffmpeg verified GPL-clean before anything is pushed. Pulling them replaces the `--build` in the quick start, and with it the expensive part of a first run: earshot compiles ffmpeg from source, which a Raspberry Pi 4 measures in hours.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.pull.yml up -d
+```
+
+To make that the default so plain `docker compose up -d` keeps using it, add one line to `.env` (append `:docker-compose.override.yml` to the list if your deployment has one; naming files explicitly turns off its automatic loading):
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.pull.yml
+```
+
+`AMBI_BOX_TAG` in `.env` pins a release (`AMBI_BOX_TAG=v1.0.0`); unset, it follows `latest`. The `srt-gateway-owner` service that setup writes into the override keeps building locally - it is a small image - or point its `image:` at the published `srt-gateway` image and drop its `build:` block. Verified end to end the way everything here is: the full pipeline check ([`scripts/test-pipeline.sh`](scripts/test-pipeline.sh)) passes on a stack running entirely from the published arm64 images.
+
 ## Requirements
 
 - Docker Engine with the compose plugin (`docker compose`), buildx for multi-arch builds
