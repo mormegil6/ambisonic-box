@@ -16,7 +16,7 @@ A Meta Quest 3's own Chromium-based browser decodes this stream, 16 and 25 chann
 
 ## What works instead, measured on real hardware
 
-**Chosen: WASM decode of the stream this stack already serves.** `opus-decoder` (github.com/eshaz/wasm-audio-decoders), built from source rather than its published bundle, which [silently discards its own multichannel options](https://github.com/eshaz/wasm-audio-decoders/issues/129) when minified. One stateful decoder fed the live DASH segments directly:
+**Chosen: WASM decode of the stream this stack already serves.** [`opus-decoder`](https://github.com/eshaz/wasm-audio-decoders), built from source rather than its published bundle, which [silently discards its own multichannel options](https://github.com/eshaz/wasm-audio-decoders/issues/129) when minified. One stateful decoder fed the live DASH segments directly:
 
 | | macOS Safari 27 | iPhone Safari (iOS 26.6) |
 |---|---|---|
