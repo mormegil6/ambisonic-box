@@ -1373,6 +1373,9 @@ def _guest_end_locked(reason):
     """Caller holds _guest_lock. Returns to free and logs; resuming the loop is
     the caller's job AFTER releasing the lock (source_start probes docker)."""
     _guest_log(reason)
+    name = _guest.get("name")
+    start = _guest.get("start")
+    dur = round(time.time() - start) if start else 0
     if _guest_timer[0]:
         _guest_timer[0].cancel(); _guest_timer[0] = None
     # forced endings arm the cooldown; a natural stop (grace expiry) does
@@ -1404,6 +1407,18 @@ def _guest_end_locked(reason):
     _resume_flag[0] = True
     print(f"guest session ended ({reason})"
           + (f"; cooldown {GUEST_COOLDOWN_S}s" if cooldown else ""), flush=True)
+    # ENDED ALERT, only for the two reasons the operator could not already know
+    # about. "operator kill" and the owner-preempt reason are the operator's
+    # own action (they clicked End, or they just went live themselves); the
+    # stall reason already sent its own telegram() the moment it was detected,
+    # in _guest_stall_arm, so alerting again here would double-send for that
+    # one session. That leaves a natural stop (nobody reconnected within grace)
+    # and hitting the absolute session cap, both of which happen unattended.
+    if reason == "grace expired":
+        telegram(f"guest stream '{name}' ended after {dur_short(dur)}")
+    elif reason == "session cap":
+        telegram(f"guest stream '{name}' ended after {dur_short(dur)}: "
+                 f"hit the {round(GUEST_MAX_S / 3600, 1)}h session limit")
 
 
 _direct_fence = [False]     # a direct session ended; its writer may still live

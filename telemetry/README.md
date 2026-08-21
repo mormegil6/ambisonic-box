@@ -10,7 +10,7 @@ Operations monitoring for the HOA 360° stack, shipped as a compose service so a
 
 Telegram ships as the default because it needs the least: create a bot, set `BOT_TOKEN`/`CHAT_ID`, done - no account approval, no daemon, one HTTPS POST. Unset either variable and nothing is sent or contacted.
 
-If you would rather not use it, swapping is deliberately small: `telegram()` in `collect.py` is 19 lines with four call sites, and it only ever needs to turn a string into one outbound request. The constraint to respect is that this service is **stdlib only** (see the Dockerfile), so a replacement should be reachable with `urllib` or `smtplib` rather than a vendor SDK. These are all straightforward\*:
+If you would rather not use it, swapping is deliberately small: `telegram()` in `collect.py` is under 60 lines across seven call sites, and it only ever needs to turn a string into one outbound request. The constraint to respect is that this service is **stdlib only** (see the Dockerfile), so a replacement should be reachable with `urllib` or `smtplib` rather than a vendor SDK. These are all straightforward\*:
 
 | Instead of Telegram | Why |
 |---|---|
