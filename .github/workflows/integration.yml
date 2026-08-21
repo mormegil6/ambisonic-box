@@ -54,6 +54,11 @@ jobs:
           # so CI has to behave like a real install. Generating a key here also
           # means the happy path of that guard is exercised on every run.
           ./scripts/setup.sh
+          # CI tests the TREE: strip the pull-mode lines setup writes into a
+          # fresh .env, or the images baked in this job are ignored in favour
+          # of the published release. The defaults job keeps them on purpose,
+          # because its subject IS the shipped first-run experience.
+          sed -i '/^COMPOSE_FILE=/d; /^AMBI_BOX_TAG=/d' .env
           # prove the guard's precondition rather than assuming setup.sh did it
           grep -qE '^RTMP_OWNER_KEY=(CHANGE_ME_this_default_is_public|hoast_demo_owner)?$' .env \
             && { echo "::error::setup.sh left a placeholder owner key"; exit 1; }
@@ -141,6 +146,11 @@ jobs:
           # also generates GUEST_GW_SECRET, which the direct path's
           # /gw/session/* routes fail closed without
           ./scripts/setup.sh
+          # CI tests the TREE: strip the pull-mode lines setup writes into a
+          # fresh .env, or the images baked in this job are ignored in favour
+          # of the published release. The defaults job keeps them on purpose,
+          # because its subject IS the shipped first-run experience.
+          sed -i '/^COMPOSE_FILE=/d; /^AMBI_BOX_TAG=/d' .env
           grep -q '^GUEST_GW_SECRET=' .env \
             || { echo "::error::setup.sh did not generate GUEST_GW_SECRET"; exit 1; }
 
@@ -273,7 +283,13 @@ jobs:
       - uses: docker/setup-buildx-action@v4
 
       - name: generate a real .env
-        run: ./scripts/setup.sh
+        run: |
+          ./scripts/setup.sh
+          # CI tests the TREE: strip the pull-mode lines setup writes into a
+          # fresh .env, or the images baked in this job are ignored in favour
+          # of the published release. The defaults job keeps them on purpose,
+          # because its subject IS the shipped first-run experience.
+          sed -i '/^COMPOSE_FILE=/d; /^AMBI_BOX_TAG=/d' .env
 
       - name: build images
         uses: docker/bake-action@v7
