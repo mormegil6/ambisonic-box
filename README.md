@@ -52,7 +52,15 @@ If setup or the first `docker compose up` fails, the exact error strings are in 
 
 Every release publishes all the stack's images to ghcr.io for linux/amd64 and linux/arm64, with each architecture's ffmpeg verified GPL-clean before anything is pushed. This is what the quick start runs on, and what spares a first run the expensive part: the `earshot` service compiles ffmpeg from source, which a Raspberry Pi 4 measures in hours.
 
-Setup makes this the default: it writes two lines into a fresh `.env` - `COMPOSE_FILE`, which tells every compose command to use [docker-compose.pull.yml](docker-compose.pull.yml) without `-f` flags, and `AMBI_BOX_TAG`, which pins the release the images come from. There is no separate pull step: `docker compose up -d` fetches whatever images it is missing before starting the containers. Upgrading to a newer release is editing that tag and running `docker compose pull && docker compose up -d`. Without setup (say, a hand-made `.env`), the same thing is one `-f` pair per command: `docker compose -f docker-compose.yml -f docker-compose.pull.yml up -d`, which follows `latest` unless `AMBI_BOX_TAG` says otherwise. Verified end to end: the full pipeline check ([`scripts/test-pipeline.sh`](scripts/test-pipeline.sh)) passes on a stack running entirely from the published arm64 images.
+Setup makes this the default by writing three lines into a fresh `.env`:
+
+```
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.pull.yml
+AMBI_BOX_TAG=v1.0.0
+```
+
+`COMPOSE_FILE` tells every compose command to use [docker-compose.pull.yml](docker-compose.pull.yml) without `-f` flags, `AMBI_BOX_TAG` pins the release the images come from, and the separator line makes the colon-separated list work on Windows too, which otherwise splits it on semicolons. There is no separate pull step: `docker compose up -d` fetches whatever images it is missing before starting the containers. Upgrading to a newer release is editing that tag and running `docker compose pull && docker compose up -d`. Without setup (say, a hand-made `.env`), the same thing is one `-f` pair per command: `docker compose -f docker-compose.yml -f docker-compose.pull.yml up -d`, which follows `latest` unless `AMBI_BOX_TAG` says otherwise. Verified end to end: the full pipeline check ([`scripts/test-pipeline.sh`](scripts/test-pipeline.sh)) passes on a stack running entirely from the published arm64 images.
 
 ### Building from source (for development)
 
@@ -200,7 +208,7 @@ Generation, packaging, the 360 test card and its projection check, captions, hea
 | `GUEST_ENABLED` | `0` | The keyless guest test endpoint. Off means the `guest` application does not exist. |
 | `VOD_ENABLED` | `0` | On-demand clips. Off by default: the stack's purpose is live. |
 
-**Setting up without [`scripts/setup.sh`](scripts/setup.sh).** Copy [`.env.example`](.env.example) to `.env` and set `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` to any random strings of about 30 letters and digits. A hand-made `.env` has no `COMPOSE_FILE` line, so plain `docker compose up -d` builds from source - run `git submodule update --init` first (the player bakes into its image), or add the line from [The pre-built images in detail](#the-pre-built-images-in-detail) to pull instead. This skips the owner SRT route on UDP 8891; to get that too, copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and set `SRT_OWNER_PASSPHRASE`. Running setup is still the easier path, because it prints the SRT URL with your passphrase already in it.
+**Setting up without [`scripts/setup.sh`](scripts/setup.sh).** Copy [`.env.example`](.env.example) to `.env` and set `RTMP_OWNER_KEY` and `LOOP_SOURCE_KEY` to any random strings of about 30 letters and digits. A hand-made `.env` has no `COMPOSE_FILE` line, so plain `docker compose up -d` builds from source - run `git submodule update --init` first (the player bakes into its image), or add the three lines from [The pre-built images in detail](#the-pre-built-images-in-detail) to pull instead. This skips the owner SRT route on UDP 8891; to get that too, copy [docker-compose.override.yml.example](docker-compose.override.yml.example) and set `SRT_OWNER_PASSPHRASE`. Running setup is still the easier path, because it prints the SRT URL with your passphrase already in it.
 
 Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, hardcoded upstream in Earshot) and the live-edge distance. The `earshot` image build patches ffmpeg's DASH muxer to floor `suggestedPresentationDelay` at 30 s (`DASH_SPD_FLOOR` build arg), so players join ~30 s behind the live edge by design. That is the price of gap-free playback of a 16-channel live stream.
 
