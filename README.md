@@ -257,6 +257,7 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
 - [docs/UPSTREAM.md](docs/UPSTREAM.md): bugs this stack found and sent back to the projects they belong to, merged and open, plus the ones still prepared and unsent
 - [docs/CHROME-MULTICHANNEL-OPUS.md](docs/CHROME-MULTICHANNEL-OPUS.md): a Chrome experiment that breaks every Opus decode above 2 channels, why the usual isolation steps do not find it, and the one-flag workaround
+- [docs/IOS-SAFARI.md](docs/IOS-SAFARI.md): Safari and iOS refuse this stream's multichannel Opus entirely, a WASM fallback proven on real hardware instead, and what wiring it into the live player would cost
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
 - [docs/architecture/README.md](docs/architecture/README.md): the source for the data-flow diagram at the top of this README, and how to regenerate it
