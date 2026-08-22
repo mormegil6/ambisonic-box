@@ -29,7 +29,7 @@ Raspberry Pi OS 13 (trixie), 64-bit, kernel `6.18.34+rpt-rpi-v8`.
 
 Both are fixed in the tree rather than worked around locally, so a fresh clone hits neither. They are recorded because both fail in ways that do not name their cause.
 
-- **yarn's default network timeout is too short for this host's install speed.** It reports a network fault that is not one. Fixed upstream in Earshot [#61](https://github.com/EnvelopSound/Earshot/pull/61), so any current Earshot build has it; the measurements behind the one-flag fix are in the comment above `RUN yarn --network-timeout 600000` in [services/earshot/src/Dockerfile](../services/earshot/src/Dockerfile).
+- **yarn's default network timeout is too short for this host's install speed.** It reports a network fault that is not one. Fixed upstream in Earshot [#61](https://github.com/EnvelopSound/Earshot/pull/61), so any current Earshot build has it; the measurements behind the one-flag fix are in the comment above `RUN yarn --network-timeout 600000` in [the earshot `Dockerfile`](https://github.com/mormegil6/Earshot/blob/master/Dockerfile).
 - **nginx-rtmp's exec path can inherit an unbounded file-descriptor limit** from some hosts' containerd config, which silently stalls the transcoder for minutes before it ever starts. Fixed by the `ulimits` block on the `earshot` service in [docker-compose.yml](../docker-compose.yml), where the mechanism is written out in full.
 
 Neither is arm64-specific in principle; the Pi is simply where a slow enough host and an unusual enough containerd default surfaced them.
