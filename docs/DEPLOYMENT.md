@@ -16,7 +16,7 @@ Raspberry Pi OS 13 (trixie), 64-bit, kernel `6.18.34+rpt-rpi-v8`.
 
 | Measure | Result |
 |---|---|
-| earshot CPU | steady 32-34 % |
+| `earshot` CPU | steady 32-34 % |
 | Temperature | 54.5-65.7 C |
 | Official case fan | cycled at 70 % duty, held that ceiling |
 | `vcgencmd get_throttled` | clean throughout |
@@ -29,7 +29,7 @@ Raspberry Pi OS 13 (trixie), 64-bit, kernel `6.18.34+rpt-rpi-v8`.
 
 Both are fixed in the tree rather than worked around locally, so a fresh clone hits neither. They are recorded because both fail in ways that do not name their cause.
 
-- **yarn's default network timeout is too short for this host's install speed.** It reports a network fault that is not one. See [services/earshot/README.md](../services/earshot/README.md) section 9.
+- **yarn's default network timeout is too short for this host's install speed.** It reports a network fault that is not one. Fixed upstream in Earshot [#61](https://github.com/EnvelopSound/Earshot/pull/61), so any current Earshot build has it; the measurements behind the one-flag fix are in the comment above `RUN yarn --network-timeout 600000` in [services/earshot/src/Dockerfile](../services/earshot/src/Dockerfile).
 - **nginx-rtmp's exec path can inherit an unbounded file-descriptor limit** from some hosts' containerd config, which silently stalls the transcoder for minutes before it ever starts. Fixed by the `ulimits` block on the `earshot` service in [docker-compose.yml](../docker-compose.yml), where the mechanism is written out in full.
 
 Neither is arm64-specific in principle; the Pi is simply where a slow enough host and an unusual enough containerd default surfaced them.
@@ -46,18 +46,18 @@ If you front the player with a CDN, its default rules probably do NOT cache the 
 
 A single cache rule fixes it. On Cloudflare, a Cache Rule matching the segment paths - `URI Path starts with /dash/chunk-` and `URI Path starts with /dash/init-` - set to Eligible for cache with an Edge TTL of ~120 s that ignores the origin's cache-control, makes the edge serve every viewer after the first from cache. Matching on the path prefix rather than the extension keeps the rule correct under either container policy: all `.m4s` on the committed passthrough default, all `.webm` if you switch to VP9. Verified off-box: an init segment returns `cf-cache-status: MISS` once, then `HIT` for everyone after.
 
-**Two things the rule must never grow to cover.** The manifest (`*.mpd`) MUST stay dynamic and uncached: this stack counts viewers by manifest polls reaching the origin, and the same polls are the heartbeat that keeps the on-demand loop awake, so an edge-cached manifest blinds the dashboard and can let the demo idle out under a live audience. And there is nothing to gain from caching `/vod-dash/` this way - the on-demand path has its own object-storage answer below.
+**Two things the rule must never grow to cover.** The manifest (`*.mpd`) MUST stay dynamic and uncached: this stack counts viewers by manifest polls reaching the origin, and the same polls are the heartbeat that keeps the on-demand loop awake, so an edge-cached manifest blinds the dashboard and can let the demo idle out under a live audience. And there is nothing to gain from caching `/vod-dash/` this way - the on-demand path has its own object-storage answer in [docs/VOD.md](VOD.md#optional-serving-vod-from-object-storage).
 
 **Check your CDN's terms first, same as for VOD.** Serving the segments from your box origin through a CDN edge is closer to "delivering large non-Cloudflare-hosted video through the proxy" than uncached passthrough was - the pattern [Cloudflare's terms](https://blog.cloudflare.com/updated-tos) restrict. A research demo with a handful of viewers is not what that enforcement is for, but the profile scales with your audience, and unlike VOD there is no free Cloudflare-hosted origin for a live stream the way R2 is for VOD. Worth knowing before an announcement, not a reason to avoid the rule at demo scale.
 
 ## Per-host overrides
 
-Deployment-specific settings live in `docker-compose.override.yml`, which Compose loads automatically and which is gitignored. Copy [docker-compose.override.yml.example](../docker-compose.override.yml.example) and adjust. The base stack runs without it.
+Deployment-specific settings live in `docker-compose.override.yml`, which is gitignored and always loaded: automatically when no `COMPOSE_FILE` is set, and as part of the list `scripts/setup.sh` writes otherwise. Copy [docker-compose.override.yml.example](../docker-compose.override.yml.example) and adjust. The base stack runs without it.
 
 Typical contents:
 
 - bind the private dashboard (`:8090`) to a private or VPN address rather than loopback
-- mount host CPU-temp and disk paths for the telemetry service
+- mount host CPU-temp and disk paths for the `telemetry` service
 - Telegram tokens (better in `.env`, which is also gitignored)
 - a branded landing page
 - the `srt-gateway-owner` block, if you narrow the owner route's bind or want it on a VPN address only

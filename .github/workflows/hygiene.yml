@@ -285,9 +285,12 @@ jobs:
           ).stdout.split() if not f.startswith("hoast360/")]
 
           def anchors(p):
-              """GitHub's slugs: strip markup and punctuation, lowercase, spaces to hyphens."""
-              out = set()
-              for line in p.read_text().split("\n"):
+              """GitHub's slugs: strip markup and punctuation, lowercase, spaces to hyphens.
+              Explicit <a id="..."> counts too: a section collapsed into <details>
+              loses its heading, and its inbound links have to keep working."""
+              text = p.read_text()
+              out = set(re.findall(r'<a id="([^"]+)"', text))
+              for line in text.split("\n"):
                   m = re.match(r"^#{1,6}\s+(.*)", line)
                   if not m:
                       continue
@@ -309,6 +312,18 @@ jobs:
                       fail = 1
                   elif frag and tgt in known and frag not in known[tgt]:
                       print(f"::error file={p}::no such anchor: {target}")
+                      fail = 1
+          # Backticked paths are not links, so nothing above sees them - and a
+          # doc pointing that way at a file the reader cannot open is exactly as
+          # broken as a dead [](). Four public docs were citing gitignored
+          # planning files like that (found 2026-08-22). Only paths that LOOK
+          # like this repo's own docs are checked, so prose mentioning some
+          # other project's file is left alone.
+          for p in files:
+              for m in re.finditer(r"`((?:docs|scripts|services|telemetry|tests)/[\w./-]+\.(?:md|sh|py|js|yml|conf))`", p.read_text()):
+                  target = m.group(1)
+                  if not pathlib.Path(target).exists():
+                      print(f"::error file={p}::backticked path does not exist: {target}")
                       fail = 1
           print("all internal markdown links resolve" if not fail else "")
           sys.exit(fail)
@@ -423,8 +438,8 @@ jobs:
 
       - name: every FROM must publish a linux/arm64 variant
         run: |
-          # CLAUDE.md's hard constraint: this stack deploys on a Raspberry Pi 4
-          # as well as amd64, so "DO NOT use ARM-only base images" has an
+          # A hard constraint of this project: this stack deploys on a Raspberry
+          # Pi 4 as well as amd64, so "DO NOT use ARM-only base images" has an
           # equally important inverse - an amd64-only base silently breaks the
           # Pi. Actually BUILDING arm64 here means QEMU-emulating an ffmpeg
           # compile (hours), so this checks the manifests instead: seconds, and

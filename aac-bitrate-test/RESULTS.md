@@ -1,6 +1,6 @@
 # AAC contribution bitrate on 16-channel ambisonics: measurement results
 
-**Date:** 2026-08-15 · **Host:** MacBook (arm64, macOS), encoding inside `ambi-box-earshot:local` · **Encoder:** ffmpeg 4.3 native AAC (the contribution leg's actual encoder - a host ffmpeg 9.0 cannot do 16-channel AAC at all, see Limits) · **Metric:** [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual) · **Material:** five excerpts (30 s each) from the [HOA seven-year corpus](https://doi.org/10.34808/w8bx-2094), the same five items as [opus-compression-test/RESULTS.md](../opus-compression-test/RESULTS.md)
+**Date:** 2026-08-22 · **Host:** MacBook (arm64, macOS), encoding inside `ambi-box-earshot:local` · **Encoder:** ffmpeg 7.1 native AAC (the contribution leg's actual encoder - a host ffmpeg 9.0 cannot do 16-channel AAC at all, see Limits) · **Metric:** [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual) · **Material:** five excerpts (30 s each) from the [HOA seven-year corpus](https://doi.org/10.34808/w8bx-2094), the same five items as [opus-compression-test/RESULTS.md](../opus-compression-test/RESULTS.md)
 
 ## The question
 
@@ -12,60 +12,60 @@ So: where does measurable degradation actually begin on this material, and where
 
 ## Method
 
-1. Same five excerpts as the Opus study, recovered from this project's own session transcripts since that study's work directory was gitignored and is gone (details in the private plan log). Two would have been wrong on the obvious guess: `piano` is Grainger's *Bridal Lullaby*, not the corpus's more prominent Chopin recording, and `quarry`'s second take is marked not-for-publication and genuinely absent from the corpus, leaving its first take as the only choice rather than a default that happened to be right.
+1. Same five excerpts as the Opus study, listed with their source recording, offset and length in [excerpts.tsv](excerpts.tsv). Both harnesses select and cut them from the published corpus through one shared helper, so the two studies measure identical material by construction.
 2. Each excerpt AAC-encoded at six per-channel rates - 32, 48, 64, 96, 128, 160 kbit/s - with **only bitrate varying**, `channelmap=channel_layout=hexadecagonal` forced so the encoder accepts 16 channels.
 3. **Two chains measured per excerpt per rate:**
    - **aac** - the contribution leg alone: uncompressed reference in, AAC out, decoded back to PCM.
-   - **cascade** - what a viewer actually receives: the AAC output decoded, then re-encoded to Opus at the production setting (`-mapping_family 255 -b:a 1536k`), since earshot always re-encodes. If this curve flattens earlier than the AAC-alone curve, contribution bitrate stops mattering above that point because Opus is the binding constraint.
+   - **cascade** - what a viewer actually receives: the AAC output decoded, then re-encoded to Opus at the production setting (`-mapping_family 255 -b:a 1536k`), since `earshot` always re-encodes. If this curve flattens earlier than the AAC-alone curve, contribution bitrate stops mattering above that point because Opus is the binding constraint.
 4. AMBIQUAL run with the **uncompressed excerpt as reference** in every case, never one encode against another - same discipline as the Opus study.
 
-Harness: [`scripts/measure-aac-bitrate.sh`](../scripts/measure-aac-bitrate.sh). All encoding runs inside the earshot image, not on the host - a host ffmpeg 9.0 refuses 16-channel AAC entirely (see Limits).
+Harness: [`scripts/measure-aac-bitrate.sh`](../scripts/measure-aac-bitrate.sh). All encoding runs inside the `earshot` image, not on the host - a host ffmpeg 9.0 refuses 16-channel AAC entirely (see [Limits, stated plainly](#limits-stated-plainly)).
 
 ## Results
 
-![AMBIQUAL LQ and LA vs contribution AAC bitrate, two chains: AAC alone and AAC-then-Opus cascade. Bold line is the mean across five excerpts, band is the min-max range. The cascade curve visibly flattens above roughly 96 kbit/s per channel while the AAC-alone curve keeps climbing to 128.](bitrate-curve-2026-08.png)
+![AMBIQUAL LQ and LA vs contribution AAC bitrate, two chains: AAC alone and AAC-then-Opus cascade. Bold line is the mean across five excerpts, band is the min-max range. Both curves climb across the whole 32 to 160 kbit/s per channel range and neither flattens; the cascade runs below AAC alone at every rate and gains less at every step, so the gap widens as bitrate rises.](bitrate-curve-2026-08.png)
 
 *Regenerate with `python3 scripts/plot-aac-bitrate.py 2026-08`.*
 
 | kbit/s/channel | carnival | deusexmachina | orchestra | piano | quarry |
 |---|---|---|---|---|---|
-| 32 | 0.566 | 0.546 | 0.571 | 0.690 | 0.546 |
-| 48 | 0.689 | 0.660 | 0.696 | 0.780 | 0.641 |
-| 64 | 0.768 | 0.735 | 0.789 | 0.848 | 0.734 |
-| 96 | 0.896 | 0.850 | 0.906 | 0.941 | 0.847 |
-| 128 | 0.947 | 0.915 | 0.962 | 0.972 | 0.904 |
-| 160 | 0.929 | 0.965 | 0.907 | 0.925 | 0.974 |
+| 32 | 0.444 | 0.416 | 0.416 | 0.481 | 0.423 |
+| 48 | 0.618 | 0.575 | 0.553 | 0.636 | 0.583 |
+| 64 | 0.675 | 0.646 | 0.619 | 0.661 | 0.652 |
+| 96 | 0.760 | 0.739 | 0.739 | 0.790 | 0.744 |
+| 128 | 0.845 | 0.833 | 0.871 | 0.909 | 0.840 |
+| 160 | 0.913 | 0.935 | 0.913 | 0.943 | 0.934 |
 
 AAC-alone AMBIQUAL LQ per excerpt. Full table, both chains, both metrics: [results.tsv](results.tsv).
 
-**The cascade flattens; the contribution leg does not, not yet.** From 64 to 128 kbit/s/channel, AAC-alone LQ rises by 0.12-0.18 across the five excerpts; the cascade rises by only 0.08-0.11 over the same span - AAC-alone gains 1.6 to 1.96x faster than what a viewer actually receives. That is the Opus re-encode acting as a ceiling: past a point, spending more contribution bitrate buys quality the downstream Opus encode cannot pass through.
+**The cascade gains less than the contribution leg, at every step.** From 64 to 128 kbit/s/channel, AAC-alone LQ rises by 0.17-0.25 across the five excerpts; the cascade rises by 0.13-0.20 over the same span, so AAC-alone gains 1.22 to 1.40x faster than what a viewer actually receives. The direction is consistent on all five. That is the Opus re-encode acting as a partial ceiling: some of what extra contribution bitrate buys does not survive to the listener. It is a tax, not a wall - neither curve plateaus inside the range measured, and both are still climbing at 160.
 
-**96 sits close to where that ceiling starts to bind, not below it.** At 96, the aac-cascade gap is already 0.08-0.11 LQ across every excerpt - the two curves have visibly separated by production's own operating point (see the figure). Contribution bitrate is not underspent: pushing past 96 keeps improving the AAC-alone number but buys the cascade comparatively little.
+**96 is not a knee, and this study does not find one.** At 96 the aac-cascade gap is 0.03-0.05 LQ, and both curves keep rising through 128 and 160 (see the [bitrate curve](bitrate-curve-2026-08.png) above). Nothing in the data marks 96 as the point where further contribution bitrate stops paying. What the data supports is the weaker statement that every extra kbit/s above it returns less to the viewer than it costs on the uplink, and that trade is what the production setting rests on, not a measured ceiling.
 
-**Localisation is punished far more than quality at low bitrate**, the same shape the Opus study found. At 32 kbit/s/channel, LA sits at 32-43% of LQ across the five excerpts; by 160 that ratio has risen to 73-84%. The ambisonic-specific failure mode AMBIQUAL exists to catch is exactly what a plain quality metric would miss here.
+**Localisation is punished far more than quality at low bitrate**, the same shape the Opus study found. At 32 kbit/s/channel, LA sits at 26-29% of LQ across the five excerpts; by 160 that ratio has risen to 82-87%. The ambisonic-specific failure mode AMBIQUAL exists to catch is exactly what a plain quality metric would miss here.
 
-**One thing this study cannot explain, stated rather than smoothed over.** Three of five excerpts (piano, orchestra, carnival) show LQ *lower* at 160 than at 128, in both chains, by 0.02-0.05. The other two (deusexmachina, quarry) keep rising cleanly through 160. The two chains are not independent evidence here - cascade's input *is* the AAC output for that item, so a dip in one is expected to appear in the other; this is one effect observed twice, not two confirmations. Five excerpts, one window each, no repeats: the same limitation the Opus study carries, and not enough to distinguish real high-bitrate encoder behaviour from AMBIQUAL noise on this material. Read the 128-160 range as "no further measurable gain," not as "160 is worse than 128."
+**An anomaly the first run could not explain turned out to be the excerpts.** That run showed three of five excerpts scoring *lower* at 160 than at 128, in both chains, and the write-up recorded it as unexplained. On content-selected windows it is simply absent: all five rise monotonically through 160 in both chains, by +0.034 to +0.102 for AAC alone. The dip was a property of the material being measured, not of the encoder or the metric.
 
 ## Second opinion: BAM-Q
 
-AMBIQUAL works in the ambisonic domain. To ask a genuinely independent question, the same conditions were also scored with **BAM-Q + GPSM<sup>q</sup>** ([Fleßner et al. 2019](https://doi.org/10.1109/TASLP.2019.2925620)), a different model family that works on **binaural** signals and was validated against listening tests. That needs a binaural render, so every condition was decoded through **HOAST360's own decoder** - the real `HOASTloader` and `HOASTBinDecoder`, the shipped IRs, the same convolver topology - making the renderer a controlled constant and keeping the measurement about the chain that actually ships. Harness: [`scripts/binauralize.js`](../scripts/binauralize.js), [`scripts/run_bamq.m`](../scripts/run_bamq.m); full output in [bamq.tsv](bamq.tsv).
+AMBIQUAL works in the ambisonic domain. To ask a genuinely independent question, the same conditions were also scored with **BAM-Q + GPSM<sup>q</sup>** ([Fleßner et al. 2019](https://doi.org/10.1109/TASLP.2019.2904850)), a different model family that works on **binaural** signals and was validated against listening tests. That needs a binaural render, so every condition was decoded through **HOAST360's own decoder** - the real `HOASTloader` and `HOASTBinDecoder`, the shipped IRs, the same convolver topology - making the renderer a controlled constant and keeping the measurement about the chain that actually ships. Harness: [`scripts/measure-bamq.sh`](../scripts/measure-bamq.sh), one command over the same work directory the AMBIQUAL half fills. It renders every condition through [`scripts/binauralize.js`](../scripts/binauralize.js) in both decoder modes (the fixed one, and the pre-fix one the defect section below is measured from), pairs each render against its uncoded reference, and scores the pairs with [`scripts/run_bamq.m`](../scripts/run_bamq.m). Full output in [bamq.tsv](bamq.tsv).
 
 Mean across the five excerpts. `OPM_fix` is the monaural measure, `binQ` the binaural one (100 = no binaural difference), `overall` the combined figure:
 
 | condition | overall | OPM_fix | binQ |
 |---|---|---|---|
-| AAC 128 | 0.5906 | 73.96 | 99.4 |
-| AAC 96 | 0.5742 | 71.21 | 98.6 |
-| cascade 128 | 0.5721 | 70.91 | 97.8 |
-| cascade 96 | 0.5617 | 69.22 | 97.8 |
+| AAC 128 | 0.5580 | 68.53 | 99.2 |
+| AAC 96 | 0.5347 | 65.00 | 98.4 |
+| cascade 128 | 0.5494 | 67.19 | 98.0 |
+| cascade 96 | 0.5424 | 66.15 | 98.0 |
 
-**BAM-Q agrees with AMBIQUAL that the cascade flattens.** Monaural quality improves from 96 to 128 kbit/s/channel on all five excerpts for AAC alone (+1.06 to +5.52 OPM), while the cascade gains less and on one excerpt (`deusexmachina`) goes slightly negative. Two metric families, different domains, different validation lineages, same conclusion - which is worth more than either result alone.
+**BAM-Q agrees that the cascade returns less, and puts it more strongly than AMBIQUAL does.** Monaural quality improves from 96 to 128 kbit/s/channel on all five excerpts for AAC alone (+1.26 to +6.97 OPM). The cascade gains less on four of them and goes *negative* on two (`carnival` -2.48, `deusexmachina` -1.95), meaning extra contribution bitrate reached the listener as slightly worse monaural quality on that material. The exception is `piano`, where the two chains move together (+6.97 against +6.86). Two metric families, different domains, different validation lineages, agreeing on direction while disagreeing on how much - which is more informative than either result alone, and a reason not to quote a single ratio as the finding.
 
-**The degradation AAC causes is almost entirely monaural.** `binQ` sits at 97-100 for every codec condition, meaning bitrate reduction leaves interaural cues substantially intact while damaging spectral quality. That is the monaural/binaural split Fleßner et al. describe, and it is the reason to pair a binaural metric with an ambisonic one rather than run two of the same kind. It also matches AMBIQUAL's own LQ-versus-LA gap from the ambisonic side.
+**The degradation AAC causes is almost entirely monaural.** `binQ` sits at 97-100 for every codec condition (unchanged from the first run), meaning bitrate reduction leaves interaural cues substantially intact while damaging spectral quality. That is the monaural/binaural split Fleßner et al. describe, and it is the reason to pair a binaural metric with an ambisonic one rather than run two of the same kind. AMBIQUAL disagrees from the ambisonic side, and the disagreement is the interesting part: on the AAC leg LA runs 33-39 % below LQ at 96 kbit/s/channel and 19-27 % below at 128, wider on the cascade (41-47 % and 30-40 %). So the ambisonic model finds the spatial dimension the worst-hit where the binaural model finds it the least-hit. Both can hold: damage to the directional HOA channels does not have to survive binaural decoding as an interaural cue error, and can arrive as spectral colouring instead. What it means in practice is that neither metric alone bounds the question, which is the argument for running both.
 
 ### A decoder defect had to be fixed before any of this was measurable
 
-Building the binaural render surfaced a bug in HOAST360's filter loading, upstream since 2020: `HoastLoader.concatBuffers()` read source channel 0 for **every** destination channel in a higher-order group, so each group was filled with copies of its first channel's decoding filter. At 3rd order that is **10 of the 12 higher-order filter channels wrong**; only ambisonic 5 and 13 were correct, being first in their groups, and 1-4 were never affected (they come from the first-order buffer, handled separately).
+Building the binaural render surfaced a bug in HOAST360's filter loading, upstream since 2020 and offered back as [thomasdeppisch/hoast360#31](https://github.com/thomasdeppisch/hoast360/pull/31): `HoastLoader.concatBuffers()` read source channel 0 for **every** destination channel in a higher-order group, so each group was filled with copies of its first channel's decoding filter. At 3rd order that is **10 of the 12 higher-order filter channels wrong**; only ambisonic 5 and 13 were correct, being first in their groups, and 1-4 were never affected (they come from the first-order buffer, handled separately).
 
 It is fixed here, and the fix is what every binaural number above was measured through. Measuring the codec through a broken decode would have confounded a bitrate question with a decoder defect.
 
@@ -73,13 +73,14 @@ It is fixed here, and the fix is what every binaural number above was measured t
 
 *Regenerate with `python3 scripts/plot-bamq.py 2026-08`.*
 
-**The defect cost more than any codec setting tested.** Its mean `overall` is 0.5408 against 0.5617 for the worst codec condition, its `OPM_fix` 65.89 against 69.22, its `binQ` 95.6 against 97.8. On every individual excerpt its `binQ` is below the worst codec condition and its ILD error is 2x to 7x larger (piano: 649.9 against 88.2). And it costs that with **no compression involved at all** - those figures compare an uncoded reference decoded two ways.
+**The defect costs more than any codec setting tested, on the binaural measures.** On every individual excerpt its `binQ` is below the worst codec condition (92-97 against 97-99) and its ILD error is 1.7x to 7.9x larger (piano: 853.5 against 107.4). It costs that with **no compression involved at all** - those figures compare an uncoded reference decoded two ways. The combined figures are closer than the binaural ones and should not be quoted alone: mean `overall` 0.5318 against 0.5347 for the worst codec condition, `OPM_fix` 64.55 against 65.00. The defect is a spatial fault, and it is the spatial measures that show it.
 
 ## Limits, stated plainly
 
-- Five excerpts, one window each, one metric, no listening test, no repeats. The 160 dip above is the visible cost of that design; a wider corpus or repeated windows would settle it.
+- Five excerpts, one window each, no listening test, no repeats. Narrow enough that a single excerpt moves a mean, which is why the findings above are stated as directions holding across all five rather than as magnitudes.
 - **Objective only.** Neither AMBIQUAL nor BAM-Q can establish transparency, which is a subjective ABX threshold; BAM-Q is validated *against* listening tests, it does not replace one. Two agreeing objective metrics raise confidence in the shape of the curve, not in any claim about audibility.
 - **The BAM-Q arm carries the renderer with it.** Its numbers describe the material as decoded by HOAST360's own binaural chain. That is deliberate, since it is what a listener receives, but it means those figures are conditional on that renderer in a way the AMBIQUAL figures are not.
-- Measured on arm64 macOS, encoding inside the earshot container so the encoder matches production; CPU-cost scaling to the Pi 4 was not measured here (that question is answered for Opus in the sibling study, not for AAC contribution, which is upstream of any host this project runs).
-- **A host ffmpeg cannot run this study at all.** ffmpeg 9.0 here refuses `-ac 16` (resolves to layout `9.1.6`, rejected) and refuses `hexadecagonal` named explicitly too. Earshot's pinned 4.3-era fork encodes it cleanly. The 16-channel ceiling in [docs/AMBISONIC-ORDER.md](../docs/AMBISONIC-ORDER.md) is therefore version-dependent as well as layout-dependent - reproducing this on a modern host ffmpeg would measure nothing, not merely hit the documented cap.
+- Measured on arm64 macOS, encoding inside the `earshot` container so the encoder matches production; CPU-cost scaling to the Pi 4 was not measured here (that question is answered for Opus in the sibling study, not for AAC contribution, which both default routes leave to the sender: the box encodes 16-channel AAC only on the `SRT_DIRECT=0` / `GUEST_SRT_DIRECT=0` RTMP republish fallback, where it measured 59 % of a core on the deployment box and has never been measured on a Pi 4).
+- **A host ffmpeg cannot run this study at all.** ffmpeg 9.0 here refuses `-ac 16` (resolves to layout `9.1.6`, rejected) and refuses `hexadecagonal` named explicitly too. The `earshot` image's pinned FFmpeg 7.1 encodes it cleanly, which is why the image pins a version at all ([EnvelopSound/Earshot#82](https://github.com/EnvelopSound/Earshot/pull/82)). The capability loss is filed upstream as [FFmpeg#24218](https://code.ffmpeg.org/FFmpeg/FFmpeg/issues/24218): `aacenc` has been unable to encode any layout above 8 channels since `c92c6cbf19` removed the last `aac_pce_configs[]` entries above `OCTAGONAL`, with 8.1 the last working release. The 16-channel ceiling in [docs/AMBISONIC-ORDER.md](../docs/AMBISONIC-ORDER.md) is therefore version-dependent as well as layout-dependent - reproducing this on a modern host ffmpeg would measure nothing, not merely hit the documented cap.
+- **AMBIQUAL needs a patch to run at all**, before any of the above: as published it raises `NameError` on the first channel. The defect and the local fix are described in the [Opus study's limits](../opus-compression-test/RESULTS.md#limits-stated-plainly) and reported upstream as [Ambiqual #2](https://github.com/QxLabIreland/Ambiqual/issues/2). Both studies depend on that patch.
 - **AMBIQUAL needs sample-exact length equality** between reference and degraded audio or it throws on the internal broadcast. AAC/Opus decode does not naturally land there; two time-based fixes (`apad -t N`, `apad=whole_dur=N`) both failed silently on this ffmpeg build. The harness uses `atrim=end_sample=N` and verifies the resulting frame count, retrying up to three times - even the exact command was observed to occasionally overshoot by one frame under concurrent load. See the harness header for the full account.

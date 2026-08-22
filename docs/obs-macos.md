@@ -2,7 +2,7 @@
 
 Everything here was established by pushing a per-channel tone ladder through real hardware and reading back what arrived. Where a setting looks arbitrary, it is not: the obvious-looking alternative fails silently, and the note says how.
 
-Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78, macOS, with [BlackHole](https://github.com/ExistentialAudio/BlackHole) as the multichannel device. SRT is Secure Reliable Transport, the contribution protocol this stack recommends: stock OBS speaks it, and it carries the four audio tracks that become your 16 channels.
+Verified on [OBS Studio](https://obsproject.com/) 32.2.1 and [REAPER](https://www.reaper.fm/) 7.78 on macOS 15 (Sequoia), with [BlackHole](https://github.com/ExistentialAudio/BlackHole) 0.7.1 as the multichannel device. SRT is Secure Reliable Transport, the contribution protocol this stack recommends: stock OBS speaks it, and it carries the four audio tracks that become the 16 channels.
 
 The steps run in the same order as [the Windows guide](obs-windows.md). Only steps 1 and 3 differ, because macOS has BlackHole and Windows does not.
 
@@ -34,7 +34,7 @@ Those outputs are numbered rather than named because on macOS the *device* is ch
 
 **Record-arm the tracks.** REAPER's audio engine otherwise goes quiet once another application takes focus, which is exactly what happens the moment you click into OBS - the meters there fall silent and it looks like the routing is broken. Arming keeps the engine running in the background so the tones keep flowing while you work in OBS.
 
-**What the fixture is not.** It feeds each ACN channel a bare tone, so nothing in it is *panned*: it is a test signal, not a mix. Real material goes through an ambisonic encoder first - a panner takes a mono or stereo source and a direction, and computes the ACN/SN3D components that place it there, which is what the 16 channels then carry (the [IEM Plug-in Suite](https://git.iem.at/audioplugins/IEMPluginSuite) is the usual free choice). The tone ladder deliberately skips that step, because a signal that has been panned is spread across many channels at once and tells you nothing about which channel went where. One tone per channel is what makes an off-by-one or a dropped channel visible.
+**What the fixture is not.** It feeds each ACN channel a bare tone, so nothing in it is *panned*: it is a test signal, not a mix. Real material goes through an ambisonic encoder first - a panner takes a mono or stereo source and a direction, and computes the ACN/SN3D components that place it there, which is what the 16 channels then carry (the [IEM Plug-in Suite](https://plugins.iem.at/) is the usual free choice). The tone ladder deliberately skips that step, because a signal that has been panned is spread across many channels at once and tells you nothing about which channel went where. One tone per channel is what makes an off-by-one or a dropped channel visible.
 
 ## 2. Set the global channel layout in OBS
 
@@ -80,6 +80,8 @@ Four sources now appear in the OBS **Sources** panel. Rename each one to carry i
 <div align="center"><img src="images/obs-macos/07_OBS-tracks-routing.png" width="88%" alt="OBS Advanced Audio Properties listing the four BlackHole16ch sources, each with exactly one of tracks 1 to 4 ticked and the rest unticked."></div>
 
 The join downstream is strictly positional - track 1 becomes channels 1-4, track 2 becomes 5-8, and so on, never a downmix - so AmbiX order survives end to end provided the mapping above is exact.
+
+
 **Sending 1st order (4 channels) instead?** Then this whole step is one line: a single 4-channel source on Track 1, and nothing on tracks 2 to 4. In [section 5](#5-point-obs-at-the-box) tick only **Track 1**. Everything else on this page is the same, including the URL. The box reads how many tracks arrive and treats one 4-channel track as 1st order and four as 3rd, so there is nothing to set at that end.
 
 
@@ -87,7 +89,7 @@ The join downstream is strictly positional - track 1 becomes channels 1-4, track
 
 **First, on the box: the owner route has to exist before you can push to it.** In the stack folder run `./scripts/setup.sh` once, then `docker compose up -d`. That generates your own publish key and passphrase, enables the authenticated SRT route on UDP 8891, and prints the exact URL to paste below. It is safe to re-run and will not overwrite an existing `.env`.
 
-This is the route you want for your own broadcasts: every caller is authenticated by your key, which SRT uses as the connection's AES key, so anyone without it is refused at the handshake. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you are after.
+This is the route you want for your own broadcasts: every caller is authenticated by your key, which SRT uses as the connection's AES key, so anyone without it is refused at the handshake. The separate *guest* endpoint exists for letting **other** people push to your box, takes no password at all, and stays off unless you turn it on - see [the variant at the end of this section](#variant-the-keyless-guest-endpoint) if that is what you're after.
 
 ### Getting your passphrase
 
@@ -119,7 +121,7 @@ Everything except the passphrase is literal, including the word `owner` in `stre
 | Container Format | **mpegts** |
 | Audio Encoder | plain **`aac`** - tick **"Show all codecs"** if it is hidden |
 | Audio Track | tick **1, 2, 3, 4** |
-| Video Encoder | any H.264 encoder; keyframe interval 2 s, CFR |
+| Video Encoder | any H.264 encoder; keyframe interval **60 frames** (the field counts frames, not seconds: 60 is 2 s at 30 fps, so scale it if Settings > Video > FPS says otherwise), CFR |
 | Bitrates | see [Contribution bitrate](BITRATE.md) - audio 384 kbit/s per track, video against your uplink |
 
 <div align="center"><img src="images/obs-macos/08_OBS-recording-streaming-settings.png" width="92%" alt="OBS Settings, Output, Recording tab on macOS: Output Mode Advanced, Type is Custom Output (FFmpeg), FFmpeg Output Type is Output to URL, the URL srt://127.0.0.1:8891?streamid=owner&passphrase=<SRT_OWNER_PASSPHRASE>&latency=2000000&pkt_size=1128, Container Format mpegts, Video Bitrate 20000 Kbps, Keyframe interval 60, Show all codecs ticked, Video Encoder h264_videotoolbox, Audio Bitrate 384 Kbps, Audio Track 1 to 4 ticked and 5 to 6 clear, Audio Encoder aac."></div>
@@ -152,11 +154,13 @@ That is the whole thing: an address, a port, your key, and the stream goes. The 
 
 **What it costs, plainly.** The port becomes scannable, so libsrt's handshake is your pre-auth surface. `GUEST_MAX_TEMP_C` and `GUEST_MAX_MBPS` belong to the guest arbiter and do not apply to owner sessions, so nothing but you throttles a misconfigured encoder. And anyone who obtains the passphrase can broadcast on your box. Use the generated one rather than one you invented, and rotate it if a venue machine has ever held it.
 
-**If you want less exposure**, narrow the bind in the `srt-gateway-owner` ports line of `docker-compose.override.yml`: `127.0.0.1` for this machine only, or a VPN address (Tailscale, WireGuard) to keep the port off the internet entirely. On a host that holds a routable address of its own - a VPS rather than something behind NAT - binding that exact IP opens one interface instead of all of them.
+**If you want less exposure**, narrow the bind in the `srt-gateway-owner` ports line of your `docker-compose.override.yml` (the [committed example](../docker-compose.override.yml.example) shows the block): `127.0.0.1` for this machine only, or a VPN address (Tailscale, WireGuard) to keep the port off the internet entirely. On a host that holds a routable address of its own - a VPS rather than something behind NAT - binding that exact IP opens one interface instead of all of them.
 
 > **Do not bind a public IP the box does not actually hold.** Behind NAT that address belongs to your router, not the box, and binding it *looks* like it worked: the container reports healthy and `ss` lists the socket, but no packet ever arrives. Normally this errors. On a host with `net.ipv4.ip_nonlocal_bind=1` set (which [docs/ENDPOINTS.md](ENDPOINTS.md) recommends, for an unrelated boot race) it does not even do that. `ip -4 addr show scope global` shows what the box really holds. When in doubt, `0.0.0.0` is always correct.
 
-### Variant: the keyless guest endpoint
+<a id="variant-the-keyless-guest-endpoint"></a>
+<details>
+<summary><strong>Variant: the keyless guest endpoint</strong> - letting somebody else push to your box, no key at all (click to expand)</summary>
 
 Everything above sends **your** stream, authenticated. The guest endpoint answers a different question: letting somebody else push to your box without giving them a key. Two differences in the OBS settings, and only two:
 
@@ -166,6 +170,8 @@ Everything above sends **your** stream, authenticated. The guest endpoint answer
 | Reachable from | loopback, a VPN address, or a forwarded public port | wherever the guest is, so a LAN or public address |
 
 Turn it on with `GUEST_ENABLED=1` in `.env` and `docker compose up -d`. The dashboard on `:8090` then shows a **GUEST ENDPOINT** row reading `free`; while it is off that row reads `disabled` and every push is refused with a bare `Couldn't open ... I/O error` that looks like a network fault and is not one. Sessions are capped, rate-limited and logged - the rules are in [docs/GUEST-ENDPOINT.md](GUEST-ENDPOINT.md). Read that before exposing it, because it genuinely takes no password from anyone.
+
+</details>
 
 ## 6. Push it
 
@@ -188,7 +194,9 @@ Custom Output (FFmpeg) does **not** auto-reconnect. If the connection drops you 
 
 ## Proving the channel order
 
-Do not trust the chain by ear. Play the tone-ladder project from [step 1](#1-send-16-channels-into-blackhole), record locally, and check what came back:
+Do not trust the chain by ear. Play the tone-ladder project from [step 1](#1-send-16-channels-into-blackhole), record locally, and check what came back.
+
+**Recording locally needs one temporary change**, because step 5 pointed OBS's only recording output at the box: in Settings > Output > Recording, switch **FFmpeg Output Type** to **Output to File**, set the container to `mkv`, keep audio tracks 1-4 ticked, and press Start Recording. Switch it back to **Output to URL** afterwards to stream again.
 
 ```bash
 ./scripts/merge-obs-tracks.sh --check recording.mkv     # expect: 4 track(s), channels per track: 4 4 4 4
@@ -197,7 +205,7 @@ ffmpeg -v error -ss 5 -i merged.mov -map 0:a:0 -t 1.5 -f s16le -c:a pcm_s16le - 
   | python3 scripts/check-tones.py 16 48000 100 100
 ```
 
-The last two arguments are the ladder's base frequency and step, so adjust them to whatever tones you generated. `check-tones.py` asserts channel *k* carries tone *k* and fails a channel that is silent, so a scramble and a muted channel are both caught rather than guessed at. `scripts/test-srt-ingest.sh` runs the same assertion through the live SRT path end to end.
+The last two arguments are the ladder's base frequency and step, so adjust them to whatever tones you generated. [`check-tones.py`](../scripts/check-tones.py) asserts channel *k* carries tone *k* and fails a channel that is silent, so a scramble and a muted channel are both caught rather than guessed at. [`scripts/test-srt-ingest.sh`](../scripts/test-srt-ingest.sh) runs the same assertion through the live SRT path end to end.
 
 ## See also
 

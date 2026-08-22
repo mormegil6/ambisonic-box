@@ -9,6 +9,7 @@ Every route Safari offers for decoding audio, `decodeAudioData`, WebCodecs `Audi
 | | Chrome / Firefox / Brave | Safari (macOS 27) | Safari (iOS 26.6) |
 |---|---|---|---|
 | `decodeAudioData`, 16-ch Opus | works | fails | fails |
+| `decodeAudioData`, 2-ch Opus | works | works in WebM, fails in MP4 | works in WebM, fails in MP4 |
 | WebCodecs `AudioDecoder`, 16-ch Opus | works | `isConfigSupported` false | `isConfigSupported` false |
 | MSE, `audio/mp4; codecs="opus"` | works | not supported | not supported (`MediaSource` itself is absent; only `ManagedMediaSource` exists) |
 
@@ -21,11 +22,13 @@ A Meta Quest 3's own Chromium-based browser decodes this stream, 16 and 25 chann
 | | macOS Safari 27 | iPhone Safari (iOS 26.6) |
 |---|---|---|
 | Channels, order | 16, correct ACN order | 16, correct ACN order |
-| Speed | 47-67x realtime across five runs | 47-88x realtime across six runs |
+| Speed | 47-67x realtime across five runs | 35-88x realtime, two iPhones |
 | Continuity across segment boundaries | gapless (junction metric 1.5, i.e. continuous) | gapless (junction metric 1.5) |
 | Server changes needed | none | none |
 
-**Fallback, also proven, weaker on iOS specifically: four parallel 4-channel AAC streams**, decoded natively (no WASM). AAC's LFE element low-passes full-band content, which rules out two 8-channel streams; four 4.0-layout streams (no LFE) is what survives that constraint.
+Web Audio itself is not a constraint: a 16-channel graph routes correctly on the iPhone (channel 13 carries its 1500 Hz tone, channel 6 its 800 Hz), while `AudioContext.destination` reports `maxChannelCount` 2. Sixteen channels in, binaural stereo out, is exactly the shape the player needs.
+
+**Fallback, also proven, weaker on iOS specifically: four parallel 4-channel AAC streams**, decoded natively (no WASM). AAC's LFE element low-passes full-band content, which rules out two 8-channel streams; four 4.0-layout streams (no LFE) is what survives that constraint. An 8-channel 7.1 file gives a second reason: it decodes, but arrives with its channels permuted. The four 4-channel streams also arrive permuted relative to fetch order, so a decoder has to read the order rather than assume it.
 
 | | macOS Safari 27 | iPhone Safari (iOS 26.6) |
 |---|---|---|
@@ -34,7 +37,9 @@ A Meta Quest 3's own Chromium-based browser decodes this stream, 16 and 25 chann
 
 So the fallback is fully viable on macOS and loses its gapless half specifically on iOS, which is why the WASM route is the primary choice rather than a mild preference.
 
-**Not yet settled:** whether `AudioWorkletNode` is genuinely unavailable on iOS Safari, which would be surprising given it has shipped there since 14.5. The first iPhone probe reported it absent by a bare `typeof` check; that check was rebuilt to actually construct a worklet (a `typeof`-only check already produced one false conclusion this same investigation, in the opus-decoder bundle above), and the rebuilt version passes on macOS Safari. It has not yet been re-run on an iPhone.
+Raw runs behind the iPhone columns: `yw5mzd` (capability probe), `3ihvtx` (WASM multistream on the box's own DASH), `3612nb` (the 4x4 AAC fallback, both decode paths). Each page beacons its full report to `hoast-player`'s access log; `scratch/ios-probe/harvest-beacons.sh` reassembles them by id, which is how the figures here can be rechecked without the tester repeating anything.
+
+**Settled:** `AudioWorkletNode` is available on iOS Safari, which matters because a continuous WASM decode loop needs a low-latency path into Web Audio and this project does not use the deprecated `ScriptProcessorNode`. Two iPhone probes reported it absent, the first by a bare `typeof` and the second by the rebuilt check that actually constructs a worklet (a `typeof`-only check had already produced one false conclusion in this same investigation, in the opus-decoder bundle above). Both were served over plain HTTP. `AudioWorklet` is gated on a secure context, so on an insecure origin `ctx.audioWorklet` is undefined and the rebuilt check fails with `undefined is not an object (evaluating 'wctx.audioWorklet.addModule')`, which is indistinguishable from the platform not shipping it; the macOS run that contradicted them passed on `localhost`, which counts as secure. Re-run over HTTPS, the same check constructs and connects a worklet. The HTTPS run came from a second phone on iOS 18.7 rather than the 26.6 one that failed, so scheme and OS version changed together and this is not a single-variable comparison. The secure-context gate accounts for the failure exactly, and every other result on the older phone matched the 26.6 runs, so the older OS reads as coverage rather than as an alternative explanation. The probe now records `isSecureContext` and `location.protocol`, so a future run cannot leave this ambiguous.
 
 ## What wiring this into the live player would cost
 

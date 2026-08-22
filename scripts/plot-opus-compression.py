@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Compression-level quality figure for the Opus study (opus-compression-test/RESULTS.md).
 
-Regenerates opus-compression-test/compression-level-<date>.{png,svg} from the
-RESULTS.md numbers, where <date> is the YYYY-MM the measurement was taken (not
+Regenerates opus-compression-test/compression-level-<date>.{png,svg} from
+opus-compression-test/results.tsv, where <date> is the YYYY-MM the measurement
+was taken (not
 the day the plot was drawn). Pass it explicitly:
 
     python3 scripts/plot-opus-compression.py 2026-08
@@ -12,14 +13,16 @@ every excerpt except piano moved *up* when the encoder was asked to do less
 work. That cannot be a real quality gain, so the upward spread is the metric's
 own noise on this material, and the honest way to read piano's loss is against
 that spread rather than against zero. The shaded band is therefore drawn at the
-largest non-piano excursion in each metric (+0.0091 LQ, +0.0171 LA); piano is
-the only excerpt that leaves it, at 1.8x and 2.2x respectively.
+largest non-piano excursion in each metric, computed from the data rather than
+stated here, so this comment cannot go stale against a re-measurement.
 
 The CPU half of the study is deliberately NOT plotted. The whole saving is 0.9 %
 of a core, which is the decisive argument and needs no chart; drawing it at a
 readable scale would give a trivial difference the visual weight of a finding.
 RESULTS.md states it as a number, which is proportionate.
 """
+import csv
+import pathlib
 import re
 import sys
 
@@ -44,17 +47,37 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Transcribed from the AMBIQUAL table in RESULTS.md. Deltas are against
-# -compression_level 10 (libopus's default), so negative means worse.
-EXCERPTS = ["solo piano", "orchestra", "dense ensemble", "live concert", "outdoor ambience"]
-c5_LQ = [-0.0163, +0.0023, +0.0026, +0.0043, +0.0091]
-c5_LA = [-0.0381, +0.0031, +0.0072, +0.0080, +0.0171]
-c0_LQ = [-0.0202, -0.0001, -0.0005, +0.0004, +0.0056]
-c0_LA = [-0.0489, +0.0018, +0.0007, -0.0011, +0.0093]
+# READ THE MEASUREMENT, DO NOT TRANSCRIBE IT. These deltas used to be copied by
+# hand out of the AMBIQUAL table in RESULTS.md. A 2026-08-22 re-run updated the
+# table and not this file, so the committed figure plotted the superseded run
+# underneath the new numbers - its noise band drawn at +/-0.0091 while the text
+# beside it said +0.0101. Reading results.tsv makes that class of drift
+# impossible.
+#
+# Deltas are against -compression_level 10 (what FFmpeg's libopus encoder
+# applies when the flag is absent), so negative means worse.
+ITEMS = [("piano", "solo piano"), ("orchestra", "orchestra"),
+         ("deusexmachina", "dense ensemble"), ("carnival", "live concert"),
+         ("quarry", "outdoor ambience")]
+TSV = pathlib.Path(__file__).resolve().parent.parent / "opus-compression-test" / "results.tsv"
+if not TSV.exists():
+    sys.exit(f"no measurement at {TSV} - run scripts/measure-opus-compression.sh first")
+scores = {}
+with TSV.open() as fh:
+    for row in csv.DictReader(fh, delimiter="\t"):
+        scores[(row["item"], row["level"])] = (float(row["LQ"]), float(row["LA"]))
+missing = [(i, l) for i, _ in ITEMS for l in ("10", "5", "0") if (i, l) not in scores]
+if missing:
+    sys.exit(f"{TSV} is missing rows: {missing}")
+
+EXCERPTS = [label for _, label in ITEMS]
+c5_LQ = [scores[(i, "5")][0] - scores[(i, "10")][0] for i, _ in ITEMS]
+c5_LA = [scores[(i, "5")][1] - scores[(i, "10")][1] for i, _ in ITEMS]
+c0_LQ = [scores[(i, "0")][0] - scores[(i, "10")][0] for i, _ in ITEMS]
+c0_LA = [scores[(i, "0")][1] - scores[(i, "10")][1] for i, _ in ITEMS]
 
 # The noise band: the largest excursion among the excerpts that cannot have
-# genuinely improved. Taken from the data rather than hardcoded, so a
-# re-measurement cannot leave the band describing the previous run.
+# genuinely improved.
 noise_LQ = max(abs(v) for v in c5_LQ[1:] + c0_LQ[1:])
 noise_LA = max(abs(v) for v in c5_LA[1:] + c0_LA[1:])
 
@@ -65,7 +88,7 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2), sharey=True)
 
 for ax, v5, v0, noise, metric in (
     (ax1, c5_LQ, c0_LQ, noise_LQ, "LQ (listening quality)"),
-    (ax2, c5_LA, c0_LA, noise_LA, "LA (listening artefacts)"),
+    (ax2, c5_LA, c0_LA, noise_LA, "LA (localisation)"),
 ):
     ax.axvspan(-noise, noise, color="#7f8c8d", alpha=0.16, zorder=0)
     ax.barh([i + h / 2 for i in y], v5, height=h, color="#2980b9",

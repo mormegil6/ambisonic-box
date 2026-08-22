@@ -1,7 +1,7 @@
 name: arm64
 
-# The Pi 4 is a first-class target (CLAUDE.md, and the README documents it as
-# validated end to end), but the main build workflow is amd64 only because
+# The Pi 4 is a first-class target (the README documents it as validated end
+# to end), but the main build workflow is amd64 only because
 # QEMU-emulating earshot's ffmpeg-from-source compile takes hours.
 #
 # This is the middle ground: really build the FOUR LIGHT images for arm64 under

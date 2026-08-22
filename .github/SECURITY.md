@@ -6,7 +6,7 @@
 
 Useful things to include, roughly in order of how much they help:
 
-- which route is affected: RTMP owner (`:1935/owner`), the guest application (`:1935/guest`), SRT guest (`:8890`), SRT owner (`:8891`), the direct-to-DASH listeners, the player, or telemetry
+- which route is affected: RTMP owner (`:1935/owner`), the guest application (`:1935/guest`), SRT guest (`:8890`), SRT owner (`:8891`), the direct-to-DASH listeners, the player, or `telemetry`
 - whether it needs a credential, and if so which one
 - whether it is reachable from outside the host, or only from inside the compose network
 - the smallest way to reproduce it, and what you saw versus what you expected
@@ -30,9 +30,9 @@ Not because these do not matter, but because a report here cannot fix them:
 
 - **`services/earshot/src`** is a submodule pointing at a fork of [Envelop Earshot](https://github.com/EnvelopSound/Earshot), which is a separate project under GPL-2.0. Report defects in Earshot itself upstream. The same applies to the [patched HOAST360 player](https://github.com/mormegil6/hoast360), also a submodule.
 
-  **Stated plainly, because it is the largest unpatched surface here and it is easy to describe misleadingly:** earshot's runtime image is `alpine:3.11` with `nginx 1.15.1` (2018) and a fork of ffmpeg. Alpine 3.11 reached end of life in **November 2021**, so its security data has stopped and a scanner has little left to report; the `node:12` toolchain sometimes named in this context is a *build* stage that contributes only static files and is not in the shipped image. earshot is also the container that decodes contributor-supplied media, and the least confined one in the stack: it holds capabilities the others drop and cannot run with a read-only root filesystem. Trivy scans it in CI **report-only**, which is a deliberate choice about an image nobody can patch from this repository rather than a claim that it is clean.
+  **Stated plainly, because it is the largest unpatched surface here and it is easy to describe misleadingly:** `earshot`'s runtime image is `alpine:3.11` with `nginx 1.15.1` (2018). Alpine 3.11 reached end of life in **November 2021**, so its security data has stopped and a scanner has little left to report. Two parts of that surface have since moved: ffmpeg is built from the checksum-verified 7.1 release tarball rather than an unpinned fork checkout, and the toolchain that was `node:12` is now `node:24-alpine3.24` - a *build* stage either way, contributing only static files and absent from the shipped image. `earshot` is also the container that decodes contributor-supplied media, and the least confined one in the stack: it holds capabilities the others drop and cannot run with a read-only root filesystem. Trivy scans it in CI **report-only**, which is a deliberate choice about an image nobody can patch from this repository rather than a claim that it is clean.
 
-  What actually bounds it: earshot publishes no port to the host, its RTMP relay and `on_publish` callback are compose-internal, and the `webtools` admin UI is bound to `127.0.0.1:8081`. Rebuilding it on a supported base belongs upstream and is tracked there. A report that this base is old is expected rather than a finding; a way to reach earshot from outside the compose network is very much a finding.
+  What actually bounds it: `earshot` publishes exactly one host port, loopback-only - the `webtools` admin UI on `127.0.0.1:8081` - while its RTMP relay, its `on_publish` callback and the direct-DASH listeners stay inside the compose network. Rebuilding it on a supported base belongs upstream; it is not currently an open item there. A report that this base is old is expected rather than a finding; a way to reach `earshot` from outside the compose network is very much a finding.
 - **The placeholder credentials that ship in `.env.example`** are published on purpose. `rtmp-ingest` refuses to start while `RTMP_OWNER_KEY` or `LOOP_SOURCE_KEY` is still one of them, and `scripts/setup.sh` generates both. A report that the committed placeholder is public is expected rather than a finding. A route by which one of them still *works* is not: until 2026-08-10 this list named only `RTMP_OWNER_KEY`, and the omission was the bug, because `LOOP_SOURCE_KEY` is checked inside the owner application and `setup.sh` never replaced it.
 - **Running with `ALLOW_DEFAULT_OWNER_KEY=1`.** That flag exists for a host nobody can reach, warns on every boot, and disables the guard deliberately.
 - **`services/earshot/src/nginx-transcoder/certs/example.com.key`.** Upstream's self-signed example, expired in 2019, never presented (the stack ships `SSL_ENABLED=false`). It is recorded in `.gitleaksignore` with that reasoning.
@@ -48,6 +48,6 @@ Stated so a reporter can tell a real gap from a deliberate choice:
 
 - The guest endpoint is **off by default** (`GUEST_ENABLED=0`), and binding its port admits nobody on its own.
 - Telemetry's dashboard binds to loopback, and its `/rtmp/*` callback routes are peer-authenticated.
-- `rtmp-ingest` logs failed publish authentication, without the credential, so brute force leaves a trace. A `fail2ban` jail for it ships in the deployment notes.
+- `rtmp-ingest` logs failed publish authentication, without the credential, so brute force leaves a trace. No `fail2ban` jail ships with the stack: the owner key is 192 bits of randomness and the SRT passphrase is the connection's AES key, so neither is a guessing target, and the guest endpoint is keyless by design. The log is there to be read, and the `telemetry` alerter is what surfaces it.
 - Every image is scanned for known CVEs in CI, and the four images this project controls are gated on that scan.
 - Secrets are scanned across full git history weekly.

@@ -438,8 +438,8 @@ esac
 # range - and passes through untouched under -c:v copy. That plays correctly
 # everywhere today, including a Quest 3, because it is H.264. It becomes the
 # known-broken combination the moment FFMPEG_FLAGS is switched to the documented
-# VP9 policy, which is a one-line change in .env. CLAUDE.md already states the
-# rule ("any re-encoded master must convert"); nothing checked it.
+# VP9 policy, which is a one-line change in .env. The rule is documented ("any
+# re-encoded master must convert"); nothing checked it.
 if [ -f content/demo.mp4 ]; then
     minfo=$( { docker run --rm -v "$PWD/content:/c:ro" --entrypoint ffmpeg ambi-box-earshot:local \
                  -hide_banner -i /c/demo.mp4 2>&1 | grep -m1 'Video:'; } || true )

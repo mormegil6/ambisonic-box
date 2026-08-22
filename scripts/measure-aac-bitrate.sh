@@ -27,8 +27,10 @@
 # AND IT RUNS INSIDE THE EARSHOT IMAGE, which is not a convenience. Measured
 # 2026-08-15: a host ffmpeg 9.0 CANNOT encode 16-channel AAC at all. `-ac 16`
 # there resolves to layout "9.1.6", which the encoder refuses, and naming
-# `hexadecagonal` explicitly is refused too. Earshot's pinned 4.3-era fork
-# encodes it cleanly. So the 16-channel ceiling documented in
+# `hexadecagonal` explicitly is refused too. The earshot image's pinned
+# FFmpeg 7.1 encodes it cleanly: aacenc lost the last aac_pce_configs[] entries
+# above OCTAGONAL in c92c6cbf19, reported as FFmpeg#24218, and 8.1 is the last
+# release that can still do it. So the 16-channel ceiling documented in
 # docs/AMBISONIC-ORDER.md is version-dependent as well as layout-dependent, and
 # a study run with a modern host ffmpeg would measure nothing at all. Using the
 # container also means this measures the encoder the contribution leg really
@@ -38,11 +40,18 @@
 # another, the same discipline as measure-opus-compression.sh: the question is
 # how much quality a setting gives up, so every setting needs the same reference.
 set -uo pipefail
+# pick_start() resolves scripts/pick-excerpt.py relative to $PWD, and the paths
+# below are $PWD-relative, so this must come before both.
+SELF=$(cd "$(dirname "$0")" && pwd)
+cd "$SELF/.."
 
 AQ=${AMBIQUAL_DIR:-$HOME/Downloads-repos/Ambiqual}
-CORPUS=${CORPUS_DIR:-"/Volumes/Scratch/A Seven-Year Corpus of Higher-Order Ambisonics Recordings"}
+# The corpus path, the five recordings and the window picker are shared with
+# measure-opus-compression.sh so the two studies cannot drift apart.
+. "$SELF/lib/corpus-excerpts.sh" || { echo "cannot source lib/corpus-excerpts.sh" >&2; exit 2; }
 W=${WORKDIR:-$PWD/aac-bitrate-test/work}
 OUT=${OUTFILE:-$PWD/aac-bitrate-test/results.tsv}
+MANIFEST=${MANIFEST:-$PWD/aac-bitrate-test/excerpts.tsv}
 LEN=${EXCERPT_S:-30}
 SR=48000   # every corpus source is 48 kHz (verified against corpus_statistics.csv)
 END_SAMPLE=$(( LEN * SR ))
@@ -52,21 +61,6 @@ END_SAMPLE=$(( LEN * SR ))
 # makes the curve readable rather than a flat line of "fine everywhere".
 RATES=${RATES:-"32 48 64 96 128 160"}
 
-# ITEM -> SOURCE. Recovered from this project's own session transcripts
-# (~/.claude/projects/.../*.jsonl), which recorded the mapping
-# measure-opus-compression.sh used; its own work directory was gitignored and
-# is gone. Confirmed against the corpus on disk 2026-08-15 - worth recording
-# that two of five would have been WRONG had the obvious guess been kept:
-# piano was Grainger-BridalLullaby, not the higher-profile Chopin Revolutionary
-# also in the corpus, and quarry's scena2 (named NOT-TO-PUBLISH in the
-# transcript) is absent from the published corpus entirely, leaving scena1 as
-# the only choice rather than a default that happened to be right.
-ITEM_piano=${ITEM_piano:-"2021-03-27_aula-pg_solo-piano/audio/3OA_ZM1_PGrainger-BridalLullaby.wav"}
-ITEM_orchestra=${ITEM_orchestra:-"2022-03-10_gut-lobby_choir-orchestra/audio/3OA_ZM1_JubileeConcertPt1.wav"}
-ITEM_deusexmachina=${ITEM_deusexmachina:-"2023-06-03_aula-pg_choir-contemporary/audio/3OA_ZM1_JNeske-DeusExMachina.wav"}
-ITEM_carnival=${ITEM_carnival:-"2023-02-21_gut-lobby_choir-jazz-band/audio/3OA_ZM1_Concert.wav"}
-ITEM_quarry=${ITEM_quarry:-"2024-07-27_piechcin-quarry_vr-production-outdoor/audio/3OA_ZM1_scena1.wav"}
-ITEMS=${ITEMS:-"piano orchestra deusexmachina carnival quarry"}
 
 # All ffmpeg work runs in the earshot image (see the header for why). $W is
 # mounted at /w and the corpus read-only at /c, so paths inside are stable.
@@ -98,29 +92,40 @@ decode_exact() {
 }
 
 mkdir -p "$W" "$(dirname "$OUT")"
-[ -d "$CORPUS" ] || { echo "corpus not mounted: $CORPUS" >&2; exit 2; }
+require_corpus
 [ -x "$AQ/.venv/bin/python" ] || { echo "AMBIQUAL venv missing: $AQ/.venv" >&2; exit 2; }
 
 printf 'item\tchain\tkbps_per_ch\tLQ\tLA\n' > "$OUT"
+manifest_init "$MANIFEST"
 
 for it in $ITEMS; do
-    eval "src=\${ITEM_$it}"
+    src=$(item_source "$it")
     full="$CORPUS/sessions/$src"
     [ -f "$full" ] || { echo "missing source for $it: $full" >&2; continue; }
 
     # Excerpt chosen by CONTENT, not by clock. A fixed offset put the Opus
     # study's concert excerpt in the pre-concert audience and left its ambience
     # item mostly silent; selection is part of the method, not a detail.
-    ref="$W/${it}_ref.wav"
-    if [ ! -f "$ref" ]; then
+    ref="$W/${it}_ref.wav"; off="$W/${it}_ref.start"
+    # The offset is cached beside the WAV. manifest_init truncated the manifest
+    # at the start of this run, and a warm work directory skips the cut, so
+    # writing the row only when cutting would leave a published study with a
+    # header-only excerpts.tsv.
+    unset PICK_START
+    if [ ! -f "$ref" ] || [ ! -f "$off" ]; then
         echo "[aac] picking a ${LEN}s window in $it" >&2
-        start=$(python3 scripts/pick-excerpt.py "$full" --length "$LEN" --top 1 2>/dev/null \
-                | awk '/^ *1\./{print $2; exit}')
-        start=${start:-0}
+        pick_start "$it" "$LEN"          # sets PICK_START, or exits
+        start=$PICK_START
         FF -v error -y -ss "$start" -t "$LEN" -i "/c/sessions/$src" \
             -c:a pcm_s24le "/w/${it}_ref.wav" || continue
+        printf '%s\n' "$start" > "$off"
         echo "[aac] $it ref cut at ${start}s" >&2
     fi
+    start=${PICK_START:-$(cat "$off" 2>/dev/null)}
+    [ -n "$start" ] || { echo "[aac] no recorded offset for $it" >&2; exit 3; }
+    # Record what was actually measured, so the windows behind a published
+    # figure stay checkable after the work directory is gone.
+    manifest_add "$MANIFEST" "$it" "$src" "$start" "$LEN"
 
     for kb in $RATES; do
         total=$(( kb * 16 ))

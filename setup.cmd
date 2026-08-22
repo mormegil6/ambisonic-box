@@ -75,7 +75,7 @@ echo One part of it cannot come along: the warning about ports another program
 echo already holds, which a container has no way to see. If "docker compose up"
 echo later complains about a port, that is what it would have caught.
 echo.
-docker run --rm -v "%CD%:/repo" -w /repo %SETUP_IMG% sh scripts/setup.sh
+docker run --rm -v "%CD%:/repo" -w /repo %SETUP_IMG% sh scripts/setup.sh %*
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" goto :manual
 goto :held

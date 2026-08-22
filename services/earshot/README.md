@@ -1,4 +1,4 @@
-# earshot - submodule of a fork of Envelop Earshot
+# `earshot` submodule - a fork of Envelop Earshot
 
 `src/` is a git submodule pointing at [mormegil6/Earshot](https://github.com/mormegil6/Earshot), a fork of [EnvelopSound/Earshot](https://github.com/EnvelopSound/Earshot), GPL licensed (see `src/LICENSE`).
 
@@ -10,22 +10,27 @@ The fork tracks `EnvelopSound/Earshot`'s `master` directly (real GitHub fork rel
 
 ## What's still genuinely local to the fork
 
-Everything that has no upstream analogue lives directly in the fork's own commit history, with the rationale in the code itself (each patch carries a comment explaining the WHY, often with real measurements) rather than repeated here. As of the fork's `8b0b267`:
+Everything that has no upstream analogue lives directly in the fork's own commit history, with the rationale in the code itself (each patch carries a comment explaining the WHY, often with real measurements) rather than repeated here. As of the fork's `73e0ecc`:
 
 | file | what, briefly |
 |---|---|
-| `Dockerfile` | SPD-floor guard (`DASH_SPD_FLOOR`, anchored `sed` into `dashenc.c`), `socat`, the `direct-dash-gate.sh` `COPY` |
-| `nginx-transcoder/nginx.conf` / `nginx-no-ssl.conf` | `wait_key`/`wait_video` A/V-sync fix, `$name`/`${DASH_NAME}` path-safety split, `-b:a 1024k`, `dashName` in `/nginxInfo` |
+| `Dockerfile` | `socat` and the `direct-dash-gate.sh` `COPY`, both for the SRT direct-DASH listeners |
+| `nginx-transcoder/nginx.conf` / `nginx-no-ssl.conf` | `-b:a 1024k` on the Opus encode. The `dashName` field on `/nginxInfo` was also local until it went upstream in [#84](https://github.com/EnvelopSound/Earshot/pull/84) |
 | `nginx-transcoder/entrypoint.sh` | the SRT direct-DASH listener block (~150 lines: `socat` gate on `:9100`/`:9101`, `JOIN_MAP` derivation, the log-permission workaround) - this deployment's owner-SRT route bypasses RTMP entirely, which stock Earshot has no model for at all |
 | `nginx-transcoder/direct-dash-gate.sh` | new file: the peer-IP admission gate for the two direct-DASH listeners |
 | `webtools/src/Webtools.js` | `probeDirectStream()` and the `dashName`/`directStream` state pair - the client half of the same direct-DASH detection |
-| `webtools/src/GainSliderBox.js` | one kept comment (measured RMS numbers for the AudioContext-suspend fix); the fix itself is upstream via #64 |
+| `.dockerignore` | new file: an explicit allowlist, because a submodule checkout is the whole repo tree rather than the curated subset a vendored copy had, so the build context has to be narrowed deliberately |
+| `webtools/yarn.lock` | `moment` 2.29.4 to 2.30.1, not yet offered upstream |
 
-None of the above is upstreamable on its own terms: the SRT direct-DASH feature is architecture specific to this deployment, not a generic Earshot fix.
+The SRT direct-DASH work is not upstreamable on its own terms: it is architecture specific to this deployment, not a generic Earshot fix. The rest of the table is a different matter and the status is in [docs/UPSTREAM.md](../../docs/UPSTREAM.md) - `nginx.conf`'s `wait_key`/`wait_video` fix merged upstream as [#53](https://github.com/EnvelopSound/Earshot/pull/53), and the `GainSliderBox.js` row is a comment left behind by a fix that is already upstream via [#64](https://github.com/EnvelopSound/Earshot/pull/64).
 
 ## What this service does in the stack
 
-nginx-rtmp accepts the relayed stream from `rtmp-ingest` on :1935 (internal only) and `exec`s Envelop's PCE-aware ffmpeg fork per published stream:
+`earshot` takes contribution two ways, and which one carries your stream depends on how it arrived.
+
+**The direct listeners, which the default routes use.** `SRT_DIRECT_LISTENERS` (default 1, `docker-compose.yml`) arms two compose-internal sockets: `:9100` joins four 4-channel tracks to 16 channels, `:9101` passes a single quad through. Both SRT gateways hand raw MPEG-TS to them - the owner route since 2026-08-09, guests since 2026-08-21 - so nothing on that path touches RTMP or the AAC re-encode. `direct-dash-gate.sh` admits only a gateway holding a claimed session.
+
+**The RTMP ingress**, which serves the legacy contribution route (OBS Music Edition, the demo loop, and guests with `GUEST_SRT_DIRECT=0`): nginx-rtmp accepts the relayed stream from `rtmp-ingest` on :1935 (internal only) and `exec`s the PCE-aware ffmpeg fork per published stream:
 
 ```
 ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
@@ -33,8 +38,8 @@ ffmpeg -analyzeduration 10M -i rtmp://127.0.0.1/live/$name \
   -f dash /opt/data/dash/${DASH_NAME}.mpd
 ```
 
-That is the line as it stands in `src/nginx-transcoder/nginx-no-ssl.conf`, which is the canonical copy: read the rationale for `-b:a 1024k` and for keeping `$name` on `-i` only in the comment block directly above it in that file rather than here. `nginx.conf` (the `SSL_ENABLED=true` variant) must carry the identical exec line, so diff the two whenever either changes: if they drift, an SSL deployment runs an audio configuration nothing has tested.
+That exec line belongs to the RTMP ingress; the direct listeners run their own ffmpeg from the entrypoint's listener block. It is as it stands in `src/nginx-transcoder/nginx-no-ssl.conf`, which is the canonical copy: read the rationale for `-b:a 1024k` and for keeping `$name` on `-i` only in the comment block directly above that line in [`src/nginx-transcoder/nginx-no-ssl.conf`](src/nginx-transcoder/nginx-no-ssl.conf), rather than repeated here. `nginx.conf` (the `SSL_ENABLED=true` variant) must carry the identical exec line, so diff the two whenever either changes: if they drift, an SSL deployment runs an audio configuration nothing has tested.
 
-16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see `.env.example` at the repo root - `-c:v copy` passthrough by default, VP9 realtime documented as the opt-in codec policy). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
+16-channel Opus is hardcoded upstream; the video codec policy comes from the `FFMPEG_FLAGS` env var (see [`.env.example`](../../.env.example) at the repo root - `-c:v copy` passthrough by default, VP9 realtime documented as the opt-in codec policy). The live MPEG-DASH segmentation happens *here*, not in the shaka service (shaka cannot ingest a 16-channel live stream and is a `tools`-profile utility for VOD packaging only).
 
 HTTP :80 (mapped to host :8081 in dev) serves the webtools monitoring UI at `/webtools`, `rtmp_stat` at `/stat`, a health endpoint at `/` and the raw DASH output at `/dash` (the player normally serves it from the shared volume instead).

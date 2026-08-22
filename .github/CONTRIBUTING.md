@@ -13,11 +13,13 @@ For security problems, do not open an issue. See [SECURITY.md](SECURITY.md).
 ```bash
 git clone https://github.com/mormegil6/ambisonic-box.git && cd ambisonic-box
 git submodule update --init      # the patched HOAST360 player; nothing works without it
-./scripts/setup.sh               # writes .env and generates YOUR OWN publish key
+./scripts/setup.sh --source      # writes .env and generates YOUR OWN publish key
 docker compose up -d --build
 ```
 
-On Windows, run `.\setup.cmd` in place of `./scripts/setup.sh` (cmd.exe and PowerShell alike), and split the first line at the `&&`, which Windows PowerShell does not accept. `setup.cmd` is a launcher for that same `scripts/setup.sh` rather than a second implementation of it; the README's quick start has the detail.
+**`--source` is what makes your own code run.** Without it, setup writes a `.env` pinned to the published release, every service resolves to a `ghcr.io` image, and `--build` becomes a no-op: the stack you test is the last release, not your change. Users want that default; contributors do not. If you already have a `.env` from a normal setup, delete its `COMPOSE_FILE` line to switch it over.
+
+On Windows, run `.\setup.cmd --source` in place of `./scripts/setup.sh --source` (cmd.exe and PowerShell alike), and split the first line at the `&&`, which Windows PowerShell does not accept. `setup.cmd` is a launcher for that same `scripts/setup.sh` rather than a second implementation of it; the README's quick start has the detail.
 
 Two things that catch people:
 

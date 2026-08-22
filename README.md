@@ -64,10 +64,11 @@ AMBI_BOX_TAG=v1.0.0
 
 ### Building from source (for development)
 
-For working on the stack, or tracking `main` between releases - the published images only move when a version is tagged, while a build always matches the tree you are standing on. Run setup first exactly as in the quick start (secrets work identically on this path), then switch compose from pulling to building by deleting the `COMPOSE_FILE` line setup wrote into `.env`. After that, same two commands on every platform:
+For working on the stack, or tracking `main` between releases - the published images only move when a version is tagged, while a build always matches the tree you are standing on. Pass `--source` to setup and it writes a `.env` with no `COMPOSE_FILE` line, so compose builds everything from this tree (on an existing `.env`, delete that line by hand):
 
 ```bash
 git submodule update --init             # the patched player, baked in at build
+./scripts/setup.sh --source             # .\setup.cmd --source on Windows
 docker compose up -d --build
 ```
 
@@ -90,7 +91,7 @@ The build compiles `earshot`'s nginx-rtmp and ffmpeg fork from source: minutes o
 
 **What your encoder sends, and what the box does with it.** Whichever route you use, the stream arrives as H.264 video and AAC audio, because that is what OBS can send. From the `earshot` service onward the audio is Opus and is never downmixed: the channel count that arrives is the channel count delivered, 16 for 3rd order (the canonical configuration, ACN/SN3D) and 4 for 1st.
 
-Both SRT routes take the direct path by default: the tracks pass untouched to the `earshot` service, which combines them and converts to Opus in one operation, so audio is compressed once on the way in rather than twice. What differs is supervision: your **own** stream is authenticated by its passphrase and otherwise left alone, while a **guest** session is arbitrated by telemetry throughout - admitted into the single slot, counted, time-limited, and cut off when it must be - whichever transport carries it. `GUEST_SRT_DIRECT=0` reroutes guests through the legacy RTMP hop instead: their tracks are re-encoded to one 16-channel AAC stream and republished into the arbiter over RTMP - the older, blunter enforcement path, at the price of a second lossy compression.
+Both SRT routes take the direct path by default: the tracks pass untouched to the `earshot` service, which combines them and converts to Opus in one operation, so audio is compressed once on the way in rather than twice. What differs is supervision: your **own** stream is authenticated by its passphrase and otherwise left alone, while a **guest** session is arbitrated by `telemetry` throughout - admitted into the single slot, counted, time-limited, and cut off when it must be - whichever transport carries it. `GUEST_SRT_DIRECT=0` reroutes guests through the legacy RTMP hop instead: their tracks are re-encoded to one 16-channel AAC stream and republished into the arbiter over RTMP - the older, blunter enforcement path, at the price of a second lossy compression.
 
 **Why 16 channels and not 25**, and the two candidate routes past that ceiling, are in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). The short version: ffmpeg's AAC encoder accepts only *named* channel layouts, so 4 and 16 pass while 9 and 25 are refused. That binds the AAC contribution leg only - the on-demand path never touches AAC and is 4th-order verified end to end.
 
@@ -130,7 +131,7 @@ Two operator-facing views of the same running stream:
 
 ## Stream your own content
 
-**What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because loop-source publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
+**What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because `loop-source` publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
 
 Two ways in. **SRT is the recommended one**: stock OBS, no patched fork, the same recipe on macOS and Windows. RTMP is the legacy route and needs [OBS Studio Music Edition](https://github.com/pkviet/obs-studio/releases/), a Windows-only fork, because RTMP carries only one audio track.
 
@@ -163,7 +164,7 @@ Custom Output (FFmpeg) lives on the *Recording* tab even though it streams to a 
 
 The guides are meant to be followed literally, and they also explain why: `4.0` and never `7.1`, plain `aac` and never `mp2` or `aac_at`, `latency` in microseconds, `pkt_size=1128` through a tunnel, and the leading space that silently turns the URL into a filename. Each was established by pushing a per-channel tone ladder through real hardware, because each obvious-looking alternative fails **without any error**.
 
-Channel counts: 4 and 16 pass through as they are, a 2nd-order source must be zero-padded to 16 by the sender, and stereo or mono produces no output at all. Why 16 is the ceiling today, and what would lift it, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). Bitrate guidance is in [docs/BITRATE.md](docs/BITRATE.md), together with this project's own measurement of the AAC ladder ([aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual), with [BAM-Q](https://doi.org/10.1109/TASLP.2019.2925620) as a second opinion).
+Channel counts: 4 and 16 pass through as they are, a 2nd-order source must be zero-padded to 16 by the sender, and stereo or mono produces no output at all. Why 16 is the ceiling today, and what would lift it, is in [docs/AMBISONIC-ORDER.md](docs/AMBISONIC-ORDER.md). Bitrate guidance is in [docs/BITRATE.md](docs/BITRATE.md), together with this project's own measurement of the AAC ladder ([aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): [AMBIQUAL](https://github.com/QxLabIreland/Ambiqual), with [BAM-Q](https://doi.org/10.1109/TASLP.2019.2904850) as a second opinion).
 
 The stream appears at `http://<host>:8080/dash/<DASH_NAME>.mpd` (default `hoast_demo`), which is what the bundled player requests. `DASH_NAME` is independent of your keys, so rotating a credential never moves the manifest URL.
 
@@ -309,7 +310,7 @@ Compose files, service configs and scripts in this repository: **Apache 2.0**. T
 | **Reference clips and media** shipped as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips): the `directions` and `colortones` clips, the 8K 360 test card, and the caption sidecars | **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** - reuse, remix and redistribute freely, including commercially, with attribution (one disclosed exception in [docs/VOD.md](docs/VOD.md#licence)) |
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
 | [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (submodule at `services/earshot/src`, tracking [a fork](https://github.com/mormegil6/Earshot)) | GPL |
-| Envelop/pkviet FFmpeg fork (built inside the earshot image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
+| Envelop/pkviet FFmpeg fork (built inside the `earshot` image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |
 | nginx, Alpine packages | BSD-2-Clause / various |

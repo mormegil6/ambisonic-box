@@ -22,8 +22,12 @@ services:
       - /:/host/root:ro                        # disk usage of the HOST root (df /)
       - /proc/uptime:/host/uptime:ro           # host uptime (not the container's)
       # Deployment favicon for the dashboard, from the same brand.json the player
-      # uses. Optional; the committed generic icon shows when this is absent.
-      - ./custom/brand.json:/app/brand.json:ro
+      # uses. Optional, and commented out because `custom/` is gitignored: a
+      # fresh clone has no such file, and compose creates a DIRECTORY in its
+      # place, which the reader then has to debug. Copy
+      # services/hoast-player/brand.example.json to custom/brand.json first,
+      # then uncomment this and its twin under hoast-player.
+      #- ./custom/brand.json:/app/brand.json:ro
     ports:
       # Expose the PRIVATE dashboard only on the Tailscale interface, never
       # publish :8090 to 0.0.0.0. Replace with this host's 100.x Tailscale IP:
@@ -34,7 +38,9 @@ services:
       # Deployment branding: the committed page is generic; this mounts a small
       # brand.json (About text, a citation, a copyright line) that the page loads
       # at startup. Keys are documented in services/hoast-player/brand.example.json.
-      - ./custom/brand.json:/usr/share/nginx/html/brand.json:ro
+      # Commented out for the same reason as the dashboard's copy above: create
+      # custom/brand.json first, then uncomment both.
+      #- ./custom/brand.json:/usr/share/nginx/html/brand.json:ro
 
   # ---------------------------------------------------------------------------
   # OWNER SRT ROUTE (optional). Push your OWN 16-channel stream from stock OBS

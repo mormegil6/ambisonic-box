@@ -32,7 +32,7 @@ docker run --rm -v "$ROOT":/content google/shaka-packager:v3.7.2 packager \
 echo "packaged: $DASH/$MPD"; ls -lh "$DASH"
 
 # Caption sidecars, if the clip has any. These are NOT packaged into the MPD
-# (side-loaded native text tracks are used deliberately - see PAPER-NOTES 14),
+# (side-loaded native text tracks are used deliberately),
 # so nothing else copies them, and a repackage into an existing directory
 # would otherwise leave the PREVIOUS clip's captions in place. That is exactly
 # what happened on the 2026-08-05 six-direction rebuild: the manifest and every

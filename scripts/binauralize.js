@@ -47,8 +47,18 @@ function writeWav(file, left, right, sampleRate) {
     await page.goto((process.env.BASE || 'http://127.0.0.1:8099') + '/scripts/binauralize.html',
                     { waitUntil: 'domcontentloaded' });
 
+    // HEADROOM, applied per item across all of its conditions at once.
+    // The binaural render can exceed full scale on loud material, and clipping
+    // is a nonlinear distortion baked into the 16-bit file that no later
+    // rescaling undoes - BAM-Q would then be scoring clipping rather than the
+    // codec. One scale factor per ITEM, never per file: the whole measurement
+    // is a comparison between an item's conditions, so they must all be moved
+    // by the same amount. (This surfaced when the study's excerpts were fixed
+    // to be content-selected rather than cut at offset 0; the old excerpts were
+    // quiet enough never to reach full scale, so the harness never clipped.)
     let totalClipped = 0;
     for (const item of ITEMS) {
+        const rendered = [];
         for (const mode of MODES) {
             const conds = mode === 'buggy' ? BUGGY_CONDS : CONDS;
             for (const cond of conds) {
@@ -56,16 +66,29 @@ function writeWav(file, left, right, sampleRate) {
                 if (!fs.existsSync(src)) { console.log(`  MISSING ${src}`); continue; }
                 const url = `${process.env.BASE || 'http://127.0.0.1:8099'}/${src}`;
                 const r = await page.evaluate(([u, m]) => window.binauralize(u, m), [url, mode]);
-                const suffix = mode === 'fixed' ? '' : '_buggy';
-                const dst = path.join(OUT, `${item}_${cond}${suffix}_binaural.wav`);
-                const clipped = writeWav(dst, r.left, r.right, r.sampleRate);
-                totalClipped += clipped;
-                console.log(`  ${item.padEnd(14)} ${(cond + '/' + mode).padEnd(14)} -> ` +
-                            `${path.basename(dst).padEnd(38)} ${r.length} @ ${r.sampleRate}` +
-                            `${clipped ? `  CLIPPED ${clipped}` : ''}`);
+                rendered.push({ cond, mode, r });
             }
+        }
+        let peak = 0;
+        for (const { r } of rendered)
+            for (const ch of [r.left, r.right])
+                for (const v of ch) { const a = Math.abs(v); if (a > peak) peak = a; }
+        const scale = peak > 0.99 ? 0.99 / peak : 1;
+        if (scale !== 1)
+            console.log(`  ${item.padEnd(14)} peak ${peak.toFixed(3)} -> scaling all conditions by ${scale.toFixed(4)} (${(20 * Math.log10(scale)).toFixed(2)} dB)`);
+        for (const { cond, mode, r } of rendered) {
+            const suffix = mode === 'fixed' ? '' : '_buggy';
+            const dst = path.join(OUT, `${item}_${cond}${suffix}_binaural.wav`);
+            const L = scale === 1 ? r.left : r.left.map(v => v * scale);
+            const R = scale === 1 ? r.right : r.right.map(v => v * scale);
+            const clipped = writeWav(dst, L, R, r.sampleRate);
+            totalClipped += clipped;
+            console.log(`  ${item.padEnd(14)} ${(cond + '/' + mode).padEnd(14)} -> ` +
+                        `${path.basename(dst).padEnd(38)} ${r.length} @ ${r.sampleRate}` +
+                        `${clipped ? `  CLIPPED ${clipped}` : ''}`);
         }
     }
     if (totalClipped) console.log(`\n  WARNING: ${totalClipped} clipped samples total`);
+    else console.log('\n  no clipping');
     await browser.close();
 })();

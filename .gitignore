@@ -55,12 +55,17 @@ docs/PLAN.md
 *.bundle
 
 # measurement scratch: excerpts, per-condition encodes, binaural renders.
-# Regenerable from the corpus + harness; the deliverables (results.tsv,
-# bamq.tsv, the figures) are committed, these are not. opus-compression-test's
-# equivalent work dir was left untracked with no gitignore entry and was later
-# lost to manual cleanup, which is why the AAC study's item mapping had to be
-# recovered from session transcripts - explicit entries this time.
+# Regenerable from the corpus + harness. The deliverables are committed and
+# these are not: every .tsv at a study's top level is evidence behind a
+# published number and belongs in the repo, while anything under a work or
+# binaural directory is bulk audio that does not. Entries are explicit rather
+# than glob-based, so a new directory has to be added here deliberately.
 aac-bitrate-test/work/
+aac-bitrate-test/work-offset0-BAD-2026-08-15/
 aac-bitrate-test/binaural/
+# Same renders from the discarded offset-0 pass. Listed separately because the
+# patterns above are literal directory names: this one is 165 MB of WAVs that
+# a blanket `git add -A` would have committed.
+aac-bitrate-test/binaural-offset0-BAD/
 aac-bitrate-test/run.log
 opus-compression-test/work/

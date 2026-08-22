@@ -964,9 +964,38 @@
             document.head.appendChild(cb);
           }
           var clipMpd = vodUrl('/vod-dash/' + clip + '/' + clip + '.mpd');
-          orderFromMpd(clipMpd).then(function (order) {
-              hoast360.initialize(clipMpd, '/irs/', order);
-          });
+          // Check the manifest EXISTS before handing it to the player. Without
+          // this, a deployment that enabled VOD but never packaged the clips
+          // (VOD_ENABLED=1 serves the page; content/vod/dash/ is gitignored and
+          // produced by scripts/package-vod-dash.sh) got a player that
+          // initialised fine and 404ed every segment - which reads as broken
+          // software rather than as missing input. orderFromMpd cannot report
+          // it: it maps a failed fetch to the default order and carries on.
+          fetch(clipMpd, { method: 'HEAD', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r : Promise.reject(r.status); })
+            .then(function () {
+              return orderFromMpd(clipMpd).then(function (order) {
+                  hoast360.initialize(clipMpd, '/irs/', order);
+              });
+            })
+            .catch(function (status) {
+              // fetch rejects with a TypeError on any network-level failure, so
+              // `status` is only a number when the server actually answered.
+              var detail = typeof status === 'number'
+                ? 'HTTP ' + status
+                : 'the request did not complete';
+              var msg = document.getElementById('gateErrMsg');
+              if (msg) msg.textContent = status === 404
+                ? 'This clip is not packaged on this deployment yet. The VOD page is enabled, but content/vod/dash/ is empty: run scripts/encode-vod-ladder.sh then scripts/package-vod-dash.sh, or point vodBase at a host that already serves the packaged tree.'
+                : 'The clip manifest could not be loaded (' + detail + ').';
+              show('gateErr');
+            });
+          // init() binds #gateRetry and never runs in VOD mode (boot() returns
+          // into initVod before it), so the button inside #gateErr was dead on
+          // this path. initialize() is not re-entrant, so retry is a reload,
+          // the same recovery the live path uses.
+          var vodRetry = document.getElementById('gateRetry');
+          if (vodRetry) vodRetry.addEventListener('click', function () { location.reload(); });
           wireVodLoop();
           addLoopButton();
           if (info.captions) addCaptions(info.captions);
