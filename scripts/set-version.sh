@@ -82,15 +82,12 @@ if [ "$RELEASE" -eq 1 ]; then
     sed -e "s|^version: .*|version: \"$NEW\"|" \
         -e "s|^date-released: .*|date-released: \"$TODAY\"|" \
         "$CFF_FILE" > "$CFF_FILE.tmp"
-    # The image tag a fresh install pins (scripts/setup.sh PIN_TAG). Releases
-    # only: a -dev version has no published images to point at.
-    SETUP_FILE="scripts/setup.sh"
-    sed -e "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"v$NEW\"|" "$SETUP_FILE" > "$SETUP_FILE.tmp" \
-        && mv "$SETUP_FILE.tmp" "$SETUP_FILE" && chmod +x "$SETUP_FILE"
-    grep -q "^PIN_TAG=\"v$NEW\"" "$SETUP_FILE" || {
-        echo "failed: $SETUP_FILE has no PIN_TAG line to rewrite" >&2
-        exit 1
-    }
+    # PIN_TAG (scripts/setup.sh) is NOT touched here, deliberately. It is the
+    # image tag a fresh install pulls, so it must never name a tag with no
+    # images - and at this point in a release there are none yet: the tag that
+    # triggers the build has not even been pushed. Bumping it here made every
+    # release fail its own integration run until the images finished building.
+    # The ghcr-publish workflow bumps it once the images exist.
 else
     CFF_NOTE="version (date-released left on the last release)"
     sed -e "s|^version: .*|version: \"$NEW\"|" "$CFF_FILE" > "$CFF_FILE.tmp"
@@ -105,7 +102,6 @@ grep -q "^version: \"$NEW\"\$" "$CFF_FILE" || {
 echo "$OLD -> $NEW"
 echo "  $VERSION_FILE"
 echo "  $CFF_FILE: $CFF_NOTE"
-[ "$RELEASE" -eq 1 ] && echo "  scripts/setup.sh: PIN_TAG=v$NEW"
 echo
 
 if [ "$RELEASE" -eq 1 ]; then
@@ -114,9 +110,13 @@ next, to cut it:
   git commit -am "Release $NEW"
   git tag -a "v$NEW" -m "v$NEW"
   git push origin main "v$NEW"
+  gh release create "v$NEW" --verify-tag --notes-from-tag   # this is what mirrors it to GitLab
 
 then bump straight past it, so main never claims to BE a release it has moved on from:
   ./scripts/set-version.sh <next>-dev
+
+scripts/setup.sh PIN_TAG is not yours to touch: ghcr-publish bumps it once the
+images for this tag exist, so a fresh install never pulls a tag with no images.
 EOF
 else
     echo "next: git commit -am \"Back to development on $NEW\""
