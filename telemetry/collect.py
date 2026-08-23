@@ -3039,7 +3039,23 @@ def evaluate_alerts(s):
             for x in s["services"] if not x["healthy"]]
     d, t = s["system"]["disk_used_pct"], s["system"]["temp_c"]
     st = s["stream"]
-    stalled = bool(st["publishing"] and st["segment_age_s"] is not None and st["segment_age_s"] > SEG_STALE_S)
+    # WHO IS RESPONSIBLE FOR THE GAP. segment_age_s is the age of the newest
+    # segment on disk, and it keeps growing while the slot is empty and the loop
+    # is idle. A publisher that has only just claimed inherits all of it: on
+    # 2026-08-23 a guest was alerted as "publishing but segments 33s stale" four
+    # seconds after connecting, for 29 s that accrued while the slot was free.
+    # A publisher can only be blamed for staleness it had time to cause, so the
+    # condition also requires it to have been publishing at least as long as the
+    # threshold. A genuine stall still trips, SEG_STALE_S later.
+    _pub_since = state.get("_pub_since")
+    if not st["publishing"]:
+        _pub_since = None
+    elif _pub_since is None:
+        _pub_since = time.time()
+    state["_pub_since"] = _pub_since
+    _pub_for = (time.time() - _pub_since) if _pub_since else 0
+    stalled = bool(st["publishing"] and st["segment_age_s"] is not None
+                   and st["segment_age_s"] > SEG_STALE_S and _pub_for > SEG_STALE_S)
     # Trailing pair is the reading to track across the episode and whether lower
     # or higher is worse, so the recovery line can report how bad it got.
     _pub = publisher_label()
