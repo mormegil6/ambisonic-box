@@ -71,4 +71,20 @@ jobs:
           there=$(git ls-remote gitlab refs/heads/main | awk '{print $1}')
           echo "  github: $here"
           echo "  gitlab: $there"
-          [ "$here" = "$there" ] || { echo "::error::mirror push did not take effect"; exit 1; }
+          # AT-OR-AHEAD, not equal. Cutting a release pushes the release commit
+          # and then the "back to development" bump seconds later, so this job
+          # routinely verifies after GitLab has legitimately moved past the
+          # commit it was mirroring. Equality failed that twice (v1.0.1 and
+          # v1.0.2) and reported a working mirror as broken. What actually
+          # matters is whether this commit arrived, so test ancestry.
+          # $there may be a commit this checkout predates (it was pushed after
+          # this job started), so fetch it before asking about ancestry or
+          # merge-base errors on an unknown object and the elif goes to else.
+          git fetch -q gitlab main 2>/dev/null || true
+          if [ "$here" = "$there" ]; then
+            echo "  in sync"
+          elif git merge-base --is-ancestor "$here" "$there" 2>/dev/null; then
+            echo "  gitlab is ahead of this commit; it arrived and a later push followed"
+          else
+            echo "::error::mirror push did not take effect"; exit 1
+          fi
