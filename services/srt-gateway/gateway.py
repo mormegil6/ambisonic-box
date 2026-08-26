@@ -832,9 +832,21 @@ class Gateway:
         if legacy:
             url = f"{ARBITER_URL}/rtmp/owner/done?name={urllib.parse.quote(s['name'])}"
         else:
+            # WHY the session ended, not just that it did. Without this the
+            # gateway knows exactly what was wrong ("unusable audio: 1 track(s)
+            # x 2 ch") and the sender sees only a dropped connection: SRT can
+            # carry a rejection reason during the handshake, but the audio
+            # layout is not known until media has been buffered and probed, and
+            # an established connection has no channel to explain its own
+            # teardown. So the reason goes out of band, for the status page the
+            # sender is already watching. One publisher at a time means the
+            # last reason is unambiguous without identifying the caller, which
+            # is just as well: the department's UDP forward presents every
+            # external guest as the same source address.
             url = (f"{ARBITER_URL}/gw/session/done"
                    f"?session={urllib.parse.quote(s['session'])}"
-                   f"&gw={urllib.parse.quote(GW_SECRET)}")
+                   f"&gw={urllib.parse.quote(GW_SECRET)}"
+                   f"&reason={urllib.parse.quote(str(s.get('end_reason') or ''))[:200]}")
         # Retried, because a lost done strands the slot: telemetry would hold
         # this session live until the 60 s beat-silence rule demoted it, with
         # the demo loop still down. Cheap insurance against a transient blip.
@@ -914,6 +926,9 @@ class Gateway:
             return False
 
     def end_session(self, s, drop_caller, reason):
+        # Set before anything else: _terminate_child runs on its own thread and
+        # is what posts done, so recording the reason later would race it.
+        s["end_reason"] = reason
         with self.lock:
             if self.session is not s:
                 return
