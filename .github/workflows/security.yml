@@ -68,13 +68,24 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # NO LAYER CACHE HERE, deliberately, unlike the build workflow. With
+      # cache-from=type=gha the `apk add` layer is restored from whenever it was
+      # first built, so the scan reports on the package set of that day rather
+      # than of today. On 2026-08-26 that meant rtmp-ingest kept testing as
+      # openssl 3.5.7-r0, and failing CVE-2026-14456, while Alpine v3.24 had
+      # already published the fixed 3.5.8-r0: rebuilding changed nothing because
+      # the layer never rebuilt. (`apk add --no-cache` does not help; it governs
+      # apk's own index, not Docker's layer reuse.) A scan that can silently
+      # test a stale image is worse than a slow one, so this job always builds
+      # from scratch and pulls fresh bases.
       - name: build images
         uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
           set: |
-            *.cache-from=type=gha
+            *.no-cache=true
+            *.pull=true
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 
