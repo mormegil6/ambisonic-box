@@ -785,9 +785,22 @@
             return fetch(url, { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.text() : ''; })
                 .then(function (t) {
-                    var m = t.match(/audio_channel_configuration[^>]*value="(\d+)"/i)
-                         || t.match(/AudioChannelConfiguration[^>]*value="(\d+)"/);
-                    var ch = m ? parseInt(m[1], 10) : 16;
+                    // The silent stereo AAC keep-alive set also carries an
+                    // AudioChannelConfiguration, value="2". Only the Opus set
+                    // describes the ambisonic order, so read it from there and
+                    // never from whichever set the muxer emitted first: on a
+                    // 4-channel first-order stream a value="2" match falls
+                    // through to order 3 and builds a 16-convolver graph for a
+                    // 4-channel feed.
+                    var ch = 0;
+                    t.split(/(?=<AdaptationSet)/).forEach(function (blk) {
+                        if (!/codecs="opus"/i.test(blk)) return;
+                        var mm = blk.match(/audio_channel_configuration[^>]*value="(\d+)"/i)
+                              || blk.match(/AudioChannelConfiguration[^>]*value="(\d+)"/);
+                        var n = mm ? parseInt(mm[1], 10) : 0;
+                        if (n > ch) ch = n;
+                    });
+                    if (!ch) ch = 16;
                     var order = { 4: 1, 9: 2, 16: 3, 25: 4 }[ch];
                     if (!order) order = 3;
                     if (window.console) console.log('HOA order', order, '(' + ch + ' ch) from manifest');
