@@ -2,7 +2,14 @@
 # alpine's nginx + nginx-mod-rtmp packages are published for x86_64 and aarch64.
 FROM alpine:3.24
 
-RUN apk add --no-cache nginx nginx-mod-rtmp gettext
+# Patch the base image's OS packages BEFORE installing. `apk add` resolves
+# missing dependencies but never upgrades ones the base already carries: nginx
+# depends on libssl3/libcrypto3, alpine:3.24.1 ships those at 3.5.7-r0, that
+# satisfies the dependency, and apk leaves them. So this image kept scanning as
+# 3.5.7-r0 and failing CVE-2026-14456 while Alpine v3.24 had 3.5.8-r0 available,
+# and no amount of rebuilding changed it.
+RUN apk upgrade --no-cache \
+ && apk add --no-cache nginx nginx-mod-rtmp gettext
 
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
 # guest endpoint snippets; the entrypoint includes them only when

@@ -3,12 +3,14 @@
 #   docker build -f services/hoast-player/Dockerfile .
 FROM nginx:1.31.3-alpine
 
-# Patch the base image's OS packages. This image is unusual among the stack's:
-# every other one runs `apk add` or `apt-get install`, which refreshes the
-# package index and therefore picks up current versions as a side effect. This
-# one only COPYs files onto the nginx base, so without this line it ships
-# whatever was baked in the day that base image was published - and it is the
-# one image on the public internet. Container scanning found the difference:
+# Patch the base image's OS packages, as every image here should. An earlier
+# version of this comment claimed the other images got this for free because
+# `apk add` refreshes the package index and so picks up current versions. That
+# is wrong, and it cost a red CI run on 2026-08-27: `apk add` installs what is
+# MISSING and leaves what is already present, so a base image's own OpenSSL
+# survives untouched however fresh the build. rtmp-ingest shipped 3.5.7-r0 for
+# exactly that reason. This image is still the most exposed one, being the only
+# one on the public internet, but it is not the only one that needs the line. Container scanning found the difference:
 # OpenSSL (heap use-after-free in PKCS7_verify, CVE-2026-45447), curl/libcurl
 # (cookie leak across reused connections, CVE-2026-6276), c-ares, expat and
 # libxml2, all HIGH and all with fixes already available upstream.
