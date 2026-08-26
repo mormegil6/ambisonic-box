@@ -1,6 +1,8 @@
 # Chrome: multichannel Opus fails to decode (DirectOpusAudioDecoding)
 
-**STATUS 2026-08-21: FIXED UPSTREAM, NOT YET IN ANY RELEASE.** Chromium CL [8266681](https://chromium-review.googlesource.com/c/chromium/src/+/8266681) landed on `main` at position 1683608 on 2026-08-21, marked `Fixed: 547065816`. It repairs the channel-mapping logic in `OpusAudioDecoder` and adds regression tests. It missed the M153 branch point (2026-08-17) by four days, so the first release expected to carry it is **M154, stable 2026-09-22**. Stable Chrome 151 was measured still broken on 2026-08-21.
+**STATUS 2026-08-26: FIXED, AND BEING MERGED BACK TO M152/M153.** The tracker now marks 547065816 Fixed, verified in 154.0.8021.0, with `Merge: 152, 153` and the assignee confirming "Merging back to M153 and maybe M152 SGTM. I'll start the process." So the fix is no longer gated on M154 stable (2026-09-22) as recorded below; it should reach a release sooner. Re-check which stable line carries it before telling anyone to upgrade, and retire the `--disable-features=DirectOpusAudioDecoding` workaround only once a shipped stable is measured clean.
+
+Earlier status, kept for the timeline (2026-08-21): Chromium CL [8266681](https://chromium-review.googlesource.com/c/chromium/src/+/8266681) landed on `main` at position 1683608 on 2026-08-21, marked `Fixed: 547065816`. It repairs the channel-mapping logic in `OpusAudioDecoder` and adds regression tests. It missed the M153 branch point (2026-08-17) by four days, so the first release expected to carry it is **M154, stable 2026-09-22**. Stable Chrome 151 was measured still broken on 2026-08-21.
 
 RETIREMENT TEST, so this page does not outlive the bug: re-run the one-click check below on Chrome M154 or later. If the 16-channel row passes with no flags, delete this document and the workaround it describes. The player's own capability gate needs no change either way, because it probes rather than checking version numbers.
 
