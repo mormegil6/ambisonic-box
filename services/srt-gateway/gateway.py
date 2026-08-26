@@ -549,6 +549,13 @@ class Gateway:
                        f"expected 4x4 or 1x4")
             log(f"reject {s['ip']} ({why})")
             self._memoize(s["ip"])      # same reason as above: no free retry loop
+            # Tell the arbiter WHY, out of band. This refusal happens before
+            # _session_claim, so there is no session for done to reference, and
+            # SRT cannot explain a teardown to an established caller anyway: the
+            # sender just sees the connection drop. Without this the gateway is
+            # the only thing that ever knows, in a container log the pusher
+            # cannot read, which cost a tester an evening of guessing.
+            self._notify_reject(why)
             self.events.put(("force_teardown",
                              f"unsupported audio layout ({tracks}x{channels})"))
             return None
@@ -924,6 +931,20 @@ class Gateway:
             return ep.get("name") == s["name"] and ep.get("state") in ("live", "handover")
         except Exception:
             return False
+
+    def _notify_reject(self, why):
+        """Best effort: a refusal the pusher should be told about. Never raises
+        and never blocks the teardown - the connection is going away either way,
+        and a stalled arbiter must not hold the slot open."""
+        if MODE != "guest":
+            return
+        try:
+            url = (f"{ARBITER_URL}/gw/session/reject"
+                   f"?gw={urllib.parse.quote(GW_SECRET)}"
+                   f"&reason={urllib.parse.quote(str(why)[:200])}")
+            urllib.request.urlopen(url, timeout=3).read()
+        except Exception as e:
+            log(f"reject notice not delivered ({e})")
 
     def end_session(self, s, drop_caller, reason):
         # Set before anything else: _terminate_child runs on its own thread and

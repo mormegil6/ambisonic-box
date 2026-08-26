@@ -1933,6 +1933,39 @@ def gw_done(role, session):
     return 200, {}
 
 
+def gw_reject(role, reason):
+    """/gw/session/reject - a push the gateway refused BEFORE it could claim.
+
+    The claim is what creates a session here, and the gateway probes the audio
+    layout before claiming, so the commonest failure of all (stereo, mono, or
+    no audio at all) is refused while telemetry still has nothing to attach a
+    reason to. done cannot carry it either: there is no session id to match.
+
+    SRT gives the sender nothing to read. A rejection reason exists only in the
+    handshake, and the layout is not known until media has been buffered, so an
+    established connection can only be dropped, never explained. The pusher sees
+    a bare I/O error. This is the out-of-band path that turns that into a
+    sentence on the player page they are already watching.
+
+    Only recorded while the slot is FREE: a live session's own ending outranks a
+    stranger's refused handshake, and one publisher at a time means the latest
+    refusal is unambiguous without identifying anyone. Which is just as well,
+    since the department's UDP forward presents every external guest as the same
+    source address."""
+    if role != "guest" or not GUEST_ENABLED:
+        return 200, {}
+    reason = (reason or "").strip()[:200]
+    if not reason:
+        return 200, {}
+    with _guest_lock:
+        if _guest["state"] != "free":
+            return 200, {}
+        _guest.update(last_end=time.time(), last_end_reason=reason)
+        _guest_save()
+    print(f"guest push refused ({reason})", flush=True)
+    return 200, {}
+
+
 def guest_update(name):
     """on_update liveness ping. Non-2xx here makes nginx-rtmp drop the
     publisher: the enforcement point for the cap and the kill button."""
@@ -3435,6 +3468,9 @@ def serve():
                     return self._json(code, body)
                 if act == "done":
                     code, body = gw_done(role, (args.get("session") or [""])[0])
+                    return self._json(code, body)
+                if act == "reject":
+                    code, body = gw_reject(role, (args.get("reason") or [""])[0])
                     return self._json(code, body)
                 return self._json(404, {"error": "not found"})
             if p == "/rtmp/owner/notify":
