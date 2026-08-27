@@ -439,12 +439,34 @@
         // The badge and dot are driven from this probe rather than the 60 s
         // status file: on-demand makes the stream's state change in seconds, and
         // a minute of lag would show LIVE over an idle player.
+        // Which stream is on air. 'owner' and 'live'/'handover' come straight
+        // from the arbiter; anything else with a running source is the demo.
+        // English only, like the rest of the page chrome: gnLang() exists for
+        // the two guest-facing panels, which address the person pushing a
+        // stream, and it is reachable only from flags inside those panels. A
+        // badge that is always visible must not depend on a toggle that is not.
+        // 'demo' rather than 'demo loop' so the badge stays on one line.
+        function sourceLabel(p) {
+            var st = p.endpoint && p.endpoint.state;
+            if (st === 'owner') return 'owner';
+            if (st === 'live' || st === 'handover') return 'guest';
+            return 'demo';
+        }
+
         function setBadge(p) {
             probeOk = true;
+            window.__LAST_P__ = p;
             var badge = document.getElementById('stLive'), dot = document.getElementById('stDot');
             var starting = p.live || p.source_running || p.starting;
             if (badge) {
-                badge.textContent = p.ready ? 'LIVE' : (starting ? 'starting' : 'idle');
+                // WHOSE stream this is, not just that one exists. The badge read
+                // LIVE for the demo loop, a guest and an owner alike, so when the
+                // loop resumed after a guest session the picture changed while the
+                // page said the same thing, and a viewer could not tell whether
+                // they were still watching the guest. endpoint.state already
+                // distinguishes them; nothing new is needed from telemetry.
+                badge.textContent = (p.ready ? 'LIVE' : (starting ? 'starting' : 'idle'))
+                                  + (starting || p.ready ? ' \u00b7 ' + sourceLabel(p) : '');
                 badge.className = 'stat-badge ' + (p.ready ? 'sb-live' : 'sb-off');
             }
             if (dot) {
