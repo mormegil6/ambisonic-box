@@ -209,12 +209,30 @@ jobs:
           if [ "$cur" = "$TAG" ]; then echo "  PIN_TAG is already $TAG"; exit 0; fi
           sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
           grep -q "^PIN_TAG=\"$TAG\"" scripts/setup.sh || { echo "::error::PIN_TAG rewrite did not take"; exit 1; }
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -qam "Pin a fresh install to $TAG, now that its images exist"
-          # main may have moved while the images built; rebase rather than force.
+          # COMMITTED THROUGH THE API, NOT `git push`. main is protected with
+          # "commits must have verified signatures", and a runner's git commit is
+          # unsigned, so every push was rejected with GH006 and the retry loop
+          # below treated a permanent refusal as a race and hammered it three
+          # times (v1.1.0: all five images published, pointer left at v1.0.2).
+          # GitHub signs commits it creates through the contents API with its own
+          # web-flow key, so they are Verified and the rule accepts them. That
+          # keeps the bump behind `needs: publish`, which is the whole point of
+          # this job: PIN_TAG must never name a tag whose images do not exist.
           for i in 1 2 3; do
-            git pull -q --rebase origin main && git push -q origin HEAD:main && { echo "  pinned $cur -> $TAG"; exit 0; }
-            echo "  push race, retrying ($i)"
+            SHA=$(gh api "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
+                    --jq .sha -f ref=main) || exit 1
+            if gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
+                 -f message="Pin a fresh install to $TAG, now that its images exist" \
+                 -f content="$(base64 -w0 < scripts/setup.sh)" \
+                 -f sha="$SHA" -f branch=main >/dev/null; then
+              echo "  pinned $cur -> $TAG"; exit 0
+            fi
+            # A 409 means main moved while the images built: re-read and retry.
+            # Anything else is not a race and will not fix itself.
+            echo "  contents API rejected the bump, retrying ($i)"
+            git fetch -q origin main && git checkout -q origin/main -- scripts/setup.sh
+            sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
           done
-          echo "::error::could not push the PIN_TAG bump"; exit 1
+          echo "::error::could not commit the PIN_TAG bump"; exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
