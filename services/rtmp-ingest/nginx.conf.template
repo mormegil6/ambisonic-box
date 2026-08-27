@@ -172,6 +172,25 @@ http {
         # key can run one more step - telling telemetry to preempt any
         # in-progress guest session - before answering nginx-rtmp, without
         # nesting proxy_pass inside the `if` blocks above.
+        # WITHOUT THIS, THE FALLBACK BELOW IS UNREACHABLE AND THE OWNER'S
+        # PUBLISH FAILS CLOSED, which is the opposite of what @owner_authed
+        # promises. The chain is two deep: /auth returns 418, the error_page
+        # here enters @owner_authed, and if telemetry is down the proxy there
+        # 502s and its own error_page is meant to mask that to 201. nginx
+        # defaults recursive_error_pages off, so an error_page reached from an
+        # error_page is ignored: the 502 propagates, nginx-rtmp sees a non-2xx
+        # and REJECTS the publisher. A telemetry outage therefore took down the
+        # one path documented as surviving it, and telemetry is the container
+        # stopped and started most often.
+        #
+        # The tell that this was a bug rather than a choice: /owner_done carries
+        # the identical error_page line and always worked, because nginx-rtmp
+        # calls it directly rather than through an error_page. Same intent, same
+        # code, different reachability.
+        #
+        # Server-scoped is safe here: these three error_page directives are the
+        # only ones in this server, and they are all this chain.
+        recursive_error_pages on;
         error_page 418 = @owner_authed;
         location @owner_authed {
             # Best-effort only: the owner's publish must succeed whether or
