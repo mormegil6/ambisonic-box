@@ -38,9 +38,12 @@ done
 
 ENV_FILE=".env"
 OVR_FILE="docker-compose.override.yml"
-# The release whose published images a fresh install runs. Maintained by
-# scripts/set-version.sh on every release cut, so it cannot go stale by hand.
-PIN_TAG="v1.0.2"
+# The release whose published images a fresh install runs. Bumped by
+# .github/workflows/ghcr-publish.yml once the images for a tag actually exist,
+# so this can never point at a tag with nothing behind it. set-version.sh
+# deliberately does NOT touch it, and says so, for that same reason: this file
+# previously claimed the opposite.
+PIN_TAG="v1.1.0"
 OWNER_PORT=8891
 
 say()  { printf '%s\n' "$*"; }
