@@ -229,6 +229,8 @@ Two things are deliberately *not* env-tunable: the audio policy (16-ch Opus, har
 | [`scripts/pick-excerpt.py`](scripts/pick-excerpt.py) | choose a measurement excerpt by content - level, spectral flatness, steadiness - rather than by a fixed offset |
 | [`scripts/smoke-hoast360.js`](scripts/smoke-hoast360.js) | headless-browser smoke test of the patched player |
 
+Shaka Packager writes the Opus `dOps` box little-endian, which makes Chromium's MSE refuse the segments it produces. It is unfixed in every release, reported as [shaka-packager#1627](https://github.com/shaka-project/shaka-packager/issues/1627), and it bites when packaging Opus from WebM into MP4. Packaging an existing Opus MP4 is unaffected, because the reader carries the mirror defect and the two cancel. Until it lands upstream, VOD packaging needs a patched build.
+
 `package-dash-variants.sh` drives Shaka Packager through the compose `tools` profile. The pattern for manual runs is `docker compose run --rm shaka <packager args>`.
 
 ## Troubleshooting
