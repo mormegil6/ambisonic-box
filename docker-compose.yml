@@ -476,6 +476,26 @@ services:
     # would report - the bound exists to catch a runaway, not to be approached.
     mem_limit: 512m
     restart: unless-stopped
+    # The one service that had no healthcheck, which was backwards: this is the
+    # container holding the docker socket, arbitrating the guest slot, starting
+    # and stopping loop-source and sending every alert, so a silent hang here
+    # strands guest admission with nothing left to notice or report it. It is
+    # also the failure a healthcheck catches and `restart: unless-stopped` does
+    # not, since a wedged process never exits.
+    #
+    # /api/live rather than a static endpoint, deliberately: it runs live_probe()
+    # into guest_public(), which takes the guest lock, so a check that answers
+    # proves the arbiter is still serving rather than merely that a socket is
+    # open. Measured at 37 ms on the box, against a 3 s timeout. python3 because
+    # the image is python:3.12-slim and carries no wget or curl, the same reason
+    # srt-gateway's check is written this way.
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/live', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
     logging: *bounded-logs
 
   # SRT guest ingest: terminates SRT on public UDP 8890 (the only place the
