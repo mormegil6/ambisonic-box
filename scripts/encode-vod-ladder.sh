@@ -8,7 +8,20 @@
 #
 # PRESET defaults to 4 because slower presets measured better on BOTH size and
 # fidelity at every rung - not the usual trade. Full 120 s directions clip,
-# SSIM against the source over a 30 s window:
+# SSIM against the source over a 30 s window.
+#
+# READ THESE AS RATIOS, NOT AS TARGETS. They were measured 2026-07-23
+# against the then-current near-lossless master, a 593 MB AV1 CRF 18 encode
+# carrying the OLD test card. That master was superseded on 2026-08-05 when
+# ac85744 swapped make-directions-clip.sh to libsvtav1 CRF 28, and deleted on
+# 2026-08-27 once the old card made it unusable. Today's ladder is cut from
+# the 173 MB CRF 28 master, so absolute byte counts here no longer match what
+# a run produces. The preset comparison they were taken for still holds.
+#
+# The live clips were cut at the default CRF below, with no override: PLAN's
+# 2026-08-08 entry records the 8 rungs and the 8K preset floor and no CRF.
+# A ladder found on the box at 3x these sizes was an earlier generation from
+# the near-lossless master, not a different CRF policy.
 #
 #   7680x3840   p6 169.5 MB 25.419 dB  ->  p5 147.1 MB 25.974 dB   -13.2 %, +0.55 dB
 #   5760x2880   p6 122.9 MB 25.749 dB  ->  p4 102.5 MB 26.255 dB   -16.6 %, +0.51 dB
