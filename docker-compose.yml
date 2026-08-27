@@ -567,7 +567,14 @@ services:
   # measurement scripts (lip-sync-test/), which is why that dir is mounted.
   # Usage: docker compose run --rm shaka <packager args>
   shaka:
-    image: google/shaka-packager:v3.7.2
+    # BUILT, not pulled. The official image writes the Opus dOps box
+    # little-endian, so the audio it packages is refused by Chromium's MSE and
+    # by every DASH player built on it. See services/shaka/README.md and
+    # shaka-project/shaka-packager#1627. Go back to the official image the
+    # moment a release carries the fix; nothing else here has to change.
+    build:
+      context: ./services/shaka
+    image: ambi-box-shaka:local
     profiles: ["tools"]
     entrypoint: packager
     volumes:

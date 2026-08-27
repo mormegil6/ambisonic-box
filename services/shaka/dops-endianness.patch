@@ -1,0 +1,52 @@
+diff --git a/packager/media/formats/mp4/box_definitions.cc b/packager/media/formats/mp4/box_definitions.cc
+index f1959d58e5..8e50c755bf 100644
+--- a/packager/media/formats/mp4/box_definitions.cc
++++ b/packager/media/formats/mp4/box_definitions.cc
+@@ -1964,7 +1964,10 @@ bool OpusSpecific::ReadWriteInternal(BoxBuffer* buffer) {
+     const int kMinOpusSpecificBoxDataSize = 11;
+     RCHECK(buffer->BytesLeft() >= kMinOpusSpecificBoxDataSize);
+     RCHECK(buffer->ReadWriteVector(&data, buffer->BytesLeft()));
+-    preskip = data[2] + (data[3] << 8);
++    // dOps stores PreSkip big-endian, like every other ISO BMFF field.
++    // Reading it little-endian turned a conformant 312 into 14337, and that
++    // value drives codec_delay_ns, so a 6.5 ms delay became 298.7 ms.
++    preskip = (data[2] << 8) + data[3];
+ 
+     // https://tools.ietf.org/html/draft-ietf-codec-oggopus-06#section-5
+     BufferWriter writer;
+@@ -1984,9 +1987,32 @@ bool OpusSpecific::ReadWriteInternal(BoxBuffer* buffer) {
+     // The version field shall be set to 0.
+     const uint8_t kOpusSpecificBoxVersion = 0;
+     buffer->writer()->AppendInt(kOpusSpecificBoxVersion);
+-    buffer->writer()->AppendArray(
+-        &opus_identification_header[kOpusMagicSignatureSize + 1],
+-        opus_identification_header.size() - kOpusMagicSignatureSize - 1);
++    // OpusHead stores OutputGain, InputSampleRate and PreSkip LITTLE-endian
++    // (RFC 7845 section 5); dOps stores the same fields BIG-endian. The field
++    // order and widths are identical, so appending the blob verbatim produced a
++    // structurally valid box carrying byte-swapped numbers: PreSkip 312 was
++    // written as 14337 and InputSampleRate 48000 as 2159738880. Chromium
++    // refuses the resulting segments with "Failure parsing MP4: Opus".
++    const uint8_t* head =
++        &opus_identification_header[kOpusMagicSignatureSize + 1];
++    const size_t head_size =
++        opus_identification_header.size() - kOpusMagicSignatureSize - 1;
++    const size_t kOpusHeadFixedFields = 10u;  // channels, preskip, rate, gain, family
++    DCHECK_GE(head_size, kOpusHeadFixedFields);
++    buffer->writer()->AppendInt(head[0]);  // OutputChannelCount
++    buffer->writer()->AppendInt(
++        static_cast<uint16_t>(head[1] | (head[2] << 8)));  // PreSkip
++    buffer->writer()->AppendInt(
++        static_cast<uint32_t>(head[3] | (head[4] << 8) | (head[5] << 16) |
++                              (static_cast<uint32_t>(head[6]) << 24)));  // InputSampleRate
++    buffer->writer()->AppendInt(
++        static_cast<uint16_t>(head[7] | (head[8] << 8)));  // OutputGain
++    buffer->writer()->AppendInt(head[9]);  // ChannelMappingFamily
++    // StreamCount, CoupledCount and the channel map are single bytes.
++    if (head_size > kOpusHeadFixedFields) {
++      buffer->writer()->AppendArray(&head[kOpusHeadFixedFields],
++                                    head_size - kOpusHeadFixedFields);
++    }
+   }
+   return true;
+ }

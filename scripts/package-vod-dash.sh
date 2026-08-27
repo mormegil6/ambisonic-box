@@ -46,9 +46,9 @@ args="$args,segment_template=/content/$drel/audio_\$Number\$.m4s"
 # PATCHED PACKAGER, NOT THE OFFICIAL IMAGE. Shaka writes the Opus dOps box
 # little-endian, so a stock build produces audio Chromium's MSE refuses:
 # InputSampleRate 48000 comes out as 2159738880. Reported as
-# shaka-packager#1627, unfixed in every release including v3.9.3. Build the
-# image from ambisonic-box-deployment/shaka-dops-fix, and go back to the
-# official one the moment a release carries the fix.
+# shaka-packager#1627, unfixed in every release including v3.9.3. Build it with
+# `docker compose --profile tools build shaka` (see services/shaka/README.md),
+# and go back to the official image the moment a release carries the fix.
 #
 # --user: Shaka runs as root in its container, so without this every output
 # lands root-owned in the bind mount, which nginx and rclone both trip over.
@@ -57,7 +57,7 @@ args="$args,segment_template=/content/$drel/audio_\$Number\$.m4s"
 # type="dynamic" with a minimumUpdatePeriod and no duration, and dash.js then
 # plays a 120 s clip as a live stream, starting it near the live edge about
 # 90 s in.
-docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT":/content shaka-packager:dops-fix packager \
+docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT":/content ambi-box-shaka:local packager \
   $args --segment_duration 2 --generate_static_live_mpd --mpd_output "/content/$drel/$MPD"
 
 echo "packaged: $DASH/$MPD"; ls -lh "$DASH"
