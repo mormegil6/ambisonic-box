@@ -13,11 +13,11 @@ Every route Safari offers for decoding audio, `decodeAudioData`, WebCodecs `Audi
 | WebCodecs `AudioDecoder`, 16-ch Opus | works | `isConfigSupported` false | `isConfigSupported` false |
 | MSE, `audio/mp4; codecs="opus"` | works | not supported | not supported (`MediaSource` itself is absent; only `ManagedMediaSource` exists) |
 | `decodeAudioData`, 4-ch and 8-ch AAC | works | works, channels distinct | not re-measured |
-| `decodeAudioData`, 16-ch AAC | n/a | cannot be produced at all (see below) | n/a |
+| `decodeAudioData`, 16-ch AAC | n/a | not tested; CoreAudio has no layout tag for it (see below) | n/a |
 
 Read that table one row at a time rather than as a verdict on a codec. Safari's four decode surfaces disagree with each other, and WebKit has a documented history of it: in Safari 27, `MediaSource.isTypeSupported('audio/mp4; codecs="opus"')` returns false while `decodeAudioData` decodes the same stereo Opus-in-MP4 file, and `canPlayType` returns the empty string for it. Measure the surface the code actually uses. An earlier revision of this document reported stereo Opus-in-MP4 as failing, on the strength of the wrong surface.
 
-The AAC ceiling is Apple's, not WebKit's, and it is not a browser bug to file. `afinfo` and `afconvert` refuse a 16-channel AAC file outside any browser, `CoreAudioBaseTypes.h` defines no AAC channel layout tag above 8, and Apple's own encoder fails at 9 channels and up. Even `kAudioChannelLayoutTag_HOA_ACN_SN3D` gives no route through AAC. Treat 8 channels as a permanent ceiling for planning: 1st order (4 channels) has a fully native AAC path on Safari, 3rd order has none.
+The AAC ceiling here is Apple's, not WebKit's, and it is not a browser bug to file. `afinfo` and `afconvert` refuse a 16-channel AAC file outside any browser, `CoreAudioBaseTypes.h` defines no AAC channel layout tag above 8, and Apple's own encoder fails at 9 channels and up. Read that as a ceiling on Apple platforms, not on the format and not on ffmpeg: the contribution leg produces 16-channel AAC with a PCE every day, and Apple simply has no layout tag able to describe it. No ffmpeg change touches this one, including the master fix in [docs/AMBISONIC-ORDER.md](AMBISONIC-ORDER.md). Even `kAudioChannelLayoutTag_HOA_ACN_SN3D` gives no route through AAC. Treat 8 channels as a permanent ceiling for planning: 1st order (4 channels) has a fully native AAC path on Safari, 3rd order has none.
 
 A Meta Quest 3's own Chromium-based browser decodes this stream, 16 and 25 channels, with no fallback needed at all; see the capability shot in the main [README](../README.md) and [docs/AMBISONIC-ORDER.md](AMBISONIC-ORDER.md).
 

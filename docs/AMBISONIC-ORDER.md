@@ -4,7 +4,7 @@ Where the ceiling actually sits, what is already verified above it, and the two 
 
 ## Why 16 channels
 
-In practice: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are named AAC layouts; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 is not one. The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. AAC's standard channel configurations stop at 7.1, so anything wider has to spell its layout out in a Program Config Element (PCE) instead of naming one - and ffmpeg writes a PCE only for the layouts in its own table, which is why `hexadecagonal` works and 25 channels does not. `earshot` pins ffmpeg 7.1, built from the checksum-verified release tarball, so the image does not inherit whatever the host has; that pin now also matters in the other direction, since FFmpeg 9.0 dropped `hexadecagonal` from that table. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
+In practice, on the FFmpeg 7.1 that `earshot` pins: 1st order (4 ch) and 3rd order (16 ch) work end to end with no special handling, because `quad` and `hexadecagonal` are layouts its AAC encoder has a PCE configuration for; 2nd order (9 ch) must be zero-padded to 16 by the sender, because 9 has no such configuration on any released FFmpeg (see [What changed upstream, and what has not shipped](#what-changed-upstream-and-what-has-not-shipped)). The ceiling sits on the contribution leg, not on delivery or rendering. ffmpeg's AAC encoder refuses a 25-channel (4th-order) input outright - 16 works only because `hexadecagonal` is a *named* layout it accepts - and that leg has to be AAC because RTMP/FLV cannot carry Opus. AAC's standard channel configurations stop at 7.1, so anything wider has to spell its layout out in a Program Config Element (PCE) instead of naming one - and ffmpeg writes a PCE only for the layouts in its own table, which is why `hexadecagonal` works and 25 channels does not. `earshot` pins ffmpeg 7.1, built from the checksum-verified release tarball, so the image does not inherit whatever the host has; that pin now also matters in the other direction, since FFmpeg 9.0 dropped `hexadecagonal` from that table and no release has yet shipped the ambisonic entries that replace it. Everything downstream is already order-4 capable, verified component by component: 25-channel Opus at `mapping_family 255` round-trips intact, Shaka Packager carries `AudioChannelConfiguration value="25"` into the manifest, and the player image ships the complete order-4 impulse-response set.
 
 ## The on-demand path is already 4th order
 
@@ -22,7 +22,7 @@ Noted, not built. The same per-track pattern extends past 3rd order. Six tracks 
 
 ## Channel counts
 
-The pipeline is order-flexible where the tools allow it. `earshot`'s transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder only accepts *named* channel layouts, so 4 (`quad`) and 16 (`hexadecagonal`) work while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders).
+The pipeline is order-flexible where the tools allow it. `earshot`'s transcode carries any channel count into `mapping_family 255` Opus, and the player reads the ambisonic order from the manifest's `AudioChannelConfiguration` (4 ch = 1st order, 16 ch = 3rd order; verified end to end for both). The hard limit sits in the RTMP contribution leg: ffmpeg's AAC encoder writes a PCE only for the layouts in its own static table, so on the pinned 7.1 that is 4 (`quad`) and 16 (`hexadecagonal`), while 9 (2nd order) and 25 (4th order) are refused outright; a 2nd-order source must be zero-padded to 16 channels by the sender (a valid 3rd-order signal with silent upper orders). Master has since gained a 9-channel ambisonic entry that no release carries, and 25 was not added at all: [What changed upstream, and what has not shipped](#what-changed-upstream-and-what-has-not-shipped).
 
 ### Why 2nd order pads to 16 rather than to 10
 
@@ -38,7 +38,7 @@ A reasonable idea, once you know modern ffmpeg: send 2nd order as a 10-channel n
 | 16 | `hexadecagonal` | yes |
 | 24 | `22.2` | yes |
 
-So 2nd order still has nowhere to land, but not for the reason it is easy to assume. The height layouts exist in this build; the AAC encoder simply has no PCE configuration for them and refuses them outright. Nine channels therefore go out zero-padded to 16, and that is the only reachable layout rather than a design preference.
+So 2nd order still has nowhere to land, but not for the reason it is easy to assume. The height layouts exist in this build; the AAC encoder simply has no PCE configuration for them and refuses them outright. Nine channels therefore go out zero-padded to 16, and that is the only reachable layout rather than a design preference. Both gaps are closed on FFmpeg master and in no release, which is the next subsection.
 
 Check the encoder, not the layout list, before designing around a channel count:
 
@@ -46,7 +46,13 @@ Check the encoder, not the layout list, before designing around a channel count:
 docker run --rm --entrypoint ffmpeg ambi-box-earshot:local -hide_banner -layouts
 ```
 
-A newer ffmpeg does not lift this by itself: 7.1 names the height layouts and still refuses to encode them. What would open a 2nd-order path is upstream work now in flight, adding PCE configurations for those layouts and, separately, for ambisonic layouts at 4, 9 and 16 channels - the 9-channel entry being exactly the missing rung (see [docs/UPSTREAM.md](UPSTREAM.md)).
+A newer ffmpeg does not lift this by itself: 7.1 names the height layouts and still refuses to encode them.
+
+#### What changed upstream, and what has not shipped
+
+FFmpeg master added AAC PCE configurations for the height layouts (`ed923a7a89`) and for ambisonic layouts at 4, 9 and 16 channels (`f35acb72ac`) on 2026-08-23, closing [FFmpeg#24218](https://code.ffmpeg.org/FFmpeg/FFmpeg/issues/24218), but no release carries them - 9.0.1 of 2026-08-12 predates the fix - and `earshot` pins 7.1, so 9 channels stays refused on every version this stack can run, and 25 was not added at all.
+
+The 9-channel entry carries this project's own contribution: the reorder map `{2,5,6,0,1,7,8,3,4}` was measured here and adopted verbatim ([docs/UPSTREAM.md](UPSTREAM.md)). When a release does carry it, 2nd order gains a native 9-channel AAC path and the zero-padding above becomes a compatibility measure rather than the only option. Nothing in that work reaches 4th order.
 
 **Over SRT, 1st and 3rd order both work, and the gateway picks between them for you.** `srt-gateway` buffers the start of the stream, asks ffprobe what is in it, and chooses: four 4-channel tracks are joined into one `hexadecagonal` stream (3rd order), while a single 4-channel track is already `quad` and passes straight through (1st order). Nothing is configured at either end. Anything else is refused within a few seconds with the reason, rather than being accepted and then producing no output. So a 1st-order microphone, which is what most ambisonic rigs are, works on the recommended route as one 4-channel track. A plain stereo or mono push produces no output at all and is auto-ended on the guest endpoint with that reason.
 
