@@ -121,6 +121,12 @@
       .guest-notice summary::before{content:'\25B8';color:#d29922;font-size:13px;
         transition:transform .15s;flex:0 0 auto}
       details[open].guest-notice summary::before{transform:rotate(90deg)}
+      /* Floated, not a header row: the flags sit top right and the reason text
+         wraps around them, rather than being pushed onto its own line below.
+         flow-root on the panel keeps the float inside the bordered box when
+         the text is short enough not to clear it on its own. */
+      #guestEndReason{display:flow-root}
+      .gn-endflags{float:right;margin-left:10px}
       .gn-flags{margin-left:auto;display:flex;gap:4px}
       .gn-flags button{font-size:17px;line-height:1;padding:2px 5px;border:1px solid transparent;
         border-radius:6px;background:transparent;cursor:pointer;opacity:.45;width:auto}
@@ -243,12 +249,18 @@
         <p id="guestNoticeAffil" hidden></p>
         <p><button id="guestReportBtn" type="button" hidden></button></p>
       </details>
-      <!-- Why the last guest session ended (visible ~10 min): OBS reports a
-           successful connection even when the transcode stalls on a wrong
-           audio layout, so without this line the commonest failure is
-           invisible to the person who caused it. Static text, both languages;
-           mechanical message, not branding. -->
+      <!-- Why the last guest session ended or was refused (visible ~10 min):
+           the sender is told nothing by SRT itself, which can only drop the
+           connection, so without this line the commonest failure is invisible
+           to the person who caused it. Mechanical message, not branding, in
+           one language: it carries its own flags because the guest notice
+           above (which holds the other pair) is hidden exactly when this is
+           shown. -->
       <div class="guest-notice" id="guestEndReason" hidden>
+        <span class="gn-flags gn-endflags">
+          <button id="gnLangEndEn" type="button" title="English" aria-label="English">&#x1F1EC;&#x1F1E7;</button>
+          <button id="gnLangEndPl" type="button" title="Polski" aria-label="Polski">&#x1F1F5;&#x1F1F1;</button>
+        </span>
         <p id="guestEndReasonText"></p>
       </div>
 
@@ -502,7 +514,15 @@
                 if (b) b.classList.toggle('on', lang === k.toLowerCase());
             });
             var af = document.getElementById('guestNoticeAffil');
-            if (af) { af.textContent = gb.a || ''; af.hidden = !gb.a; }
+            // gb is optional: brand.json is a deployment file and 404s on a
+            // vanilla stack, which is exactly when GN_DEFAULT is used instead.
+            // Line 474 already guards it and this one did not, so a guest going
+            // live without branding threw here, the throw propagated out of the
+            // /api/live .then, and the .catch reported it to the visitor as
+            // "the server status service is not responding" - leaving the
+            // player unusable for the whole session it was meant to show.
+            var affil = (gb && gb.a) || '';
+            if (af) { af.textContent = affil; af.hidden = !affil; }
             var rb = document.getElementById('guestReportBtn');
             if (rb) {
                 if (!rb.dataset.state) rb.textContent = lang === 'pl' ? 'Zg\u0142o\u015b transmisj\u0119' : 'Report this stream';
@@ -525,11 +545,88 @@
             // ch") are what tell someone what to change.
             var show = ep && ep.state === 'free' && ep.last_end_reason;
             if (!show) { box.hidden = true; return; }
+            // ONE language, chosen the same way as the guest notice above,
+            // rather than both joined by a slash. Quoting the reason inside
+            // each language printed the same "0 track(s) x 0 ch" twice in one
+            // paragraph, which buried the part that tells the pusher what to
+            // change. The reason itself stays verbatim: those numbers are the
+            // diagnosis, and translating them would only obscure them.
+            var reason = ep.last_end_reason;
+            // The reason arrives in English, from a small fixed vocabulary, and
+            // means two quite different things. Some reasons are a REFUSAL, where
+            // the channel guidance is the whole point. Others are an ordinary
+            // ending: a stream that ran to its end and was not resumed says
+            // "grace expired", which is bookkeeping, not a diagnosis. Telling
+            // that pusher what channel counts are required reads as if they did
+            // something wrong when they did not, so the guidance is attached
+            // only to the reasons it actually explains.
+            var pl = gnLang() === 'pl';
+            function classify(r) {
+                r = r || '';
+                var m = /^unusable audio: (\d+) track\(s\) x (\d+) ch/.exec(r);
+                if (m) {
+                    var t = +m[1], u = t % 10, d100 = t % 100;
+                    var w = t === 1 ? '\u015bcie\u017cka'
+                          : (u >= 2 && u <= 4 && (d100 < 12 || d100 > 14)) ? '\u015bcie\u017cki'
+                          : '\u015bcie\u017cek';
+                    return { audio: true, text: pl
+                        ? 'nieodtwarzalny d\u017awi\u0119k: ' + t + ' ' + w + ' x ' + m[2] + ' ch; oczekiwano 4x4 lub 1x4'
+                        : r };
+                }
+                if (/channel count never resolved/.test(r)) return { audio: true, text: pl
+                    ? 'nie uda\u0142o si\u0119 ustali\u0107 liczby kana\u0142\u00f3w; po\u0142\u0105czenie w \u015brodku strumienia. Uruchom koder ponownie i po\u0142\u0105cz si\u0119 jeszcze raz'
+                    : r };
+                if (/playable output/.test(r)) return { audio: true, text: pl
+                    ? 'nie wygenerowa\u0142 odtwarzalnego strumienia'
+                    : 'it produced no playable output' };
+                if (/^grace expired$/.test(r)) {
+                    // Duration from the arbiter's own config, not a number typed
+                    // into prose: GUEST_GRACE_S is tunable and a hardcoded "2
+                    // minutes" would quietly start lying the day it changes.
+                    var gs = (ep && ep.grace_s) || 0;
+                    var dur = !gs ? '' : (gs % 60 === 0
+                        ? (pl ? ' (' + (gs / 60) + ' min)' : ' (' + (gs / 60) + ' min)')
+                        : (pl ? ' (' + gs + ' s)' : ' (' + gs + ' s)'));
+                    // full: this reason IS the sentence. Wedging it after "The
+                    // last test stream ended:" said "ended" twice in a row.
+                    return { audio: false, full: true, text: pl
+                        ? 'Ostatni strumie\u0144 testowy najwyra\u017aniej si\u0119 zako\u0144czy\u0142, a czas na ponowne po\u0142\u0105czenie' + dur + ' up\u0142yn\u0105\u0142.'
+                        : 'The last test stream appears to have ended, and the reconnection window' + dur + ' has closed.' };
+                }
+                if (/^operator kill$/.test(r)) return { audio: false, text: pl
+                    ? 'zosta\u0142 zatrzymany przez operatora'
+                    : 'it was stopped by the operator' };
+                if (/owner broadcast/.test(r)) return { audio: false, text: pl
+                    ? 'zosta\u0142 zako\u0144czony na czas transmisji w\u0142a\u015bciciela'
+                    : 'it was ended for an owner broadcast' };
+                if (/session cap/.test(r)) return { audio: false, text: pl
+                    ? 'osi\u0105gn\u0105\u0142 limit d\u0142ugo\u015bci sesji'
+                    : 'it reached the session length limit' };
+                return { audio: false, text: r };      // unknown: verbatim, no advice
+            }
+            var c = classify(ep.last_end_reason);
+            // Dash, not a colon: the audio reasons carry a colon of their own
+            // ("unusable audio: 1 track(s) x 2 ch"), and two colons in one
+            // sentence reads as a parsing error rather than a sentence. Applied
+            // to both leads so the separator does not depend on which reason
+            // happened to arrive.
+            var lead = c.audio
+                ? (pl ? 'Ostatni strumie\u0144 testowy zosta\u0142 zatrzymany - '
+                      : 'The last test stream was stopped - ')
+                : (pl ? 'Ostatni strumie\u0144 testowy zako\u0144czy\u0142 si\u0119 - '
+                      : 'The last test stream ended - ');
+            var advice = !c.audio ? '' : (pl
+                ? ' Punkt ko\u0144cowy wymaga d\u017awi\u0119ku ambisonicznego: 4 kana\u0142y (pierwszego rz\u0119du) '
+                  + 'lub 16 kana\u0142\u00f3w (trzeciego rz\u0119du); zwyk\u0142y d\u017awi\u0119k stereo lub mono '
+                  + 'nie zostanie odtworzony.'
+                : ' The endpoint needs ambisonic audio: 4 channels (first order) or 16 channels (third order); '
+                  + 'plain stereo or mono will not play.');
+            ['En', 'Pl'].forEach(function (k) {
+                var b = document.getElementById('gnLangEnd' + k);
+                if (b) b.classList.toggle('on', gnLang() === k.toLowerCase());
+            });
             document.getElementById('guestEndReasonText').textContent =
-                'The last test stream was stopped: ' + ep.last_end_reason + '. '
-                + 'The endpoint needs ambisonic audio: 4 channels (1st order) or 16 channels (3rd order); plain stereo or mono will not play. / '
-                + 'Ostatnia transmisja testowa zosta\u0142a zatrzymana: ' + ep.last_end_reason + '. '
-                + 'Punkt ko\u0144cowy wymaga d\u017awi\u0119ku ambisonicznego: 4 kana\u0142y (1. rz\u0105d) lub 16 kana\u0142\u00f3w (3. rz\u0105d); zwyk\u0142e stereo lub mono nie zadzia\u0142a.';
+                (c.full ? c.text : lead + c.text + '.') + advice;
             box.hidden = false;
         }
 
@@ -747,13 +844,19 @@
             try { l = localStorage.getItem('gnLang'); } catch (e) {}
             return l === 'pl' ? 'pl' : 'en';
         }
-        ['En', 'Pl'].forEach(function (k) {
-            var b = document.getElementById('gnLang' + k);
-            if (!b) return;
-            b.addEventListener('click', function (ev) {
-                ev.preventDefault(); ev.stopPropagation();
-                try { localStorage.setItem('gnLang', k.toLowerCase()); } catch (e) {}
-                renderGuestNotice(window.__LAST_EP__);
+        // Both pairs drive the same stored preference and re-render both
+        // panels: only one of the two is ever visible, so a switch made on
+        // either has to take effect on the other.
+        ['gnLang', 'gnLangEnd'].forEach(function (prefix) {
+            ['En', 'Pl'].forEach(function (k) {
+                var b = document.getElementById(prefix + k);
+                if (!b) return;
+                b.addEventListener('click', function (ev) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    try { localStorage.setItem('gnLang', k.toLowerCase()); } catch (e) {}
+                    renderGuestNotice(window.__LAST_EP__);
+                    renderGuestEndReason(window.__LAST_EP__);
+                });
             });
         });
 
