@@ -23,6 +23,14 @@ on:
   push:
     branches: [main]
     tags: ['*']
+  # A catch-up run, because push is not enough on its own. git.pg.edu.pl is a
+  # university instance with maintenance windows, and a push that lands during
+  # one fails correctly and then never retries: nothing re-triggers this job
+  # until somebody happens to push again. On 2026-08-27 an 11:00 to 17:00
+  # window did exactly that. Daily is plenty, since the mirror is a backup
+  # rather than anything anyone reads.
+  schedule:
+    - cron: '17 5 * * *'
   workflow_dispatch:
 
 permissions:
@@ -53,6 +61,15 @@ jobs:
       - name: push main and tags to GitLab
         run: |
           git remote add gitlab git@git.pg.edu.pl:p829296/ambisonic-box.git
+          # On the daily catch-up an unreachable GitLab is not news: it is a
+          # maintenance window, and the next run picks it up. On a push it is
+          # worth failing for, because that push is the thing that did not
+          # arrive. Same job, different meaning, so only the schedule softens.
+          if [ "${{ github.event_name }}" = "schedule" ] \
+             && ! git ls-remote --exit-code gitlab >/dev/null 2>&1; then
+            echo "gitlab unreachable on the scheduled run; the next one retries"
+            exit 0
+          fi
           # main only, plus tags. Deliberately NOT --mirror: that would delete
           # refs on GitLab that do not exist here, and would try to push every
           # dependabot/* branch into the university instance for no reason.
