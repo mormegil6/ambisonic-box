@@ -201,10 +201,18 @@ jobs:
           TAG='${{ github.ref_name }}'
           # Releases only. A pre-release or -dev style tag must not become the
           # thing a first-time install pulls.
+          # v1.1.1-rc1, v1.1.1-dev and v1.2.3-beta.1 all match the plain glob,
+          # so a hyphen has to be rejected before it is applied, and so does a
+          # fourth component like v1.1.0.1.
           case "$TAG" in
-            v[0-9]*.[0-9]*.[0-9]*) : ;;
-            *) echo "  $TAG is not a plain release tag; leaving PIN_TAG alone"; exit 0 ;;
+            *-*)                       TAG_OK=0 ;;
+            v[0-9]*.[0-9]*.[0-9]*.*)   TAG_OK=0 ;;
+            v[0-9]*.[0-9]*.[0-9]*)     TAG_OK=1 ;;
+            *)                         TAG_OK=0 ;;
           esac
+          if [ "$TAG_OK" = 0 ]; then
+            echo "  $TAG is not a plain release tag; leaving PIN_TAG alone"; exit 0
+          fi
           cur=$(sed -n 's|^PIN_TAG="\(v.*\)"|\1|p' scripts/setup.sh)
           if [ "$cur" = "$TAG" ]; then echo "  PIN_TAG is already $TAG"; exit 0; fi
           sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
@@ -219,17 +227,29 @@ jobs:
           # keeps the bump behind `needs: publish`, which is the whole point of
           # this job: PIN_TAG must never name a tag whose images do not exist.
           for i in 1 2 3; do
-            SHA=$(gh api "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
+            # -X GET is load-bearing: `gh api` switches to POST the moment any
+            # -f is passed, and the contents endpoint routes GET, PUT and DELETE
+            # only, so the read 404s and takes the whole step with it before the
+            # PUT below is ever reached. That is what the v1.1.0 rewrite left
+            # behind: a different error, the same stale pointer.
+            SHA=$(gh api -X GET "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
                     --jq .sha -f ref=main) || exit 1
-            if gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
+            if err=$(gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
                  -f message="Pin a fresh install to $TAG, now that its images exist" \
                  -f content="$(base64 -w0 < scripts/setup.sh)" \
-                 -f sha="$SHA" -f branch=main >/dev/null; then
+                 -f sha="$SHA" -f branch=main 2>&1 >/dev/null); then
               echo "  pinned $cur -> $TAG"; exit 0
             fi
             # A 409 means main moved while the images built: re-read and retry.
-            # Anything else is not a race and will not fix itself.
-            echo "  contents API rejected the bump, retrying ($i)"
+            # Anything else is not a race and will not fix itself, so print what
+            # the API actually said and stop. The comment used to claim this
+            # distinction while the loop retried everything three times, which is
+            # how a permanent refusal read as a flaky one in the v1.1.0 run.
+            case "$err" in
+              *409*|*"does not match"*|*"but expected"*) : ;;
+              *) echo "::error::PIN_TAG bump refused, and not by a race: $err"; exit 1 ;;
+            esac
+            echo "  main moved while the images built, retrying ($i)"
             git fetch -q origin main && git checkout -q origin/main -- scripts/setup.sh
             sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
           done

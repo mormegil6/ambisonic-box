@@ -69,7 +69,7 @@ git push origin main v1.0.0
 ./scripts/set-version.sh 1.0.1-dev && git commit -am "Back to development on 1.0.1-dev" && git push
 ```
 
-The tag push is what publishes: `ghcr-publish` builds all five images for both architectures and tags them `v1.0.0` and `latest`, and [`set-version.sh`](../scripts/set-version.sh) has already moved [`scripts/setup.sh`](../scripts/setup.sh)'s `PIN_TAG` to the new release, so a fresh install pulls it. A GitHub release created on that tag is copied to GitLab by `release to gitlab`; the assets are not, deliberately.
+The tag push is what publishes: `ghcr-publish` builds all five images for both architectures and tags them `v1.0.0` and `latest`, and only then does it move [`scripts/setup.sh`](../scripts/setup.sh)'s `PIN_TAG` to the new release, so a fresh install never names a tag whose images are still building. `set-version.sh` deliberately does not touch `PIN_TAG`: doing it in the release commit is what made every release fail the `defaults` job until the build finished. A GitHub release created on that tag is copied to GitLab by `release to gitlab`; the assets are not, deliberately.
 
 Publishing a GitHub release from that tag also fires `release to gitlab`, which copies the release metadata but deliberately not the assets.
 
