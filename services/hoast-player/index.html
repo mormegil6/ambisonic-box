@@ -752,18 +752,33 @@
             });
         }
 
+        // The badge used to be set inside pollGate, which only the live page runs,
+        // so the VOD page never showed a version at all. Same stack, same
+        // question from a visitor, so it belongs on both.
+        function showBuildVersion(v) {
+            if (!v) return;
+            var bv = document.getElementById('buildVersion');
+            if (bv && bv.hidden) {
+                bv.textContent = 'Ambisonic Box ' + v;
+                bv.hidden = false;
+            }
+        }
+
+        // VOD polls nothing, so ask once. Failure is silent on purpose: a missing
+        // badge is cosmetic and must not interrupt a clip that plays.
+        function fetchBuildVersionOnce() {
+            fetch('/api/live', { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (p) { showBuildVersion(p && p.version); })
+                .catch(function () {});
+        }
+
         function pollGate() {
             fetch('/api/live', { cache: 'no-store' })
                 .then(function (r) { return r.json(); })
                 .then(function (p) {
                     setBadge(p);
-                    if (p.version) {
-                        var bv = document.getElementById('buildVersion');
-                        if (bv && bv.hidden) {
-                            bv.textContent = 'Ambisonic Box ' + p.version;
-                            bv.hidden = false;
-                        }
-                    }
+                    showBuildVersion(p.version);
                     // The source can stop under a session that already started:
                     // on-demand idling does exactly that once nobody has been
                     // fetching segments for TEL_IDLE_STOP_MIN. Without this the
@@ -1056,7 +1071,7 @@
           a.classList.toggle('on', on);
           if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
         });
-        if (MODE === 'vod') return initVod();
+        if (MODE === 'vod') { fetchBuildVersionOnce(); return initVod(); }
         init();   // existing live boot, unchanged
       }
 
