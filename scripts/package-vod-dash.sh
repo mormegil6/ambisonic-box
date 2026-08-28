@@ -19,6 +19,23 @@ ROOT="$(cd "$LADDER/.." && pwd)"
 case "$DASH" in "$ROOT"/*) ;; *) echo "ERROR: ladder and dash dirs must share a parent" >&2; exit 1;; esac
 lrel="${LADDER#"$ROOT"/}"; drel="${DASH#"$ROOT"/}"
 
+# The packager is built here, not pulled, because the official image writes a
+# malformed Opus dOps box (see below). Say so plainly if it is missing: docker's
+# own "image not found" sends people looking for a typo or a registry outage.
+if ! docker image inspect ambi-box-shaka:local >/dev/null 2>&1; then
+    cat >&2 <<'MSG'
+ERROR: the image ambi-box-shaka:local is not built.
+
+  docker compose --profile tools build shaka
+
+This project builds Shaka Packager rather than pulling it, because the official
+image writes the Opus dOps box little-endian and Chromium's MSE then refuses the
+audio it produces. See services/shaka/README.md and
+https://github.com/shaka-project/shaka-packager/issues/1627
+MSG
+    exit 1
+fi
+
 args=""
 for f in "$LADDER"/v_*.mp4; do
   b="$(basename "$f")"; n="${b%.mp4}"
