@@ -420,7 +420,7 @@
          Naming it after BUILD_TAG rather than a date makes the two impossible to
          drift apart, and the on-screen badge then tells you which bundle a
          browser is really running. -->
-    <script src="/dist/hoast360.bundle.js?v=rf32"></script>
+    <script src="/dist/hoast360.bundle.js?v=rf33"></script>
     <script>
         var hoast360 = new HOAST360();
 
@@ -935,10 +935,21 @@
         // 255 Opus), so the renderer order comes from the stream, not from a
         // hardcoded constant. (o+1)^2 channels -> order o; anything else
         // falls back to 3rd order, the stack's canonical configuration.
+        // Fingerprint of the manifest this page verified, used to key the URL
+        // handed to the player. Spent at the initialize() call below, where the
+        // reason it exists is written out.
+        var LAST_MPD_VER = '';
+        function mpdFingerprint(t) {
+            var h = 5381, i = t.length;
+            while (i) h = (h * 33 ^ t.charCodeAt(--i)) >>> 0;
+            return h.toString(36);
+        }
+
         function orderFromMpd(url) {
             return fetch(url, { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.text() : ''; })
                 .then(function (t) {
+                    LAST_MPD_VER = t ? mpdFingerprint(t) : '';
                     // The silent stereo AAC keep-alive set also carries an
                     // AudioChannelConfiguration, value="2". Only the Opus set
                     // describes the ambisonic order, so read it from there and
@@ -1142,7 +1153,23 @@
             .then(function (r) { return r.ok ? r : Promise.reject(r.status); })
             .then(function () {
               return orderFromMpd(clipMpd).then(function (order) {
-                  hoast360.initialize(clipMpd, '/irs/', order);
+                  // HAND dash.js A URL KEYED TO THE MANIFEST THIS PAGE JUST READ.
+                  // The page fetches the manifest no-store while dash.js fetches it
+                  // again through the ordinary HTTP cache, so the two can disagree.
+                  // Measured 2026-08-28 in real Safari: the page read the current
+                  // manifest while dash.js was served one cached before the v1.2.0
+                  // repackage, naming files that now 404 (v_1080x540.mp4,
+                  // audio_16ch.webm). dash.js logged a single 'No video bytes to
+                  // push' warning and stopped, so the player span forever and the
+                  // viewer was told nothing.
+                  // Manifests now ship Cache-Control no-cache, which stops NEW
+                  // caches going stale; this is the failsafe for caches already
+                  // holding a header-less copy, which no server change can reach.
+                  // The fingerprint changes only when the manifest does, so repeat
+                  // visits still hit cache, and a query string does not affect how
+                  // relative segment URLs resolve.
+                  hoast360.initialize(clipMpd + (LAST_MPD_VER ? '?v=' + LAST_MPD_VER : ''),
+                                      '/irs/', order);
               });
             })
             .catch(function (status) {
