@@ -54,13 +54,44 @@
 # so the two never drift apart at the seams. Check that before reusing this on
 # another master.
 #
+# CODEC=h264 ADDS THE SECOND LADDER, IT DOES NOT REPLACE THE FIRST. The AV1
+# ladder is the primary one and stays the highest-priority AdaptationSet; the
+# H.264 ladder exists because no iPhone below an A17 Pro decodes AV1 at all, and
+# dash.js drops an AdaptationSet whose codec the device cannot handle, so an
+# AV1-only manifest leaves those devices with no video track whatsoever. Rungs
+# stop at 3840x1920 because phone H.264 decoders do, and the AV1 ladder keeps
+# the 5760 and 7680 rungs for devices that can use them.
+#
+# The two branches encode differently on purpose. SVT-AV1 refuses some rungs
+# below a preset floor and has to be retried per rung, so the AV1 branch runs
+# one ffmpeg per rung. x264 has no such constraint, so the H.264 branch decodes
+# the master ONCE and splits it to every rung in a single pass, which matters
+# when the master is 8K AV1 and decoding it is the expensive half of the job.
+#
 # Usage: scripts/encode-vod-ladder.sh <master.(webm|mov|mp4)> <out-dir> [crf] [fps] [loop-to-seconds]
-#   defaults: crf 30, fps 24, no looping
+#   defaults: crf 30 (av1) / 21 (h264), fps 24, no looping
+#   CODEC=av1 (default) | h264
 set -euo pipefail
 SRC="${1:?usage: encode-vod-ladder.sh <master> <out-dir> [crf] [fps] [loop-to-seconds]}"
 OUT="${2:?output dir required}"
-CRF="${3:-30}"
-FPS="${4:-24}"
+CODEC="${CODEC:-av1}"
+case "$CODEC" in av1) CRF_DEFAULT=30 ;; h264) CRF_DEFAULT=21 ;; *) echo "CODEC must be av1 or h264" >&2; exit 1 ;; esac
+CRF="${3:-$CRF_DEFAULT}"
+# FPS IS READ FROM THE MASTER UNLESS GIVEN. It exists only to set the GOP, and
+# the GOP is what makes the packager's 2 s segments land on keyframes: at 24 fps
+# that is 48 frames, at 30 fps it is 60. Defaulting it to a constant meant a
+# 30 fps master silently got a 1.6 s GOP, whereupon the segmenter cuts at the
+# first keyframe at or after 2 s and emits 3.2 s segments instead. The clips in
+# this project are 24 AND 30 fps, so the constant was a trap for whoever forgot
+# which was which. An explicit argument still wins, for a master whose container
+# lies about its rate.
+FPS="${4:-auto}"
+if [ "$FPS" = "auto" ]; then
+    FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate \
+              -of default=nw=1:nk=1 "$SRC" | awk -F/ '{ printf "%.0f", ($2 ? $1/$2 : $1) }')
+    [ -n "$FPS" ] && [ "$FPS" -gt 0 ] 2>/dev/null || { echo "could not read frame rate from $SRC; pass it explicitly" >&2; exit 1; }
+    echo "frame rate read from master: ${FPS} fps"
+fi
 LOOP_TO="${5:-0}"
 PRESET="${PRESET:-4}"          # SVT-AV1 preset; rungs the library refuses fall
                                # back to the floor it names (see the loop below)
@@ -82,6 +113,47 @@ encode_rung () {   # W H preset outfile errfile
 
 rungs=("7680 3840" "5760 2880" "3840 1920" "2880 1440" "1920 960" "1440 720" "1080 540" "720 360")
 err=$(mktemp); trap 'rm -f "$err"' EXIT
+
+if [ "$CODEC" = "h264" ]; then
+  # One decode, every rung. Named h_ rather than v_ so both ladders can live in
+  # one directory and one package run: the packager keys AdaptationSets off the
+  # codec it finds, and the manifest post-step keys selectionPriority off these
+  # names.
+  h_rungs=("3840 1920" "2880 1440" "1920 960" "1440 720" "1080 540" "720 360")
+  n=${#h_rungs[@]}
+  fc="[0:v]split=${n}"; i=0
+  for r in "${h_rungs[@]}"; do fc="${fc}[s$i]"; i=$((i+1)); done
+  fc="${fc};"
+  i=0
+  for r in "${h_rungs[@]}"; do
+    set -- $r
+    fc="${fc}[s$i]scale=$1:$2:flags=lanczos[v$i];"
+    i=$((i+1))
+  done
+  fc="${fc%;}"
+  outs=(); i=0
+  for r in "${h_rungs[@]}"; do
+    set -- $r
+    # High profile: the baseline every iOS device since the 4S decodes in
+    # hardware. No explicit -level: x264 computes the lowest one that fits, and
+    # forcing a level only risks declaring a stream the device then refuses.
+    # Closed GOP with scenecut off so every rung cuts keyframes at the same
+    # frames, which is what lets the segmenter emit aligned 2 s segments.
+    outs+=(-map "[v$i]" -c:v libx264 -preset slow -crf "$CRF" -profile:v high
+           -pix_fmt yuv420p -g "$GOP" -keyint_min "$GOP" -sc_threshold 0
+           "${LOOP_OUT[@]}" "$OUT/h_$1x$2.mp4")
+    i=$((i+1))
+  done
+  echo ">>> H.264 ladder, ${n} rungs, one decode pass (crf $CRF gop $GOP)"
+  ffmpeg -y -hide_banner -loglevel error -stats "${LOOP_IN[@]}" -i "$SRC" \
+    -an -filter_complex "$fc" "${outs[@]}"
+  echo "H.264 ladder written to $OUT"; ls -lh "$OUT"/h_*.mp4
+  # Audio belongs to the AV1 run: it is one 16-channel Opus rendition shared by
+  # both ladders, and re-encoding it here would only produce a second identical
+  # file under the same name.
+  exit 0
+fi
+
 for r in "${rungs[@]}"; do
   set -- $r; W=$1; H=$2; name="v_${W}x${H}"
   echo ">>> $name (crf $CRF preset $PRESET gop $GOP)"

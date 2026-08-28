@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# Package an AV1 ABR ladder (from scripts/encode-vod-ladder.sh) into on-demand
+# Package the ABR ladders (from scripts/encode-vod-ladder.sh) into on-demand
 # MPEG-DASH with Shaka Packager. Runs Shaka via docker (the compose `shaka`
 # service mounts ./content read-only, so this uses a plain writable `docker run`).
+#
+# BOTH LADDERS GO INTO ONE MANIFEST: v_*.mp4 is the AV1 ladder, h_*.mp4 the
+# H.264 one, and Shaka puts them in separate AdaptationSets because their codecs
+# differ. That is the whole point. No iPhone below an A17 Pro decodes AV1, and
+# dash.js removes an AdaptationSet the device cannot decode, so an AV1-only
+# manifest leaves those devices with no video track at all. With both present
+# the same filter picks the ladder the device can actually play.
 #
 # The 16-channel Opus audio's <AudioChannelConfiguration value="16"/> survives
 # into the manifest (verify: grep AudioChannelConfiguration <mpd>).
@@ -37,8 +44,11 @@ MSG
 fi
 
 args=""
-for f in "$LADDER"/v_*.mp4; do
+have_h264=0
+for f in "$LADDER"/v_*.mp4 "$LADDER"/h_*.mp4; do
+  [ -e "$f" ] || continue          # h_* is optional; a clip may be AV1 only
   b="$(basename "$f")"; n="${b%.mp4}"
+  case "$b" in h_*) have_h264=1 ;; esac
   args="$args in=/content/$lrel/$b,stream=video"
   args="$args,init_segment=/content/$drel/${n}_init.m4s"
   args="$args,segment_template=/content/$drel/${n}_\$Number\$.m4s"
@@ -76,6 +86,43 @@ args="$args,segment_template=/content/$drel/audio_\$Number\$.m4s"
 # 90 s in.
 docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT":/content ambi-box-shaka:local packager \
   $args --segment_duration 2 --generate_static_live_mpd --mpd_output "/content/$drel/$MPD"
+
+# selectionPriority, WITHOUT WHICH THE SECOND LADDER IS A DOWNGRADE. Shaka has
+# no flag for the attribute, so it is written here. dash.js defaults
+# selectionModeForInitialTrack to highestSelectionPriority and reads this off
+# the AdaptationSet, defaulting to 1 when absent; with both ladders at the
+# default it picked avc1 over av01, which would have silently dropped every
+# AV1-capable device from the 8K rungs to the 4K H.264 ones. Marking AV1 as 2
+# keeps those devices where they were, while a device that cannot decode AV1
+# never sees that set at all because the capability filter removed it first.
+if [ "$have_h264" = "1" ]; then
+  python3 - "$DASH/$MPD" <<'PYMPD'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding='utf-8').read()
+# Decide per AdaptationSet block, by the codecs of the Representations inside
+# it: Shaka writes codecs on the Representation, not on the set.
+out, pos, written = [], 0, 0
+for m in re.finditer(r'<AdaptationSet[^>]*>.*?</AdaptationSet>', s, re.S):
+    block = m.group(0)
+    out.append(s[pos:m.start()])
+    if 'contentType="video"' in block or 'mimeType="video/' in block:
+        val = '2' if 'codecs="av01' in block else '1'
+        block, n = re.subn(r'<AdaptationSet', '<AdaptationSet selectionPriority="' + val + '"', block, count=1)
+        written += n
+    out.append(block)
+    pos = m.end()
+out.append(s[pos:])
+if written < 2:
+    # Never report success without checking. An earlier version of this step
+    # printed a confident message while a corrupted pattern matched nothing,
+    # which would have shipped a manifest where dash.js picks avc1 over av01 and
+    # every AV1-capable device silently loses the 8K rungs.
+    sys.exit('ERROR: expected 2 video AdaptationSets to mark, marked %d' % written)
+open(p, 'w', encoding='utf-8').write(''.join(out))
+print('  selectionPriority written: av01=2, avc1=1 (%d sets marked)' % written)
+PYMPD
+fi
 
 echo "packaged: $DASH/$MPD"; ls -lh "$DASH"
 
