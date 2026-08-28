@@ -207,7 +207,15 @@
       </div>
 
       <div class="player">
-        <video-js id='hoast360-player' class='video-js vjs-fluid vjs-big-play-centered' controls preload='auto' crossorigin="anonymous" data-setup='{}'>
+        <!-- NO data-setup HERE, deliberately. It arms video.js's autoSetup, which
+             creates the player with EMPTY options on a timeout and races HOAST360's
+             own videojs('hoast360-player', {...}) call. When autoSetup won, videojs()
+             found an existing player and discarded the options entirely: no
+             httpSourceSelector plugin, so no quality menu, and no
+             html5.nativeCaptions:false, so captions fell back to native tracks and
+             videojs-contrib-dash refused to handle them. It lost 5 of 12 loads in
+             WebKit and none in Chromium, which is why it read as a Safari bug. -->
+        <video-js id='hoast360-player' class='video-js vjs-fluid vjs-big-play-centered' controls preload='auto' crossorigin="anonymous">
             <p class='vjs-no-js'>
               To view this stream please enable JavaScript, and consider upgrading to a web browser that
               <a href='https://videojs.com/html5-video-support/' target='_blank' rel="noopener">supports HTML5 video</a>.
