@@ -81,7 +81,7 @@ Still to do, and the live path is the bulk of it:
 - **earshot does not emit the keep-alive track.** Everything above is proven on static fixtures only. Adding a silent AAC rendition alongside the 16-channel Opus in a live manifest is a real encoder change and the most likely place for this to bite.
 - `scripts/test-pipeline.sh` has no assertion for the keep-alive set.
 - An AAC hop handed a literal 8-channel layout gets 7.1 treatment, and the LFE low-pass silently destroys an ambisonic component. The 4x4 split avoids this by construction but nothing enforces it. Facebook documented hitting exactly this in 2016.
-- The iOS `videojs-contrib-dash` gate is still what blocks iPhone specifically.
+- The `videojs-contrib-dash` gate that blocked iPhone is cleared as of player rf31: its dist registered a DASH source handler only when `window.MediaSource` existed, and inlined a dash.js 4.2.0 that predates `ManagedMediaSource`, the only media engine iOS ships. The fork now bundles the package from source, so video rides the same patched dash.js 4.7.4 as the rest of the player and the handler registers on MMS-only WebKit too. Verified in desktop WebKit with `MediaSource` deleted, live and VOD both; a run of the real player on a physical iPhone is still owed.
 
 ## What the industry does, and what it declined to do
 
