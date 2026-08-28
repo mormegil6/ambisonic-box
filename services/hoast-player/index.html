@@ -420,7 +420,7 @@
          Naming it after BUILD_TAG rather than a date makes the two impossible to
          drift apart, and the on-screen badge then tells you which bundle a
          browser is really running. -->
-    <script src="/dist/hoast360.bundle.js?v=rf43"></script>
+    <script src="/dist/hoast360.bundle.js?v=rf44"></script>
     <script>
         var hoast360 = new HOAST360();
 
@@ -1213,8 +1213,28 @@
       function wireVodLoop() {
         var v = document.querySelector('#hoast360-player video') || document.querySelector('video');
         if (!v) return setTimeout(wireVodLoop, 400);
-        v.loop = vodLoopOn;
-        v.addEventListener('ended', function () { if (vodLoopOn) { try { v.currentTime = 0; v.play(); } catch (e) {} } });
+        // LOOP THROUGH THE PLAYER, ONCE. This used to set the element's own
+        // loop attribute AND handle 'ended' by seeking to zero, so two
+        // mechanisms raced at the wrap. On a MediaSource-backed element the
+        // element's loop rewinds behind dash.js's back, into a range whose
+        // buffer was evicted long ago (only 6 s is kept behind), while the
+        // handler seeks as well. An iPhone Xs died at the wrap every single
+        // time, at the same second, with everything healthy right up to it:
+        // beacon run zn9ool reported readyState 4, the feed running and 59
+        // segments fetched at 108 s, and the page never sent another report.
+        //
+        // Seek through video.js instead, so dash.js sees the seek, clears and
+        // refills its buffer through its own machinery, and the audio feed gets
+        // the seeking/seeked pair it already knows how to rebuild from.
+        v.loop = false;
+        v.addEventListener('ended', function () {
+            if (!vodLoopOn) return;
+            try {
+                var p = hoast360 && hoast360.videoPlayer;
+                if (p) { p.currentTime(0); p.play(); }
+                else { v.currentTime = 0; v.play(); }
+            } catch (e) { /* leave it ended rather than thrash */ }
+        });
       }
 
       // Inject a loop toggle into the videojs control bar (before fullscreen).
@@ -1232,7 +1252,7 @@
         btn.addEventListener('click', function () {
           vodLoopOn = !vodLoopOn;
           var v = document.querySelector('#hoast360-player video');
-          if (v) v.loop = vodLoopOn;
+          // the element's own loop stays off; see wireVodLoop
           btn.classList.toggle('vjs-loop-on', vodLoopOn);
         });
         var fs = cb.querySelector('.vjs-fullscreen-control');
