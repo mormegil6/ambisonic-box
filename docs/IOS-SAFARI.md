@@ -69,7 +69,7 @@ It costs a constant 0.37 s later start, measured: an element carrying an audio t
 
 Third-order Ambisonics plays on an iPhone from the same DASH stream every other client receives. There is no iOS-specific variant, no server-side downmix and no extra lossy generation. Verified on an iPhone Xs (A12, iOS 18.7) on 2026-08-29: video, 16-channel spatial audio, head tracking, fullscreen and looping.
 
-That verification is of the on-demand clips. **On the live stream an iPhone shows video and no audio.** The four requirements below are not specific to on-demand and are all met there, so the difference is narrower than the platform: something in the audio path behaves differently at the live edge.
+That verification is of the on-demand clips. **On the live stream an iPhone shows video and no audio.** macOS Safari plays the same live stream with audio, and the four requirements below are not specific to on-demand and are all met on iPhone, so the gap is narrow: it is the live edge on iOS specifically, not WebKit and not the live path in general.
 
 Two candidates, both untested and both specific to live:
 
