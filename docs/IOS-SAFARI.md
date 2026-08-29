@@ -69,7 +69,14 @@ It costs a constant 0.37 s later start, measured: an element carrying an audio t
 
 Third-order Ambisonics plays on an iPhone from the same DASH stream every other client receives. There is no iOS-specific variant, no server-side downmix and no extra lossy generation. Verified on an iPhone Xs (A12, iOS 18.7) on 2026-08-29: video, 16-channel spatial audio, head tracking, fullscreen and looping.
 
-That verification is of the on-demand clips. The live path serves the same manifest shape from the same player, so nothing in the four requirements below is specific to on-demand, but it has not been played on an iPhone and should not be claimed until it has. Two differences are known in advance: a live stream has no duration, so the loop and end-of-clip handling do not apply, and the live manifest still carries no keep-alive track, which is what the backgrounding section below is about.
+That verification is of the on-demand clips. **On the live stream an iPhone shows video and no audio.** The four requirements below are not specific to on-demand and are all met there, so the difference is narrower than the platform: something in the audio path behaves differently at the live edge.
+
+Two candidates, both untested and both specific to live:
+
+- The patched `endstreaming` gate honours the hint once a quality is initialised and the buffer is non-empty. A live stream runs a thin buffer by design, which is the condition ManagedMediaSource's hysteresis exists to manage, so the gate can close there in a way it never does on demand.
+- The feed will not anchor until it holds 3.5 s of contiguous decoded content. On demand it fetches ahead freely; at the live edge it can only have what has been published, and with a 30 s target delay it may not accumulate that window the same way.
+
+A live stream also has no duration, so the loop and end-of-clip handling described below do not apply to it, and the live manifest still carries no keep-alive track.
 
 Four platform requirements have to be met together, and missing any one of them produces a player that looks correct and does not work.
 
@@ -88,6 +95,7 @@ Fullscreen is a CSS one. Safari on iPhone offers fullscreen only for a video ele
 - Audio arrives 1.3 to 2.7 seconds after playback starts, measured across runs. The feed will not anchor until it holds 3.5 s of contiguous decoded content, so the wait is the time to fetch two audio segments. Fetching them during page load rather than after the first tap would remove it.
 - A looping clip loses about 0.4 s of audio at the wrap. The opening segments are pre-fetched during the run-out, which reduced it from 4.4 s; closing it entirely means holding decoded content across the discontinuity.
 - An A12 sustains the 4K H.264 rung but has little margin at it, alongside a WebGL sphere, 16 convolvers and a WASM decoder. A device that raises a decode error is kept below that rung for the rest of the session, and an explicit choice from the quality menu overrides that.
+- On the live stream an iPhone plays video without audio. See the note above the requirements for the two candidate causes.
 - The live path still emits no keep-alive track, so backgrounding behaviour is proven on static fixtures only. See below.
 
 ## Testing this
@@ -108,6 +116,6 @@ YouTube does use a standard where one exists: its ambisonic Opus is **mapping fa
 
 ## Status
 
-The player decodes and renders third-order Ambisonics on iOS, verified on an iPhone Xs (A12, iOS 18.7) and on macOS Safari 27. The live pipeline still emits no keep-alive track, so the backgrounding behaviour described above is proven on static fixtures only.
+The player decodes and renders third-order Ambisonics on iOS for the on-demand clips, verified on an iPhone Xs (A12, iOS 18.7) and on macOS Safari 27. On the live stream the same device plays video without audio, which is open. The live pipeline also still emits no keep-alive track, so the backgrounding behaviour described above is proven on static fixtures only.
 
 WebKit gained multichannel Opus decoding on 2026-03-05, for mapping family 1 on the WebM path and capped at 8 channels. The audio here is 16-channel Opus with mapping family 255, the family that carries an undefined channel layout described by the manifest rather than by the bitstream, so it is outside that support on both counts: too many channels, and the wrong family. Nothing found while measuring points at a change that would cover it.
