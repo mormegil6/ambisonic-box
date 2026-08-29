@@ -18,6 +18,16 @@ Two are published as [release assets](https://github.com/mormegil6/ambisonic-box
 
 Put the masters in `content/vod/masters/` (gitignored); [`scripts/encode-vod-ladder.sh`](../scripts/encode-vod-ladder.sh) builds the resolution ladder and [`scripts/package-vod-dash.sh`](../scripts/package-vod-dash.sh) packages it into combined-MPD DASH under `content/vod/dash/<clip>/`, served at `/vod-dash/`.
 
+## Two codecs, one manifest
+
+Each clip carries two video ladders: AV1 up to 7680x3840, and H.264 up to 3840x1920. Run the encoder twice, once with its default and once with `CODEC=h264`, then package the directory as a whole; the packager finds both and Shaka puts them in separate AdaptationSets because their codecs differ.
+
+The second ladder exists because no iPhone before the A17 Pro decodes AV1, and dash.js removes an AdaptationSet whose codec the device cannot handle. With AV1 alone those devices get a manifest with no video track at all: a player that loads, reports nothing wrong, and shows nothing. H.264 stops at 3840x1920 because phone decoders do.
+
+The packaging step writes `selectionPriority="2"` on the AV1 set and `="1"` on the H.264 one. That attribute is not optional here. dash.js defaults `selectionModeForInitialTrack` to `highestSelectionPriority` and treats a missing attribute as 1, so with both sets equal it picks `avc1` over `av01` and every AV1-capable device silently drops from the 8K rungs to the 4K ones. Shaka has no flag for the attribute, so the script adds it to the manifest and fails the run if it cannot mark both sets.
+
+Manifests upload with `Cache-Control: no-cache` and media with `max-age=86400`. Without a cache header a browser caches a manifest heuristically and never revalidates it, so a viewer who watched before a repackage keeps one naming files that no longer exist; every segment 404s and the player spins forever. Whatever serves the packaged tree has to set them; a static host that sends no cache headers at all will strand returning viewers on the manifest they saw last time.
+
 ## 360 test card
 
 `scripts/make-360-testcard.py` renders six flat broadcast test screens and arranges them as the walls of a cube around the viewer, then inverse-projects that into equirectangular. Each wall spans exactly 90°, so a 360 viewer at a normal field of view sees a flat, undistorted card: circles stay round and straight lines stay straight, and any bend, softening or colour shift is the pipeline's doing rather than the projection's. Each face carries EBU 75 % colour bars, a grey staircase, PLUGE, a multiburst, a checkerboard, a band-limited detail patch and a Siemens star, plus its own name and centre bearing - so the picture reports resolution, gamma, range handling and compression damage in whichever direction you happen to be looking. The poles become ordinary ceiling and floor walls instead of smeared blobs. Drawing directly in equirectangular cannot do this: the pattern is pre-distorted, so nothing in it has a known shape by the time it reaches the eye.
