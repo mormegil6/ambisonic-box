@@ -420,7 +420,7 @@
          Naming it after BUILD_TAG rather than a date makes the two impossible to
          drift apart, and the on-screen badge then tells you which bundle a
          browser is really running. -->
-    <script src="/dist/hoast360.bundle.js?v=rf50"></script>
+    <script src="/dist/hoast360.bundle.js?v=rf51"></script>
     <script>
         var hoast360 = new HOAST360();
 
@@ -1226,7 +1226,15 @@
         // Seek through video.js instead, so dash.js sees the seek, clears and
         // refills its buffer through its own machinery, and the audio feed gets
         // the seeking/seeked pair it already knows how to rebuild from.
-        v.loop = false;
+        // THE ELEMENT'S OWN LOOP, because on iOS it is the only one that works.
+        // Rewinding from an 'ended' handler calls play() again, and iOS treats
+        // that as a fresh playback request with no user gesture behind it: the
+        // clip stopped at the end and waited for a tap, reported on an iPhone
+        // Xs. The element's loop never asks, it just continues. Briefly removed
+        // on 2026-08-28 on the theory that it raced with the handler below at
+        // the wrap; the death at the wrap turned out to be an infinite loop in
+        // the audio scheduler, so there was nothing to fix here.
+        v.loop = vodLoopOn;
         v.addEventListener('ended', function () {
             if (!vodLoopOn) return;
             try {
@@ -1252,7 +1260,7 @@
         btn.addEventListener('click', function () {
           vodLoopOn = !vodLoopOn;
           var v = document.querySelector('#hoast360-player video');
-          // the element's own loop stays off; see wireVodLoop
+          if (v) v.loop = vodLoopOn;
           btn.classList.toggle('vjs-loop-on', vodLoopOn);
         });
         var fs = cb.querySelector('.vjs-fullscreen-control');
