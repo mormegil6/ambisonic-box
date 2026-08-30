@@ -67,14 +67,14 @@ It costs a constant 0.37 s later start, measured: an element carrying an audio t
 
 ## How it plays on iPhone
 
-Third-order Ambisonics plays on an iPhone from the same DASH stream every other client receives. There is no iOS-specific variant, no server-side downmix and no extra lossy generation. Verified on an iPhone Xs (A12, iOS 18.7) on 2026-08-29: video, 16-channel spatial audio, head tracking, fullscreen and looping.
+Third-order Ambisonics plays on an iPhone from the same DASH stream every other client receives. There is no iOS-specific variant, no server-side downmix and no extra lossy generation. Verified on an iPhone Xs (A12, iOS 18.7) on 2026-08-29: video, 16-channel spatial audio, head tracking, fullscreen and looping, on the on-demand clips.
 
-That verification is of the on-demand clips. **On the live stream an iPhone shows video and no audio.** macOS Safari plays the same live stream with audio, and the four requirements below are not specific to on-demand and are all met on iPhone, so the gap is narrow: it is the live edge on iOS specifically, not WebKit and not the live path in general.
+**Live audio on iPhone works.** Two intermittent failures were also measured there on 2026-08-29, and whether either also occurs on the on-demand clips has not been tested:
 
-Two candidates, both untested and both specific to live:
+- **The media session tears down under an error dash.js does not recover from.** The element's own error code, code 4, `SRC_NOT_SUPPORTED`, latched by a probe on 2026-08-29, points at dash.js re-attaching a `ManagedMediaSource` it had just detached. What actually raises the underlying error is not established. This player's own watchdog now detects the torn-down session and reloads within about 30 seconds instead of leaving it dead; the defect that starts the teardown is dash.js's and is not fixed here.
+- **The Safari content process can lose all audio output while every API reports success.** Measured directly on 2026-08-29: `AudioContext.state` stays `running`, its clock keeps advancing, an `AnalyserNode` on the output confirms real samples, a plain `<audio>` element plays a short clip to completion with no error, and a brand-new `AudioContext` created afterward is equally silent, yet nothing is audible. The state survived closing the original context and reloading the page, and cleared only when Safari itself was quit. No signal reaches the page that distinguishes this from a healthy session, so it cannot be detected or worked around here; see "What still costs something" below.
 
-- The patched `endstreaming` gate honours the hint once a quality is initialised and the buffer is non-empty. A live stream runs a thin buffer by design, which is the condition ManagedMediaSource's hysteresis exists to manage, so the gate can close there in a way it never does on demand.
-- The feed will not anchor until it holds 3.5 s of contiguous decoded content. On demand it fetches ahead freely; at the live edge it can only have what has been published, and with a 30 s target delay it may not accumulate that window the same way.
+The two live-specific mechanisms once suspected, the patched `endstreaming` gate and the feed's 3.5 s anchor threshold, are ruled out: repeated live sessions on 2026-08-29 reached full feed state and audible output well past both, then lost sound later in the same session with no corresponding change in feed state.
 
 A live stream also has no duration, so the loop and end-of-clip handling described below do not apply to it, and the live manifest still carries no keep-alive track.
 
@@ -84,7 +84,7 @@ Four platform requirements have to be met together, and missing any one of them 
 
 **The video codec.** No iPhone before the A17 Pro decodes AV1, and dash.js removes an AdaptationSet whose codec the device cannot handle, so an AV1-only manifest leaves those devices with no video track at all. The clips carry a second H.264 ladder for them, capped at 3840x1920 where phone decoders cap. See [VOD.md](VOD.md).
 
-**The audio session.** The video element is muted, because the audible signal comes from Web Audio rather than from the element, and iOS then classifies the page as ambient sound: the output follows the ringer switch and a phone on silent plays nothing, while every state the page can see reports healthy. Setting `navigator.audioSession.type = 'playback'` declares it as media playback instead. The context is also closed on `pagehide`; WebKit allows only a few per process and does not reclaim one across a reload, so a context left open by one page load can leave the next one silent, with only a browser restart clearing it.
+**The audio session.** The video element is muted, because the audible signal comes from Web Audio rather than from the element, and iOS then classifies the page as ambient sound: the output follows the ringer switch and a phone on silent plays nothing, while every state the page can see reports healthy. Setting `navigator.audioSession.type = 'playback'` declares it as media playback instead. The context is also closed on `pagehide`, which is hygiene, not a fix. A note here once read this close as preventing the platform fault described above, by staying under WebKit's per-process context limit. That reading did not survive measurement: a silent process still creates new realtime contexts without error, and the silence still occurs with the close in place.
 
 **The gestures.** `DeviceOrientationEvent.requestPermission()` is granted only from inside a handler for a real user interaction, so it is requested from the touch that starts playback rather than from the `play` event, which fires later on the engine's own schedule. `playsinline` is required as well, or `play()` hands over to the system fullscreen player, which shows the raw equirectangular frame and never paints the WebGL canvas.
 
@@ -95,7 +95,8 @@ Fullscreen is a CSS one. Safari on iPhone offers fullscreen only for a video ele
 - Audio arrives 1.3 to 2.7 seconds after playback starts, measured across runs. The feed will not anchor until it holds 3.5 s of contiguous decoded content, so the wait is the time to fetch two audio segments. Fetching them during page load rather than after the first tap would remove it.
 - A looping clip loses about 0.4 s of audio at the wrap. The opening segments are pre-fetched during the run-out, which reduced it from 4.4 s; closing it entirely means holding decoded content across the discontinuity.
 - An A12 sustains the 4K H.264 rung but has little margin at it, alongside a WebGL sphere, 16 convolvers and a WASM decoder. A device that raises a decode error is kept below that rung for the rest of the session, and an explicit choice from the quality menu overrides that.
-- On the live stream an iPhone plays video without audio. See the note above the requirements for the two candidate causes.
+- Live audio on iPhone can go silent mid-session with no observable cause and no player-side recovery, because the fault sits below every API the page can query; force-quitting Safari is the only known fix. See the note above the requirements.
+- A media session can tear down under a `SRC_NOT_SUPPORTED` element error; the player now recovers it within about 30 seconds instead of leaving it dead, but does not prevent it. See the note above the requirements.
 - The live path still emits no keep-alive track, so backgrounding behaviour is proven on static fixtures only. See below.
 
 ## Testing this
@@ -116,6 +117,6 @@ YouTube does use a standard where one exists: its ambisonic Opus is **mapping fa
 
 ## Status
 
-The player decodes and renders third-order Ambisonics on iOS for the on-demand clips, verified on an iPhone Xs (A12, iOS 18.7) and on macOS Safari 27. On the live stream the same device plays video without audio, which is open. The live pipeline also still emits no keep-alive track, so the backgrounding behaviour described above is proven on static fixtures only.
+The player decodes and renders third-order Ambisonics on iOS, on-demand and live, verified on an iPhone Xs (A12, iOS 18.7) and on macOS Safari 27. Two intermittent failures remain open on the live stream: a media-session teardown the player now recovers from within about 30 seconds, and a WebKit audio-output fault outside the player's reach that only a Safari restart clears. The live pipeline also still emits no keep-alive track, so the backgrounding behaviour described above is proven on static fixtures only.
 
 WebKit gained multichannel Opus decoding on 2026-03-05, for mapping family 1 on the WebM path and capped at 8 channels. The audio here is 16-channel Opus with mapping family 255, the family that carries an undefined channel layout described by the manifest rather than by the bitstream, so it is outside that support on both counts: too many channels, and the wrong family. Nothing found while measuring points at a change that would cover it.
