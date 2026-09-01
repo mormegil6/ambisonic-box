@@ -129,6 +129,17 @@ Two operator-facing views of the same running stream:
 
 <p align="center"><em>A Meta Quest 3 browser playing the stream at stream.bmroz.eu, with the <code>?dbg</code> capability probe reporting that 2-, 16- and 25-channel Opus all decoded on the headset itself. What that probe implies about ambisonic order is in <a href="docs/AMBISONIC-ORDER.md">docs/AMBISONIC-ORDER.md</a>.</em></p>
 
+<div align="center">
+<table>
+  <tr>
+    <td valign="center"><img src="docs/images/iphone-xs-safari-vod.jpeg" height="380" alt="The Directions on-demand clip playing on an iPhone Xs in Safari, showing the 360 test card and the on-screen indicator confirming reads are panned in 3rd-order Ambisonics, 16 channels"></td>
+    <td valign="center"><img src="docs/images/macos-safari27-live.jpeg" height="290" alt="The live stream playing in macOS Safari 27, with the About Safari dialog open over it confirming the version"></td>
+  </tr>
+</table>
+</div>
+
+<p align="center"><em>Neither Safari decodes this stream's 16-channel Opus natively, on macOS or iOS. It plays anyway, decoded in WebAssembly. The full story, including the two intermittent live-playback failures still open, is in <a href="docs/IOS-SAFARI.md">docs/IOS-SAFARI.md</a>.</em></p>
+
 ## Stream your own content
 
 **What a working demo loop does and does not prove.** It exercises the whole delivery half - transcode, 16-channel Opus, DASH segmenting, the player, the binaural render - so if it plays, that half is sound. It exercises **none of the contribution half**, because `loop-source` publishes from inside the compose network with a token the stack gave itself. Your encoder, your channel layout, your network path and your credentials are all still untested at that point, and that is exactly where first-time setups actually fail. Treat a playing loop as "the box works", not as "my stream will work".
