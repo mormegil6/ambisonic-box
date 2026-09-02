@@ -138,7 +138,7 @@ Two operator-facing views of the same running stream:
 </table>
 </div>
 
-<p align="center"><em>Neither Safari decodes this stream's 16-channel Opus natively, on macOS or iOS. It plays anyway, decoded in WebAssembly. The full story, including the two intermittent live-playback failures still open, is in <a href="docs/IOS-SAFARI.md">docs/IOS-SAFARI.md</a>.</em></p>
+<p align="center"><em>Neither Safari decodes this stream's 16-channel Opus natively, on macOS or iOS. It plays anyway, decoded in WebAssembly. The full story, including the two live-playback failures, how both were traced to their mechanisms, and what was reported upstream, is in <a href="docs/IOS-SAFARI.md">docs/IOS-SAFARI.md</a>.</em></p>
 
 ## Stream your own content
 
