@@ -67,6 +67,9 @@ WebKit suspends a backgrounded video element unless it has a decodable audio tra
 | muted, no audio track (this player's element) | suspends immediately |
 | unmuted, no audio track | suspends immediately |
 | unmuted, silent AAC track | keeps decoding |
+| muted or unmuted, no track, with MediaSession metadata and `playbackState = 'playing'` | suspends immediately |
+
+The Media Session API does not help either, which is worth stating because it is the obvious cleaner-looking alternative: an element carrying metadata and a `playbackState` of `playing` suspends exactly like one without, and WebKit resets the state to `paused` on its own. That arm was measured twice alongside both controls in the same runs, so the negative is as trustworthy as the positive.
 
 Two consequences. Unmuting alone is not enough, so this cannot be fixed with a one-line property change. And the policy is per-element, not per-page: the surviving element was in the same document as the two that died, so the familiar trick of parking a silent `<audio>` on the page does nothing here.
 
