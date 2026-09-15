@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for looking. This is a research project from a university department rather than a product, so the bar is "does it work and is it honest about what it does" rather than anything ceremonial.
+Thanks for looking. This is a research project from a university department rather than a product, so the bar is "does it work and is it honest about what it does", not anything ceremonial.
 
 ## Where to file things
 
