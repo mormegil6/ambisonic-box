@@ -9,7 +9,7 @@
   </tr>
 </table>
 
-Every route Safari offers for decoding audio, `decodeAudioData`, WebCodecs `AudioDecoder`, and MPEG-DASH via MediaSource, refuses this stream's 16-channel Opus, on both macOS and iOS. The stream plays there anyway, by decoding the audio in WebAssembly and scheduling it against the video clock. Unlike the Chrome field trial in [docs/CHROME-MULTICHANNEL-OPUS.md](CHROME-MULTICHANNEL-OPUS.md), this is not a regression with a fix in flight. It is measured as a structural gap in WebKit's audio pipeline, and nothing found while measuring it points at an upcoming change.
+Every route Safari offers for decoding audio, `decodeAudioData`, WebCodecs `AudioDecoder`, and MPEG-DASH via MediaSource, refuses this stream's 16-channel Opus, on both macOS and iOS. The stream plays there anyway, by decoding the audio in WebAssembly and scheduling it against the video clock. Unlike the Chrome field trial in [docs/CHROME-MULTICHANNEL-OPUS.md](CHROME-MULTICHANNEL-OPUS.md), which Chrome has since fixed, this is not a regression with a fix in flight. It is measured as a structural gap in WebKit's audio pipeline, and nothing found while measuring it points at an upcoming change.
 
 **Try it yourself, on a Mac, iPhone, or headset:** <https://stream.bmroz.eu/iphone-test/>. Three short pages, each runs itself and ends with a six-character ID; results also beacon back automatically. Real tester runs on both macOS Safari and iPhone Safari (iOS 26.6) are behind the numbers below.
 
@@ -34,7 +34,7 @@ A Meta Quest 3's own Chromium-based browser decodes this stream, 16 and 25 chann
 
 ## What works instead, measured on real hardware
 
-**Chosen: WASM decode of the stream this stack already serves.** [`opus-decoder`](https://github.com/eshaz/wasm-audio-decoders), built from source rather than its published bundle, which [silently discarded its own multichannel options](https://github.com/eshaz/wasm-audio-decoders/issues/129) when minified. That defect was fixed upstream in [opus-decoder 0.7.12](https://github.com/eshaz/wasm-audio-decoders/releases), released 2026-08-27, which excludes the constructor properties from minification. The published bundle is therefore usable again and the source build can be dropped; doing so needs its own verification that all 16 channels still arrive in ACN order, and has not been done here. One stateful decoder fed the live DASH segments directly:
+**Chosen: WASM decode of the stream this stack already serves.** [`opus-decoder`](https://github.com/eshaz/wasm-audio-decoders) 0.7.12, the package's own published dist, pinned exactly. Earlier releases [silently discarded their own multichannel options](https://github.com/eshaz/wasm-audio-decoders/issues/129) when minified, so the player used to carry a build from source. That defect was fixed upstream in [0.7.12](https://github.com/eshaz/wasm-audio-decoders/releases), released 2026-08-27, which excludes the constructor properties from minification, and the player now uses the published dist. The swap was checked by decoding the 16-channel tone ladder with both builds: every channel carries its own tone in ACN order, and the output is identical sample for sample on the main thread, in the Web Worker variant the player uses, and after a `reset()`, in Safari 27.0 and Chrome 154. One stateful decoder fed the live DASH segments directly:
 
 | | macOS Safari 27 | iPhone Safari (iOS 26.6) |
 |---|---|---|

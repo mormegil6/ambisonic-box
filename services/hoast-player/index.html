@@ -410,17 +410,19 @@
         } catch (e) {}
       }
     </script>
-    <!-- ?v= MUST match hoast360.js's BUILD_TAG, and MUST be bumped in the same
-         commit as any bundle rebuild. /dist/ is served by the catch-all location
-         below, which sets no Cache-Control, so browsers fall back to HEURISTIC
-         freshness and may serve a stale bundle without ever revalidating - this
-         string is the only thing that forces a re-fetch. It was missed for rf23
-         (bundle said rf23, this still said 2026-08-16c) and the deploy reached
-         returning visitors only because their browsers happened to revalidate.
-         Naming it after BUILD_TAG rather than a date makes the two impossible to
-         drift apart, and the on-screen badge then tells you which bundle a
-         browser is really running. -->
-    <script src="/dist/hoast360.bundle.js?v=a1aff69a"></script>
+    <!-- ?v= is the first 8 hex digits of the md5 of dist/hoast360.bundle.js
+         (md5 -q hoast360/dist/hoast360.bundle.js | cut -c1-8, or md5sum on
+         Linux), and MUST be recomputed in the same commit as any bundle rebuild.
+         /dist/ is served by the catch-all location below, which sets no
+         Cache-Control, so browsers fall back to HEURISTIC freshness and may
+         serve a stale bundle without ever revalidating - this string is the only
+         thing that forces a re-fetch. It was missed for rf23 (the bundle changed,
+         this still said 2026-08-16c) and the deploy reached returning visitors
+         only because their browsers happened to revalidate. The hygiene
+         workflow fails when the key is not the hash of the committed bundle.
+         The WASM Opus decoder beside the bundle needs no key of its own: its
+         file name carries a hash of its content. -->
+    <script src="/dist/hoast360.bundle.js?v=5d7d21b2"></script>
     <script>
         var hoast360 = new HOAST360();
 
