@@ -303,8 +303,8 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
 - [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
 - [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
-- [docs/UPSTREAM.md](docs/UPSTREAM.md): bugs this stack found and sent back to the projects they belong to, merged and open, plus the ones still prepared and unsent
-- [docs/CHROME-MULTICHANNEL-OPUS.md](docs/CHROME-MULTICHANNEL-OPUS.md): a Chrome experiment that breaks every Opus decode above 2 channels, why the usual isolation steps do not find it, and the one-flag workaround
+- [docs/UPSTREAM.md](docs/UPSTREAM.md): bugs this stack found and sent back to the projects they belong to, merged and open
+- [docs/CHROME-MULTICHANNEL-OPUS.md](docs/CHROME-MULTICHANNEL-OPUS.md): a Chrome experiment that broke every Opus decode above 2 channels on Chrome 151 and 152 and is fixed from 153.0.8010.36, what was measured, why the usual isolation steps did not find it, and the one-flag workaround for the two affected releases
 - [docs/IOS-SAFARI.md](docs/IOS-SAFARI.md): no Safari decode surface accepts this stream's 16-channel Opus, so the player decodes it in WebAssembly instead; what that takes on iOS, and the on-demand clips playing on an iPhone
 - [tests/av-sync/README.md](tests/av-sync/README.md): the browser-console instruments built during the A/V-desync investigation, and how to run them against the colour+tone clip
 - [docs/fixtures/README.md](docs/fixtures/README.md): the two fixtures that reproduce the exact setups the OBS guides were verified with
