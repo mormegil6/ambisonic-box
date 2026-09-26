@@ -329,6 +329,30 @@ jobs:
           sys.exit(fail)
           PY
 
+  player-key:
+    name: player cache key matches its bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # the bundle lives in the hoast360 submodule
+          submodules: true
+
+      - name: index.html's ?v= is the md5 of the committed player bundle
+        run: |
+          # /dist/ is cached for hours by the CDN and by browsers, and the ?v=
+          # on the script tag is the only thing that forces a re-fetch after a
+          # rebuild. The rule is written on the tag itself; it has been left
+          # stale by hand more than once, so it is a gate now.
+          key=$(grep -o 'hoast360\.bundle\.js?v=[0-9a-f]*' services/hoast-player/index.html | sed 's/.*v=//')
+          [ -n "$key" ] || { echo "::error file=services/hoast-player/index.html::no ?v= key on the player bundle"; exit 1; }
+          sum=$(md5sum hoast360/dist/hoast360.bundle.js | cut -c1-8)
+          if [ "$key" != "$sum" ]; then
+            echo "::error file=services/hoast-player/index.html::the bundle's ?v= is $key but the md5 of hoast360/dist/hoast360.bundle.js starts $sum, so a rebuilt player would keep serving the old bundle from cache"
+            exit 1
+          fi
+          echo "cache key $key matches the bundle"
+
   version-agrees:
     name: version metadata agrees
     runs-on: ubuntu-latest
