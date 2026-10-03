@@ -72,18 +72,18 @@ git submodule update --init             # the patched player, baked in at build
 docker compose up -d --build
 ```
 
-The build compiles `earshot`'s nginx-rtmp and ffmpeg fork from source: minutes on a fast amd64 host, hours on a Raspberry Pi. Everything else in the quick start - setup, secrets, the demo loop - is identical on this path.
+The build compiles `earshot`'s nginx-rtmp and FFmpeg from source: minutes on a fast amd64 host, about twenty minutes on a Raspberry Pi 4. Everything else in the quick start - setup, secrets, the demo loop - is identical on this path.
 
 ## Requirements
 
 - Docker Engine with the compose plugin (`docker compose`), buildx for multi-arch builds
 - *On Windows:* Docker Desktop needs **WSL2** (`wsl --install`, then reboot) and **CPU virtualisation enabled in the BIOS/UEFI**, on Windows 11 as much as on 10. Docker Desktop's installer will tell you if either is missing, but not before you have downloaded it, and this caught the project's first outside tester
-- ~2 GB of image builds on first `compose build` (the `earshot` service compiles its nginx-rtmp and ffmpeg fork from source)
+- ~2 GB of image builds on first `compose build` (the `earshot` service compiles its nginx-rtmp and FFmpeg from source)
 - *Only for the test and measurement scripts:* host `ffmpeg`/`ffprobe`; Node.js (`npm ci`, then `npx playwright install chromium` for the two headless-browser scripts); `python3` + matplotlib for the trade-off plot
 
 ## Architecture
 
-<div align="center"> <img src="docs/architecture/architecture.png" width="80%" alt="HOA 360 stream architecture: OBS and loop-source feed rtmp-ingest, earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume"> </div>
+<div align="center"> <img src="docs/architecture/architecture.png" width="80%" alt="HOA 360 stream architecture: stock OBS sends SRT to srt-gateway, which hands the stream straight to earshot; OBS Music Edition and the demo loop feed rtmp-ingest instead; earshot transcodes to 16-channel Opus DASH into the dash-output volume, hoast-player serves it to the viewer browser, with shaka packager and telemetry attached to the volume"> </div>
 
 <p align="center"><em>The data path only. Control and monitoring edges are deliberately omitted; <a href="docs/architecture/README.md">docs/architecture/</a> lists exactly what the diagram simplifies.</em></p>
 
@@ -318,7 +318,7 @@ Some measured results behind this README (transcode thermals, the bitrate and te
 
 - [lip-sync-test/RESULTS.md](lip-sync-test/RESULTS.md): the segment-duration study - measured across 0.5/1/2/4 s variants. Segment duration turns out **not** to affect A/V sync (a structural 0 ms offset at every duration); it is a bitrate and buffer-depth trade-off, which is why 2 s is the default
 - [opus-compression-test/RESULTS.md](opus-compression-test/RESULTS.md): what libopus `-compression_level` is worth on 16-channel ambisonics, judged with AMBIQUAL on real recordings. Answer: leave it unset - there is no meaningful CPU to reclaim (0.9 % of a core), and solo piano is the one material that shows any degradation
-- [aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): where the contribution leg's 96 kbit/s/channel setting actually sits, measured against AMBIQUAL and, as a second opinion in a different domain, BAM-Q. The AAC-then-Opus cascade a viewer receives flattens 1.6-1.96x slower than the AAC leg alone from 64 to 128, and the gap is already open by 96. Building the binaural render for BAM-Q also surfaced and fixed a real defect in HOAST360's decoding-filter loading, upstream since 2020, that cost more than any codec setting tested
+- [aac-bitrate-test/RESULTS.md](aac-bitrate-test/RESULTS.md): where the contribution leg's 96 kbit/s/channel setting actually sits, measured against AMBIQUAL and, as a second opinion in a different domain, BAM-Q. From 64 to 128 kbit/s/channel the AAC leg alone gains quality 1.22 to 1.40x faster than the AAC-then-Opus cascade a viewer receives, on all five excerpts, and neither curve flattens inside the range tested, so 96 is not a measured knee. Building the binaural render for BAM-Q also surfaced and fixed a real defect in HOAST360's decoding-filter loading, upstream since 2020, that cost more than any codec setting tested
 
 ## License
 
@@ -329,7 +329,7 @@ Compose files, service configs and scripts in this repository: **Apache 2.0**. T
 | **Reference clips and media** shipped as [release assets](https://github.com/mormegil6/ambisonic-box/releases/tag/vod-clips): the `directions` and `colortones` clips, the 8K 360 test card, and the caption sidecars | **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** - reuse, remix and redistribute freely, including commercially, with attribution (one disclosed exception in [docs/VOD.md](docs/VOD.md#licence)) |
 | [HOAST360](https://github.com/mormegil6/hoast360) (patched fork, git submodule) | GPL-3.0-or-later |
 | [Envelop Earshot](https://github.com/EnvelopSound/Earshot) (submodule at `services/earshot/src`, tracking [a fork](https://github.com/mormegil6/Earshot)) | GPL |
-| Envelop/pkviet FFmpeg fork (built inside the `earshot` image) | GPL v3 (built with `--enable-gpl`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
+| FFmpeg 7.1 (the release source with a one-line DASH muxer patch, built inside the `earshot` image) | GPL v3 (built with `--enable-gpl --enable-version3`; the default build (`ENABLE_NONFREE=0`) is redistributable, and only an explicit `ENABLE_NONFREE=1` build carries the non-redistributable `--enable-nonfree` stamp (services/earshot/README.md section 7)) |
 | [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) | BSD-2-Clause |
 | [Shaka Packager](https://github.com/shaka-project/shaka-packager) (official image) | BSD-3-Clause |
 | nginx, Alpine packages | BSD-2-Clause / various |

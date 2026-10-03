@@ -6,8 +6,8 @@ name: build
 # matrix got hoast-player wrong on the first try (its context is the repo root,
 # for the player submodule, not services/hoast-player).
 #
-# earshot is the expensive target: nginx-rtmp and an ffmpeg fork compiled from
-# source, plus a node:12 webtools stage. Hence the layer cache - the first run
+# earshot is the expensive target: nginx-rtmp and FFmpeg compiled from source,
+# plus a Node webtools stage. Hence the layer cache - the first run
 # is slow, later ones are near-instant unless those sources change.
 #
 # Deliberately amd64 only. The project targets arm64 too, but building that

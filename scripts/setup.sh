@@ -280,11 +280,13 @@ YAML
       - SRT_MODE=owner
       # Direct-to-DASH: hand the probed stream straight to earshot's own
       # transcoder instead of re-encoding it to 16-ch AAC and republishing
-      # over RTMP/FLV. Measured on the Mac Mini at 20 Mbps: ~28-42 % of a
-      # core against the legacy ~90-130 %, and one lossy audio generation
-      # deleted (OBS AAC -> Opus, with no AAC in between). Owner only; the
-      # guest route keeps the RTMP hop, which is where guest admission and
-      # the kick lever live. Set SRT_DIRECT=0 in .env to fall back.
+      # over RTMP/FLV. That deletes one lossy audio generation (OBS AAC ->
+      # Opus, with no AAC in between). It moves CPU rather than saving it:
+      # measured back to back on the Mac Mini at 8.3 and 18.4 Mbps
+      # (2026-10-02), the host was about as busy on either route, because the
+      # join and the Opus encode move into earshot, and ran 8 to 12 C cooler
+      # on the direct one. Guests have taken the same route by default since
+      # 2026-08-21 (GUEST_SRT_DIRECT). Set SRT_DIRECT=0 in .env to fall back.
       - SRT_DIRECT=${SRT_DIRECT:-1}
       # Authenticates this gateway to telemetry's /gw/session/* routes. The
       # owner container is a DIFFERENT container from srt-gateway, so it needs

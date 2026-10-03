@@ -11,7 +11,7 @@ flowchart TD
         GATEWAY["srt-gateway<br/>SRT terminator<br/>routes guests & owner"]
         INGEST["rtmp-ingest<br/>nginx-rtmp: auth, relay"]
         LOOP["loop-source<br/>demo.mp4"]
-        EARSHOT["earshot<br/>PCE-aware ffmpeg fork"]
+        EARSHOT["earshot<br/>FFmpeg 7.1: Opus + DASH"]
         VOL[("dash-output volume")]
         SHAKA["shaka packager<br/>(profile: tools)"]
         PLAYER["hoast-player<br/>nginx + HOAST360"]

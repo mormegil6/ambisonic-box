@@ -57,10 +57,13 @@ services:
       # against [A-Za-z0-9_-]+ in the earshot entrypoint.
       - DASH_NAME=${DASH_NAME:-hoast_demo}
       # SRT direct-DASH listeners (:9100 to :9103, one per audio shape and video
-      # codec: 4x4 or 1x4, H.264 or H.265; compose-internal, never published). The owner SRT gateway can feed raw mpegts here instead of
-      # republishing over RTMP/FLV, which deletes a 16-ch AAC re-encode (the
-      # encode alone measured 59 % of a core at 20 Mbps; total gateway child
-      # CPU falls from ~90-130 % to ~28-42 %) and one lossy audio generation.
+      # codec: 4x4 or 1x4, H.264 or H.265; compose-internal, never published). Both SRT gateways can feed raw mpegts here instead of
+      # republishing over RTMP/FLV, which deletes a 16-ch AAC re-encode and one
+      # lossy audio generation. It moves CPU rather than saving it: measured
+      # back to back on the Mac Mini at 8.3 and 18.4 Mbps (2026-10-02), the
+      # gateway fell from 77-97 % of a core to 41-79 % while earshot rose from
+      # 22-24 % to 40-43 %, the host was about as busy either way, and it ran
+      # 8 to 12 C cooler.
       # ON BY DEFAULT for the owner route: scripts/setup.sh writes
       # SRT_DIRECT=${SRT_DIRECT:-1} into the generated override. Set
       # SRT_DIRECT=0 in .env to fall back to the RTMP republish. Idle
@@ -95,12 +98,12 @@ services:
       # recreate the mismatch; against a 2 s target the demo master's 2.002 s
       # GOP leaves only that ~0.2 s residue across the whole window.
       # Realtime VP9 remains supported and is kept as a documented alternative
-      # in .env.example. It is not the default because VP9 has been measured
-      # TWICE on this host and both runs were over budget: 310 % CPU / 90.3 C at
-      # half resolution, and 459.6 % CPU BELOW REALTIME at the unscaled 4K the
-      # .env.example line would actually run. 4K VP9 is measured-and-failed here,
-      # not untried, and that second run is the strongest argument for this
-      # default. Conditions behind the numbers: README, "Video codec".
+      # in .env.example. It is not the default because of what it costs on this
+      # host: at the unscaled 4K the .env.example line would actually run, about
+      # fifteen times the CPU of passthrough (522.4 % against 34.2 %, back to
+      # back on 2026-08-12) and a 100 C peak. An earlier run that reported 4K VP9
+      # below realtime was not confirmed after the host was repasted, so this is
+      # a cost argument, not a capability one. See README, "Video codec".
       # For the VP9 line, keep -g at segment duration x fps (-g 60 at 29.97/30,
       # -g 50 at 25) or the muxer cuts at the next keyframe past the target.
       # suggestedPresentationDelay >= 30 s is patched into the muxer itself
