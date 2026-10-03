@@ -40,11 +40,10 @@ box_bottom = float(bm.group(2)) + float(bm.group(4))
 # far enough to seat the gateway plus a gap wide enough for its edge label. The
 # space this opens is the box's lower-left, which is empty in this layout.
 GW_INSET = 18.0                  # gateway's inset from the wall (mirrors loop-source)
-GW_GAP   = 175.0                 # gateway -> ingest run; sized for the old
-                                  # mechanism-named labels ("RTMP, arbiter-gated"
-                                  # at 146px) and left wide since role-named ones
-                                  # ("RTMP, guest" / "RTMP, owner", ~95px) fit
-                                  # with room to spare rather than exactly
+GW_GAP   = 200.0                 # gateway -> ingest run; sized for its widest
+                                  # label, "RTMP fallback, guest*" (~160px), with
+                                  # ~20px either side: at 175 the asterisk ran
+                                  # into ingest's arrowheads
 _ix, _iy = node_pos('INGEST')
 box_left = min(box_left,
                (_ix - node_halfwidth('INGEST')) - GW_INSET
@@ -91,7 +90,7 @@ _,   tty = node_pos('TELEM');   thh = node_halfheight('TELEM')
 # vertical instead of a diagonal. earshot, shaka, the volume, hoast-player and
 # telemetry all shift by the same delta, so the X keeps its shape; the edges
 # below already derive from ex_/sx_, so only the two edges INTO earshot need
-# redrawing (the relay just below, the owner-direct edge at its own section).
+# redrawing (the relay just below, the direct edge at its own section).
 X_DELTA = _ix - ex_
 _move('EARSHOT', _ix, ey_)
 _move('SHAKA', sx_ + X_DELTA, sy_)
@@ -208,8 +207,9 @@ ly = sy - 24.0
 s = re.sub(r'(<g class="edgeLabel"[^>]*transform="translate\()[-\d.]+,\s*[-\d.]+(\)"[^>]*>\s*<g class="label"[^>]*data-id="L_PLAYER_VIEWER_0")',
            lambda m: f"{m.group(1)}{lx}, {ly}{m.group(2)}", s, count=1)
 
-# === input side: two contribution routes into rtmp-ingest. ===
-#   SRT (recommended):  stock OBS --SRT--> srt-gateway --RTMP /guest--> ingest
+# === input side: the two contribution routes. ===
+#   SRT (recommended):  stock OBS --SRT--> srt-gateway --MPEG-TS--> earshot
+#                       (--RTMP--> ingest instead when a role's direct flag is 0)
 #   RTMP (legacy):      OBS Music Edition --RTMP :1935--------------> ingest
 # The SRT chain runs as one straight horizontal line on ingest's own row, with
 # srt-gateway inside the box (it is a compose service) and its sender outside
@@ -269,17 +269,20 @@ PORT_LX = (max(SX + shw, OX + ohw) + (GX - ghw)) / 2.0
 set_label('L_SRTOBS_GATEWAY_0', PORT_LX, SRT_OWNER_Y - 15.0)
 set_label('L_SRTOBS_GATEWAY_2', PORT_LX, SRT_GUEST_Y + 15.0)
 
-# 2) srt-gateway -> ingest: TWO parallel lines, not one. The gateway can land
-#    a stream in either of ingest's applications - guests through the one that
-#    is admission-controlled, owners (and a gateway with no session-protocol
-#    secret) through the one that is only key-checked - and drawing them as
+# 2) srt-gateway -> ingest: TWO parallel lines, not one. This pair is the
+#    fallback: both roles take the direct edge (2b) by default and drop to
+#    their line here only when their direct flag is 0. Over this pair the
+#    gateway can land a stream in either of ingest's applications - guests
+#    through the one that is admission-controlled, owners (and a gateway with
+#    no session-protocol secret) through the one that is only key-checked -
+#    and drawing them as
 #    two lines between the same two boxes is the point: same wire, two
 #    different security models, exactly as real as each other. mermaid gives
 #    the second edge of a repeated pair the id _2, not _1 (its own global edge
 #    counter, confirmed empirically for both pairs, not a typo here).
 # Three arrows land on ingest's left face in total (this pair, plus OBS Music
 # Edition's curve below) and are spaced evenly by ARROW_SEP. OWNER IS ON TOP,
-# here and on the SRT pair above: it is the route that is on by default, while
+# here and on the SRT pair above: it is the role that is on by default, while
 # guest exists only where the operator turned it on. Order therefore comes
 # from the source file - the first edge of each pair takes the top slot - so
 # swapping the two lines in architecture.mmd swaps them in the drawing.
@@ -295,7 +298,9 @@ ROUTE_LABEL_OFF = 15.0
 set_label('L_GATEWAY_INGEST_0', (g_sx + (ix - ihw)) / 2.0, OWNER_Y - ROUTE_LABEL_OFF)
 set_label('L_GATEWAY_INGEST_2', (g_sx + (ix - ihw)) / 2.0, GUEST_Y + ROUTE_LABEL_OFF)
 
-# 2b) srt-gateway -> earshot, the OWNER route: leaves the gateway's underside
+# 2b) srt-gateway -> earshot, the direct route both roles take by default
+#     (labelled so, since the pair above sits on the main run and would
+#     otherwise read as the default): leaves the gateway's underside
 #     and lands on earshot's left face, deliberately below and clear of the
 #     guest run above it. Dagre draws this edge for its own pre-move layout,
 #     so like every other rerouted edge it has to be redrawn here or it points
