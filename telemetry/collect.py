@@ -921,6 +921,18 @@ _pub_cache = [None]        # last status.json dict, for out-of-cycle endpoint up
 # stays down because source_start sees "already_publishing" - neither of
 # which covers a DIRECT owner, whose writer reaches no stat page.
 LOOP_NAME = os.environ.get("DASH_NAME", "hoast_demo")
+
+
+def _owner_label(name):
+    """How an owner's publish name may appear in a log line or an alert.
+    On the RTMP route that name IS RTMP_OWNER_KEY: rtmp-ingest's /auth admits
+    a publish only when the two are equal. Printed as is, it put the key in
+    this container's log on every owner publish, and the RTMP alert put it in
+    the Telegram chat as well. A short hash still lets two lines about one
+    publisher be matched. The demo loop's name is not a secret."""
+    if not name or name == LOOP_NAME:
+        return name
+    return "#" + hashlib.sha256(name.encode()).hexdigest()[:8]
 _owner_lock = threading.Lock()
 _owner = {"live": False, "name": None, "since": None, "session": None}
 _owner_miss = [0]          # consecutive owner_tick probes with no publisher
@@ -1793,7 +1805,7 @@ def gw_claim(role, name, addr, tracks):
             # stream_state reporting nothing published, so the public start
             # button could put the demo loop beside it, permanently, with
             # nothing to end either. Refuse instead.
-            print(f"owner claim refused: '{name}' did not take the latch "
+            print(f"owner claim refused: {_owner_label(name)} did not take the latch "
                   f"(reserved name, or another owner holds it)", flush=True)
             return 403, {"error": "owner latch not taken"}
         # PREEMPTION IS NOT INSTANT, and the honest answer is to make the
@@ -1921,7 +1933,7 @@ def gw_done(role, session):
             _owner_miss[0] = 0
             resume = True
         if resume:
-            print(f"owner left (direct session done): {name}", flush=True)
+            print(f"owner left (direct session done): {_owner_label(name)}", flush=True)
             _resume_after_guest()
         return 200, {}
     with _guest_lock:
@@ -2212,8 +2224,8 @@ def owner_notify(name_arg, addr=None):
         # Both publishers are the operator's own devices, so just log it.
         # A SAME-name notify is the owner's reconnect: re-arm the latch.
         if _owner["live"] and _owner["name"] != name_arg:
-            print(f"second owner publisher ({name_arg}) while "
-                  f"{_owner['name']} is latched; latch unchanged", flush=True)
+            print(f"second owner publisher ({_owner_label(name_arg)}) while "
+                  f"{_owner_label(_owner['name'])} is latched; latch unchanged", flush=True)
             return False
         # A same-name notify while already latched is the direct path's 30 s
         # keepalive (or an RTMP reconnect): refresh the latch and stop. The
@@ -2242,7 +2254,7 @@ def owner_notify(name_arg, addr=None):
             _guest_end_locked(ended)
     if ended:
         _refresh_pub_endpoint()     # no resume: the owner holds the slot now
-    print(f"owner publishing: {name_arg}; guests locked out", flush=True)
+    print(f"owner publishing: {_owner_label(name_arg)}; guests locked out", flush=True)
     # the loop stop probes docker and serializes on _start_lock (possibly
     # behind a source_start's `docker start`, up to ~30 s), far over this
     # callback's 3 s nginx budget - and the owner's publish is deliberately
@@ -2260,11 +2272,11 @@ def owner_notify(name_arg, addr=None):
     # it is simply forgetting - so the box says so at the moment it happens
     # rather than relying on the operator to remember days later.
     if addr and _rtmp_key_left_the_box(addr):
-        telegram(f"🔑 owner published over RTMP from {addr} as '{name_arg}'.\n"
+        telegram(f"🔑 owner published over RTMP from {addr}.\n"
                  f"RTMP sends RTMP_OWNER_KEY in CLEARTEXT - it has now been "
                  f"exposed to every hop on that path. Rotate it when this "
-                 f"session ends:\n"
-                 f"  ssh box; cd ~/ambi-box\n"
+                 f"session ends, in the stack's directory on the server "
+                 f"named below:\n"
                  f"  sed -i \"s|^RTMP_OWNER_KEY=.*|RTMP_OWNER_KEY=$(openssl rand -hex 24)|\" .env\n"
                  f"  docker compose up -d\n"
                  f"(SRT does not need this - its passphrase never leaves your machine.)")
@@ -2291,14 +2303,14 @@ def owner_done(name_arg):
         if not _owner["live"] or name_arg != _owner["name"]:
             return
         if time.time() - (_owner["since"] or 0) < 5:
-            print(f"owner done ignored (stale, latch re-armed): {name_arg}",
+            print(f"owner done ignored (stale, latch re-armed): {_owner_label(name_arg)}",
                   flush=True)
             return
         _owner.update(live=False, name=None, since=None)
         _owner_miss[0] = 0
         resume = True
     if resume:
-        print(f"owner left: {name_arg}", flush=True)
+        print(f"owner left: {_owner_label(name_arg)}", flush=True)
         _resume_after_guest()
 
 
@@ -2326,7 +2338,7 @@ def _owner_relatch_check():
             return              # set by a real notify while we were probing
         _owner.update(live=True, name=name, since=time.time())
         _owner_miss[0] = 0
-    print(f"owner latch re-derived from ingest (name={name}); a telemetry "
+    print(f"owner latch re-derived from ingest (name={_owner_label(name)}); a telemetry "
           f"restart most likely dropped the original notify", flush=True)
 
 
