@@ -106,18 +106,22 @@ echo
 
 if [ "$RELEASE" -eq 1 ]; then
     cat <<EOF
-next, to cut it:
+next, to cut it (docs/CI.md, "Versions and releases", says why in this order):
   git commit -am "Release $NEW"
+  git push origin main                  # check it was accepted before going on
   git tag -a "v$NEW" -m "v$NEW"
-  git push origin main "v$NEW"
-  gh release create "v$NEW" --verify-tag --notes-from-tag   # this is what mirrors it to GitLab
+  git push origin "v$NEW"              # the tag by name, never --tags
 
-then bump straight past it, so main never claims to BE a release it has moved on from:
+once ghcr-publish is green and its pin commit is on main, publish the notes
+(this is also what mirrors the release to GitLab), then bump straight past it,
+so main never claims to BE a release it has moved on from:
+  gh release create "v$NEW" --verify-tag --title "v$NEW" --notes-file <notes.md>
+  git pull --ff-only origin main
   ./scripts/set-version.sh <next>-dev
 
 scripts/setup.sh PIN_TAG is not yours to touch: ghcr-publish bumps it once the
 images for this tag exist, so a fresh install never pulls a tag with no images.
 EOF
 else
-    echo "next: git commit -am \"Back to development on $NEW\""
+    echo "next: git commit -am \"Back to development on ${NEW%-dev}\" && git push origin main"
 fi

@@ -30,7 +30,7 @@ Nothing here is generic. Every check traces to a mistake this project actually m
 
 **integration** - the two real suites. [`test-pipeline.sh`](../scripts/test-pipeline.sh) on every PR; [`test-guest-endpoint.sh`](../scripts/test-guest-endpoint.sh) nightly and on demand, because it takes about 17 minutes and a slow gate gets ignored. CI runs [`scripts/setup.sh`](../scripts/setup.sh) to generate a real key, which also exercises the happy path of the startup guard.
 
-The `defaults` job inside it installs with [`scripts/setup.sh`](../scripts/setup.sh) and starts the stack exactly as a first-time user would, which means it pulls the published images at the tag `PIN_TAG` names. That tag is bumped by `ghcr-publish` after a release's images exist, not by the release commit: bumping it earlier made every release fail this job until the build finished, because the tree advertised images that were still being built. If you see `manifest unknown` here, check whether a release is mid-publish before looking anywhere else.
+The `defaults` job inside it installs with [`scripts/setup.sh`](../scripts/setup.sh) and starts the stack exactly as a first-time user would, which means it pulls the published images at the tag `PIN_TAG` names. That tag is bumped by `ghcr-publish` after a release's images exist, not by the release commit: bumping it earlier made every release fail this job until the build finished, because the tree advertised images that were still being built. So while a release builds, `defaults` keeps testing the previous release, and the first run that installs the new one is the push after the pin commit (see [Versions and releases](#versions-and-releases)).
 
 **security** - gitleaks over full history. Note the trigger matters: on a `push` the action scans only that push's commits, so the FULL-history scan happens on the Monday schedule. The first one (2026-08-10) flagged Earshot's vendored placeholder TLS cert, which is a self-signed example with OpenSSL's default dummy subject, expired since 2019, and byte-identical to upstream. It is silenced by fingerprint in `.gitleaksignore` rather than by excluding a path, so a genuinely new key anywhere still fails. Gitleaks over full history (this repo carries placeholder credentials by design, so a full-history scan is expected to surface them), Trivy on the four images this project controls, and CodeQL. `earshot` is scanned but **report-only**, and the reason is worth stating correctly: its *runtime* image is `alpine:3.11` with `nginx 1.15.1`, not the `node:24-alpine3.24` build stage, which contributes only static files. Alpine 3.11 has been end-of-life since November 2021, so `ignore-unfixed: true` on a distribution whose security data has stopped means this scan reports close to nothing - moving it forward means changing the base in Earshot itself and proving the nginx-rtmp build still works on both architectures, which is a project rather than a scan fix, and failing the job in the meantime would train everyone to ignore the job. [SECURITY.md](../.github/SECURITY.md) says the same thing where a reporter will see it.
 
@@ -55,23 +55,33 @@ A running stack reports its version on `/api/live`, which the dashboard and the 
 So the file is primary, and two things keep it honest:
 
 - **`./scripts/set-version.sh <version>`** writes `telemetry/VERSION` and [`CITATION.cff`](../CITATION.cff) together. `X.Y.Z` means a release and stamps today's date; `X.Y.Z-dev` means the tree has moved past the release named by `date-released` and has not itself been released, and leaves that date alone.
-- **The `version metadata agrees` gate** fails a push where the two files disagree, where the version is not semver-shaped, where `date-released` is not an ISO date, or where a `v*` tag does not match what the tree says. It also refuses a tag carrying a `-dev` version, because that would ship a stack reporting a version that was never cut. On a branch it prints a reminder instead of failing, since `git push origin main v1.0.0` runs it on both refs.
+- **The `version metadata agrees` gate** fails a push where the two files disagree, where the version is not semver-shaped, where `date-released` is not an ISO date, or where a `v*` tag does not match what the tree says. It also refuses a tag carrying a `-dev` version, because that would ship a stack reporting a version that was never cut. On a branch it prints a reminder instead of failing, since the release commit reaches `main` before its tag exists.
 
 `integration` then proves the part that reaches a user, `telemetry/VERSION` to `/api/live`, with `AMBI_VERSION` unset so it exercises the fallback a real deployment uses.
 
-Cutting one:
+Cutting one, in this order:
 
 ```
 ./scripts/set-version.sh 1.0.0
 git commit -am "Release 1.0.0"
+git push origin main                 # check it was accepted before going on
 git tag -a v1.0.0 -m v1.0.0
-git push origin main v1.0.0
-./scripts/set-version.sh 1.0.1-dev && git commit -am "Back to development on 1.0.1-dev" && git push
+git push origin v1.0.0               # the tag by name, never --tags
+# once ghcr-publish is green and its pin commit is on main:
+gh release create v1.0.0 --verify-tag --title v1.0.0 --notes-file notes.md
+git pull --ff-only origin main
+./scripts/set-version.sh 1.0.1-dev && git commit -am "Back to development on 1.0.1" && git push origin main
 ```
 
-The tag push is what publishes: `ghcr-publish` builds all five images for both architectures and tags them `v1.0.0` and `latest`, and only then does it move [`scripts/setup.sh`](../scripts/setup.sh)'s `PIN_TAG` to the new release, so a fresh install never names a tag whose images are still building. `set-version.sh` deliberately does not touch `PIN_TAG`: doing it in the release commit is what made every release fail the `defaults` job until the build finished. A GitHub release created on that tag is copied to GitLab by `release to gitlab`; the assets are not, deliberately.
+The tag push is what publishes: `ghcr-publish` builds all five images for both architectures and tags them `v1.0.0` and `latest`, and only then does it move [`scripts/setup.sh`](../scripts/setup.sh)'s `PIN_TAG` to the new release, so a fresh install never names a tag whose images are still building. `set-version.sh` deliberately does not touch `PIN_TAG`: doing it in the release commit is what made every release fail the `defaults` job until the build finished. With a warm build cache this takes minutes; without one, about an hour and a half, almost all of it the emulated arm64 FFmpeg compile in `earshot`.
 
-Publishing a GitHub release from that tag also fires `release to gitlab`, which copies the release metadata but deliberately not the assets.
+Each step sits where it does because the other order has gone wrong:
+
+- **`main` goes first, on its own.** If `main` is refused because `origin/main` has moved, a combined `git push origin main v1.0.0` still delivers the tag, which then names a commit that is not on `main`, and the tag's mirror run carries that commit onto GitLab's `main`.
+- **Only the release commit gets the tag.** `ghcr-publish` does not wait for `hygiene`, so a tag on a tree that still says `-dev` publishes images and moves `PIN_TAG` even though the version gate fails. If `hygiene` fails on a tag anyway, cancel that `ghcr-publish` run at once: its pin job starts only after all five images are pushed.
+- **The tag goes by name.** A clone can hold tags that are not this project's, for example after fetching another repository into it, and `--tags` would publish them all. The mirror then copies every tag on GitHub to GitLab.
+- **The release notes go up after the images exist and the tag is final.** `--verify-tag` stops `gh` from creating a missing tag itself. Publishing fires `release to gitlab`, which copies the title and the notes but not the assets, and GitLab records the commit the tag names at that moment, so a release published before a re-tag keeps pointing at the old commit there. The notes are written for the release; `--notes-from-tag` would publish only the tag message, `v1.0.0`.
+- **Back to development comes after the pin commit.** Commits the workflow makes start no workflow, so the pin reaches GitLab, and the `defaults` job first installs the new images, with the next push to `main` or the nightly runs. The back-to-development push is that push. Pull the pin first: a commit made before it lands is refused and has to be rebased.
 
 
 ## Why this one is backwards: GitHub to GitLab, not the reverse (2026-08-10)

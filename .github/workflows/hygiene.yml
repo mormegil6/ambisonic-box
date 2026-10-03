@@ -415,9 +415,9 @@ jobs:
                   print(f"tag {tag} agrees with both files, released {released}")
           else:
               if SEMVER.match(v_file) and "-" not in v_file:
-                  # Not an error: `git push origin main v1.0.0` runs this on the
-                  # branch as well as the tag, and on the branch there is no tag
-                  # to check. It is a reminder that the bump back is still owed.
+                  # Not an error: the release commit is pushed to main before
+                  # its tag exists, and on the branch there is no tag to check.
+                  # It is a reminder that the bump back is still owed.
                   print(f"::notice::the tree claims to BE release {v_file} with no "
                         f"marker. After tagging, run ./scripts/set-version.sh "
                         f"<next>-dev so main stops claiming to be a release.")
