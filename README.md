@@ -189,7 +189,7 @@ Anyone with an ambisonic microphone rig and OBS can test their stream against th
 >
 > Your stream is then visible at: <https://stream.bmroz.eu/>
 >
-> One guest at a time, three hours per session; the demo loop yields while you are live and returns when you stop. The university's port forward is provisional, so the public endpoint can be temporarily gone. Behind a NAT or proxy that rewrites source addresses, read the address-keyed-rules note in [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md) first.
+> One guest at a time, three hours per session; the demo loop yields while you are live and returns when you stop. Behind a NAT or proxy that rewrites source addresses, read the address-keyed-rules note in [docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md) first.
 
 Sessions are arbitrated by `telemetry`, which holds the single slot, the session cap, the reconnect grace, the cooldown, the ban list and the dashboard's End session button. The full rule set, the resource guard, what a guest sees when refused, and how to run the endpoint responsibly are in **[docs/GUEST-ENDPOINT.md](docs/GUEST-ENDPOINT.md)**.
 

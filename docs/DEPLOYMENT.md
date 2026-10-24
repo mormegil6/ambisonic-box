@@ -4,7 +4,7 @@ Where this stack has actually run, what was measured on each host, and the per-h
 
 ## Local / lab (AMD64)
 
-The [quick start](../README.md#quick-start). Validated on WSL2 Ubuntu 24.04 LTS and on Ubuntu Server 26.04 LTS, the latter being what the reference deployment host (a 2012 Mac Mini, quad-core i7) runs.
+The [quick start](../README.md#quick-start). Validated on WSL2 Ubuntu 24.04 LTS, on Ubuntu Server 26.04 LTS (the reference deployment host, a 2012 Mac Mini with a quad-core i7) and on Ubuntu Server 22.04 LTS (the 2-vCPU cloud virtual machine that serves the public demo).
 
 ## Raspberry Pi 4 (ARM64): validated end to end
 
