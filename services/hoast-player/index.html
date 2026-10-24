@@ -283,7 +283,7 @@
       <details class="status" id="statusPanel">
         <summary>Server status <span class="live-dot" id="stDot"></span></summary>
         <div class="status-grid">
-          <div class="cell"><div class="k">Broadcast</div><div class="v"><span class="stat-badge sb-off" id="stLive">&hellip;</span></div></div>
+          <div class="cell"><div class="k">Broadcast</div><div class="v"><span class="stat-badge sb-off" id="stLive">&hellip;</span><small id="stOrder" style="display:block;margin-top:4px;font-size:12px;font-weight:400;color:var(--body)"></small></div></div>
           <div class="cell"><div class="k">Test endpoint</div><div class="v" id="stGuest">&hellip;</div></div>
           <div class="cell"><div class="k">Viewers now</div><div class="v" id="stViewers">&hellip;</div></div>
           <div class="cell"><div class="k">Resolution</div><div class="v" id="stRes">&hellip;</div></div>
@@ -1416,6 +1416,9 @@
               setSpecSpatial('stSpatial', s.spatial_audio || "Channel-based");
               set('stConv', s.spatial_audio ? " · ACN/SN3D" : "");
               set('stKicker', s.spatial_audio || (s.audio_channels+"-channel audio"));
+              // Same facts under the Broadcast badge, so the open Server status
+              // panel says what the stream currently is without a scroll.
+              set('stOrder', (s.spatial_audio ? s.spatial_audio.replace(/ Ambisonics$/, "") + " · " : "") + s.audio_channels + " ch");
             }
           }).catch(function(){ set('stViewers',"unavailable"); });
         }
