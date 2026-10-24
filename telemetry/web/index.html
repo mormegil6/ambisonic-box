@@ -50,6 +50,9 @@
   .kv div .k{min-height:2.6em}
   .kv div .k .hint{display:block;text-transform:none;letter-spacing:0;opacity:.65;font-size:10.5px}
   .kv div .v{font-size:15px;margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* Stream detail only: one label carries a two-line hint, so keep every value on the same baseline */
+  #streamDetail > div{display:flex;flex-direction:column}
+  #streamDetail > div .v{margin-top:auto;padding-top:3px}
   .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:6px}
   .bar > i{display:block;height:100%;border-radius:3px}
   /* the span every plot in this panel is computed over, stated once */
@@ -174,12 +177,13 @@
 
   <section>
     <h2>Stream detail</h2>
-    <div class="kv">
+    <div class="kv" id="streamDetail">
       <div><div class="k">Resolution</div><div class="v" id="res">—</div></div>
       <div><div class="k">Bitrate / viewer</div><div class="v" id="br">—</div></div>
       <div><div class="k">Egress (all viewers)</div><div class="v" id="eg">—</div></div>
-      <div><div class="k">RTMP links <span class="hint">(publisher + transcoder, expect 2)</span></div><div class="v" id="nclients">—</div></div>
+      <div><div class="k">RTMP links <span class="hint">(2 = publisher + transcoder)</span></div><div class="v" id="nclients">—</div></div>
       <div><div class="k">Segment age</div><div class="v" id="segage">—</div></div>
+      <div><div class="k">Spatial audio</div><div class="v" id="spatial">—</div></div>
     </div>
   </section>
 
@@ -613,6 +617,12 @@ healthy"><span class="dot" style="background:${col('--grn')}"></span>telemetry<b
   const age = s.stream ? s.stream.segment_age_s : null;
   $('segage').textContent = age==null ? "—" : age+"s";
   $('segage').className = "v" + (age!=null && age>15 ? " stale":"");
+  // Detected from the live manifest's channel count: 16 = 3rd order, 4 = 1st.
+  // A count that is not a perfect square arrives with no spatial_audio, so it
+  // reads as plain channels rather than claiming an order.
+  $('spatial').textContent = s.audio_channels
+    ? (s.spatial_audio ? s.spatial_audio.replace(/ Ambisonics$/, "") + " · " : "") + s.audio_channels + "\u00a0ch"
+    : "—";
 
   // system
   const sy=s.system||{};
