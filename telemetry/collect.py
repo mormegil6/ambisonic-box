@@ -241,7 +241,17 @@ def segment_age():
                 m = re.match(r"chunk-stream(\d+)-", p.name)
                 if not m:
                     continue
-                age = now - p.stat().st_mtime
+                # The muxer's sliding window unlinks old chunks every couple of
+                # seconds, so a file the glob just listed can be gone by the time
+                # it is stat'ed. One vanished file used to abort the whole read
+                # (the except below returned None), which made the stream look
+                # stale for that poll: measured on 2026-10-24 as 55 aborted reads
+                # in 20,942 against a live output directory, and as about five
+                # isolated one-minute not-live samples a day in the soak record.
+                try:
+                    age = now - p.stat().st_mtime
+                except FileNotFoundError:
+                    continue
                 rep = m.group(1)
                 if rep not in newest or age < newest[rep]:
                     newest[rep] = age
