@@ -5,7 +5,8 @@ name: integration
 # are the point of having CI at all - but they are also slow and stateful, so
 # they do not run on every push to a topic branch.
 #
-#   test-pipeline.sh       ~3 min once images exist. Runs on PRs and main.
+#   test-pipeline.sh       ~3 min once images exist. Runs on PRs, main and
+#                          release tags.
 #   test-guest-endpoint.sh ~12 min, ten full cycles plus nine cases. Nightly
 #                          and on demand, because it is long and because a
 #                          flaky gate is worse than no gate.
@@ -14,8 +15,11 @@ on:
   pull_request:
   push:
     branches: [main]
+    # A release tag gets its own run, whatever the commit changed (path filters
+    # do not apply to tags): ghcr-publish waits for it before tagging images.
+    tags: ['v[0-9]*']
     # A docs-only change cannot affect an image or the running stack, so it
-    # does not need a 6-minute build. This is also the noise lever: fewer
+    # does not need a build at all. This is also the noise lever: fewer
     # runs on prose-only commits means fewer notification emails for pushes
     # that could not have broken anything. hygiene still runs on everything,
     # because it is the one that checks the docs themselves.
@@ -64,13 +68,22 @@ jobs:
             && { echo "::error::setup.sh left a placeholder owner key"; exit 1; }
           echo "setup.sh generated a real owner key"
 
+      - name: read the build workflow's cache, one scope per image
+        id: cache
+        run: |
+          {
+            echo 'set<<EOF'
+            .github/scripts/bake-cache-scopes.sh amd64 read
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: build images (warm cache from the build workflow)
         uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
           set: |
-            *.cache-from=type=gha
+            ${{ steps.cache.outputs.set }}
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 
@@ -159,13 +172,22 @@ jobs:
           grep -q '^GUEST_GW_SECRET=' .env \
             || { echo "::error::setup.sh did not generate GUEST_GW_SECRET"; exit 1; }
 
-      - name: build images
+      - name: read the build workflow's cache, one scope per image
+        id: cache
+        run: |
+          {
+            echo 'set<<EOF'
+            .github/scripts/bake-cache-scopes.sh amd64 read
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: build images (warm cache from the build workflow)
         uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
           set: |
-            *.cache-from=type=gha
+            ${{ steps.cache.outputs.set }}
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 
@@ -226,17 +248,24 @@ jobs:
     # enabled, so until 2026-08-11 nothing anywhere executed the default that
     # every clone inherits. A CI runner IS a fresh clone, which makes this the
     # natural place for it: no override, no .env beyond what setup.sh writes.
+    # That .env selects the published images at PIN_TAG, so this job builds
+    # nothing: it used to bake every image and then never run one of them.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - uses: docker/setup-buildx-action@v4
 
       - name: generate a real .env
         run: ./scripts/setup.sh
+
+      # What a fresh install pulls must be the newest published release, the
+      # same as `latest`, and complete on both architectures. A run of an old
+      # copy of ghcr-publish can move PIN_TAG and `latest` back without
+      # failing anything, so this is where it shows, within a day.
+      - name: the release a fresh install gets is the newest, and whole
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/check-published-release.sh
 
       - name: no guest override may leak in
         run: |
@@ -247,16 +276,6 @@ jobs:
             exit 1
           fi
           echo "default posture: GUEST_ENABLED is $(grep -E '^GUEST_ENABLED=' .env || echo 'unset')"
-
-      - name: build images (warm cache from the build workflow)
-        uses: docker/bake-action@v7
-        with:
-          files: docker-compose.yml
-          load: true
-          set: |
-            *.cache-from=type=gha
-            rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
-            hoast-player.tags=ambi-box-hoast-player:latest
 
       - name: start the stack with no overrides
         run: |
@@ -298,13 +317,22 @@ jobs:
           # because its subject IS the shipped first-run experience.
           sed -i '/^COMPOSE_FILE=/d; /^AMBI_BOX_TAG=/d' .env
 
-      - name: build images
+      - name: read the build workflow's cache, one scope per image
+        id: cache
+        run: |
+          {
+            echo 'set<<EOF'
+            .github/scripts/bake-cache-scopes.sh amd64 read
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: build images (warm cache from the build workflow)
         uses: docker/bake-action@v7
         with:
           files: docker-compose.yml
           load: true
           set: |
-            *.cache-from=type=gha
+            ${{ steps.cache.outputs.set }}
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 

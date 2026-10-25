@@ -37,9 +37,12 @@ permissions:
   contents: read
 
 concurrency:
-  # never let two mirror pushes race
+  # never let two mirror pushes race, and keep every waiting run: a tag run
+  # carries only its own tag, so one dropped from the queue would be missing on
+  # GitLab until the daily run
   group: mirror-to-gitlab
   cancel-in-progress: false
+  queue: max
 
 jobs:
   mirror:
@@ -70,20 +73,38 @@ jobs:
             echo "gitlab unreachable on the scheduled run; the next one retries"
             exit 0
           fi
-          # main only, plus tags. Deliberately NOT --mirror: that would delete
-          # refs on GitLab that do not exist here, and would try to push every
-          # dependabot/* branch into the university instance for no reason.
-          git push gitlab "HEAD:refs/heads/main"
           # --force on tags, deliberately: GitHub is the source of truth, so a
           # tag that moved here must move on the mirror too. Without it a
           # re-cut tag wedges every later mirror run with "already exists"
           # (tags never fast-forward), which is exactly what the v1.0.0
           # re-tag did on release day. Branch pushes stay unforced.
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            # A tag push carries only that tag. HEAD is then the tagged commit,
+            # which for a fix to an older line is not ahead of GitLab's main,
+            # so pushing it there was refused and the tag never went across.
+            git push gitlab --force "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+            # and the rest, which a tag push can never be refused for
+            git push gitlab --force --tags
+            echo "mirrored tag $GITHUB_REF_NAME to git.pg.edu.pl"
+            exit 0
+          fi
+          # main only, plus tags. Deliberately NOT --mirror: that would delete
+          # refs on GitLab that do not exist here, and would try to push every
+          # dependabot/* branch into the university instance for no reason.
+          git push gitlab "HEAD:refs/heads/main"
           git push gitlab --force --tags
           echo "mirrored $(git rev-parse --short HEAD) to git.pg.edu.pl"
 
       - name: verify the two now agree
         run: |
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            here=$(git rev-parse "refs/tags/$GITHUB_REF_NAME")
+            there=$(git ls-remote gitlab "refs/tags/$GITHUB_REF_NAME" | awk '{print $1}')
+            echo "  github: $here"
+            echo "  gitlab: $there"
+            [ "$here" = "$there" ] || { echo "::error::tag $GITHUB_REF_NAME did not arrive on GitLab"; exit 1; }
+            echo "  tag in sync"; exit 0
+          fi
           here=$(git rev-parse HEAD)
           there=$(git ls-remote gitlab refs/heads/main | awk '{print $1}')
           echo "  github: $here"

@@ -39,8 +39,9 @@ done
 ENV_FILE=".env"
 OVR_FILE="docker-compose.override.yml"
 # The release whose published images a fresh install runs. Bumped by
-# .github/workflows/ghcr-publish.yml once the images for a tag actually exist,
-# so this can never point at a tag with nothing behind it. set-version.sh
+# .github/workflows/ghcr-publish.yml once the images of the newest release
+# actually exist, so this can never point at a tag with nothing behind it, and
+# never moves back to an older release. set-version.sh
 # deliberately does NOT touch it, and says so, for that same reason: this file
 # previously claimed the opposite.
 PIN_TAG="v1.3.9"

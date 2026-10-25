@@ -32,10 +32,12 @@ services:
       args:
         # Redistributable by default: this stack links no nonfree library, so
         # ffmpeg's --enable-nonfree would only stamp the binary
-        # non-redistributable (services/earshot/README.md section 7, upstream
-        # PR #57). The upstream Dockerfile keeps the stock default; the STACK
-        # opts out here so published images are clean. Set 1 to restore the
-        # stock build.
+        # non-redistributable (the comment above ARG ENABLE_NONFREE in
+        # services/earshot/src/Dockerfile, upstream PR #57). The upstream
+        # Dockerfile keeps the stock default; the STACK opts out here so a
+        # local build matches the published images, which ghcr-publish builds
+        # with ENABLE_NONFREE=0 whatever this says. Set 1 to restore the stock
+        # build.
         ENABLE_NONFREE: "${ENABLE_NONFREE:-0}"
     image: ambi-box-earshot:local
     environment:

@@ -6,19 +6,28 @@ name: build
 # matrix got hoast-player wrong on the first try (its context is the repo root,
 # for the player submodule, not services/hoast-player).
 #
-# earshot is the expensive target: nginx-rtmp and FFmpeg compiled from source,
-# plus a Node webtools stage. Hence the layer cache - the first run
-# is slow, later ones are near-instant unless those sources change.
+# Both architectures, each built natively on its own GitHub-hosted runner of
+# the same Ubuntu release. The Pi 4 is a first-class target, so an arm64 break
+# should fail the commit that causes it, not surface at the next release, and
+# natively that costs minutes where QEMU-emulating earshot's FFmpeg compile
+# took over an hour. What the arm64 leg proves is that every image builds and
+# passes the checks below on arm64. GitHub's arm64 servers are not a Pi, so it
+# says nothing about runtime behaviour, thermals or speed on the device.
 #
-# Deliberately amd64 only. The project targets arm64 too, but building that
-# here means QEMU-emulating an ffmpeg compile, which is hours. Multi-arch
-# belongs on a release job, not on every push.
+# shaka and earshot are the expensive targets: shaka compiles Shaka Packager
+# with cmake, the longest step of every cold run (10 to 13 minutes), and
+# earshot compiles nginx-rtmp and FFmpeg (4 to 6). Hence the layer cache, one
+# scope per image and architecture; .github/scripts/bake-cache-scopes.sh says
+# why one each.
 
 on:
   push:
     branches: [main, 'ci-**']
+    # A release tag gets its own run, whatever the commit changed (path filters
+    # do not apply to tags): ghcr-publish waits for it before tagging images.
+    tags: ['v[0-9]*']
     # A docs-only change cannot affect an image or the running stack, so it
-    # does not need a 6-minute build. This is also the noise lever: fewer
+    # does not need a build at all. This is also the noise lever: fewer
     # runs on prose-only commits means fewer notification emails for pushes
     # that could not have broken anything. hygiene still runs on everything,
     # because it is the one that checks the docs themselves.
@@ -28,14 +37,30 @@ on:
       - 'LICENSE'
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Mondays, built from scratch with fresh base images (see the bake step),
+    # so a base image or package that stops building on either architecture is
+    # caught in a week with no commits too. Off the hour, because GitHub delays
+    # or drops scheduled runs at the top of the hour first.
+    - cron: '17 5 * * 1'
 
 permissions:
   contents: read
 
 jobs:
   bake:
-    name: build all images
-    runs-on: ubuntu-latest
+    name: build all images (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      # one architecture failing must not hide whether the other builds
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
     # `docker buildx bake -f docker-compose.yml` interpolates the compose file
     # before it builds anything, and the two publish credentials are mandatory
     # there (`:?`, so a clone with no .env fails loudly instead of half-starting
@@ -55,6 +80,24 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # integration.yml reads the amd64 scopes this writes. A pull request
+      # reads main's cache and writes none of its own: a full write of both
+      # architectures is a few GB against the repository's 10 GB, so every
+      # pull request writing its own would evict main's. A release tag's run
+      # writes none either, since no other ref could read it, and the Monday
+      # run neither, since it rebuilt from scratch only to prove it still can.
+      - name: one cache scope per image and architecture
+        id: cache
+        env:
+          ARCH: ${{ matrix.arch }}
+          MODE: ${{ (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.ref_type == 'tag') && 'read' || 'read-write' }}
+        run: |
+          {
+            echo 'set<<EOF'
+            .github/scripts/bake-cache-scopes.sh "$ARCH" "$MODE"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: build every compose target
         uses: docker/bake-action@v7
         with:
@@ -62,9 +105,11 @@ jobs:
           # keep the images in the local docker daemon so later steps can
           # actually run them
           load: true
+          # the Monday run: every RUN layer re-runs, against current bases
+          no-cache: ${{ github.event_name == 'schedule' }}
+          pull: ${{ github.event_name == 'schedule' }}
           set: |
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+            ${{ steps.cache.outputs.set }}
             rtmp-ingest.tags=ambi-box-rtmp-ingest:latest
             hoast-player.tags=ambi-box-hoast-player:latest
 
@@ -78,8 +123,15 @@ jobs:
           # ever flips upstream, this is the line that notices.
           grep -q 'ARG ENABLE_NONFREE' services/earshot/src/Dockerfile \
             || { echo "::error::earshot Dockerfile no longer declares ENABLE_NONFREE"; exit 1; }
-          if docker run --rm --entrypoint sh ambi-box-earshot:local -c \
-               'ffmpeg -hide_banner -buildconf 2>&1 | grep -q -- --enable-nonfree'; then
+          # Read the configuration before judging it, so an ffmpeg that does
+          # not run at all fails here instead of passing as nonfree-free.
+          conf=$(docker run --rm --entrypoint ffmpeg ambi-box-earshot:local -hide_banner -buildconf 2>&1) || true
+          if ! grep -q -- '--enable-gpl' <<< "$conf"; then
+            echo "::error::no build configuration from earshot's ffmpeg"
+            printf '%s\n' "$conf" | head -n 20
+            exit 1
+          fi
+          if grep -q -- '--enable-nonfree' <<< "$conf"; then
             echo "::error::earshot was built with --enable-nonfree; images would not be redistributable"
             exit 1
           fi

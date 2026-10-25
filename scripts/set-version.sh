@@ -87,7 +87,8 @@ if [ "$RELEASE" -eq 1 ]; then
     # images - and at this point in a release there are none yet: the tag that
     # triggers the build has not even been pushed. Bumping it here made every
     # release fail its own integration run until the images finished building.
-    # The ghcr-publish workflow bumps it once the images exist.
+    # The ghcr-publish workflow bumps it once the images exist, if this is the
+    # newest release.
 else
     CFF_NOTE="version (date-released left on the last release)"
     sed -e "s|^version: .*|version: \"$NEW\"|" "$CFF_FILE" > "$CFF_FILE.tmp"
@@ -112,15 +113,20 @@ next, to cut it (docs/CI.md, "Versions and releases", says why in this order):
   git tag -a "v$NEW" -m "v$NEW"
   git push origin "v$NEW"              # the tag by name, never --tags
 
-once ghcr-publish is green and its pin commit is on main, publish the notes
-(this is also what mirrors the release to GitLab), then bump straight past it,
-so main never claims to BE a release it has moved on from:
+ghcr-publish builds and tests at once, but tags nothing until this commit's
+hygiene, build and integration runs, on the tag and on main, have passed.
+
+once ghcr-publish is green, and its pin commit is on main if this is the newest
+release (an older line's fix gets no pin), publish the notes (this is also what
+mirrors the release to GitLab), then bump straight past it, so main never claims
+to BE a release it has moved on from:
   gh release create "v$NEW" --verify-tag --title "v$NEW" --notes-file <notes.md>
   git pull --ff-only origin main
   ./scripts/set-version.sh <next>-dev
 
 scripts/setup.sh PIN_TAG is not yours to touch: ghcr-publish bumps it once the
-images for this tag exist, so a fresh install never pulls a tag with no images.
+images for this tag exist, and only for the newest release, so a fresh install
+never pulls a tag with no images or an older release than before.
 EOF
 else
     echo "next: git commit -am \"Back to development on ${NEW%-dev}\" && git push origin main"

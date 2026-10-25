@@ -50,7 +50,7 @@ If setup or the first `docker compose up` fails, the exact error strings are in 
 
 ### The pre-built images in detail
 
-Every release publishes all the stack's images to ghcr.io for linux/amd64 and linux/arm64, with each architecture's ffmpeg verified GPL-clean before anything is pushed. This is what the quick start runs on, and what spares a first run the expensive part: the `earshot` service compiles ffmpeg from source, which a Raspberry Pi 4 measures in hours.
+Every release publishes the stack's five images to ghcr.io for linux/amd64 and linux/arm64, each architecture built on its own native machine. `earshot`'s ffmpeg is verified GPL-clean on each architecture before that image is pushed, and nothing is tagged until a fresh install on exactly those images has come up healthy and passed the RTMP and SRT end-to-end tests on both architectures. This is what the quick start runs on, and what spares a first run the expensive part: building `earshot`, which compiles nginx-rtmp and FFmpeg from source, is about 15 of the 20 minutes a cold build takes on a Raspberry Pi 4.
 
 Setup makes this the default by writing three lines into a fresh `.env`:
 
@@ -301,8 +301,8 @@ Measurements, the two arm64 build traps this repo already fixes, and what belong
 - [docs/ENDPOINTS.md](docs/ENDPOINTS.md): every port/endpoint the stack exposes, public vs private, what to monitor, and the port-by-port answer to whether the box is broadcasting anything right now
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): where the stack has run, what was measured on each host, and what belongs in a per-host override
 - [telemetry/README.md](telemetry/README.md): monitoring service (dashboard + alerts + public status.json)
-- [docs/CI.md](docs/CI.md): the four CI workflows, why each check exists, and what they deliberately do not cover
-- [services/earshot/README.md](services/earshot/README.md): Earshot vendoring provenance and local patches
+- [docs/CI.md](docs/CI.md): the CI workflows, why each check exists, and what they deliberately do not cover
+- [services/earshot/README.md](services/earshot/README.md): the Earshot fork, what is still local to it, and what the service does in the stack
 - [docs/UPSTREAM.md](docs/UPSTREAM.md): bugs this stack found and sent back to the projects they belong to, merged and open
 - [docs/CHROME-MULTICHANNEL-OPUS.md](docs/CHROME-MULTICHANNEL-OPUS.md): a Chrome experiment that broke every Opus decode above 2 channels on Chrome 151 and 152 and is fixed from 153.0.8010.36, what was measured, why the usual isolation steps did not find it, and the one-flag workaround for the two affected releases
 - [docs/IOS-SAFARI.md](docs/IOS-SAFARI.md): no Safari decode surface accepts this stream's 16-channel Opus, so the player decodes it in WebAssembly instead; what that takes on iOS, and the on-demand clips playing on an iPhone

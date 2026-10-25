@@ -17,7 +17,7 @@ on:
   push:
     branches: [main, 'ci-**']
     # A docs-only change cannot affect an image or the running stack, so it
-    # does not need a 6-minute build. This is also the noise lever: fewer
+    # does not need a build at all. This is also the noise lever: fewer
     # runs on prose-only commits means fewer notification emails for pushes
     # that could not have broken anything. hygiene still runs on everything,
     # because it is the one that checks the docs themselves.
@@ -90,10 +90,11 @@ jobs:
             hoast-player.tags=ambi-box-hoast-player:latest
 
       # The four images this project actually controls are gated. earshot is
-      # scanned too but only reported: its webtools stage sits on
-      # node:12.22.1-alpine3.12, so it carries CVEs nobody can fix from this
-      # repository (that tree lives in a submoduled fork, not here), and
-      # failing on them would train everyone to ignore this job.
+      # scanned too but only reported: its runtime base is alpine:3.11, end of
+      # life since November 2021, so it carries CVEs nobody can fix from this
+      # repository (moving that base is a change to the Earshot fork; docs/CI.md
+      # has the detail), and failing on them would train everyone to ignore
+      # this job.
       - name: scan the images we control
         uses: aquasecurity/trivy-action@v0.36.0
         with:

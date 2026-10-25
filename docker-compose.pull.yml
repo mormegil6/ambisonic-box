@@ -1,6 +1,7 @@
 # Run the stack from the pre-built multi-arch images on ghcr.io instead of
 # building locally. This skips the expensive part of a first run - earshot's
-# ffmpeg-from-source compile, which a Raspberry Pi 4 measures in hours.
+# from-source build, 15 of the 20 minutes a cold build takes on a Raspberry
+# Pi 4 (README, measured 2026-08-10).
 #
 # This is the DEFAULT: scripts/setup.sh writes COMPOSE_FILE and AMBI_BOX_TAG
 # into a fresh .env, so plain `docker compose up -d` uses this file with the
@@ -10,8 +11,9 @@
 #
 # which follows `latest` unless AMBI_BOX_TAG is set. Images are published for
 # linux/amd64 and linux/arm64 by .github/workflows/ghcr-publish.yml on every
-# version tag, with each architecture's ffmpeg verified GPL-clean before
-# anything is pushed.
+# version tag, each architecture built natively: earshot's ffmpeg is verified
+# GPL-clean before that image is pushed, and nothing is tagged until the stack
+# has run end to end on both architectures.
 #
 # The srt-gateway-owner service is not covered here (this file must not
 # create the service for deployments that do not run it); setup writes it

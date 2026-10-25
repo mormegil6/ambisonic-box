@@ -1,94 +1,238 @@
 name: ghcr-publish
 
-# Publishes every image the stack builds to ghcr.io, both linux/amd64 and
+# Publishes the images a fresh install pulls to ghcr.io, both linux/amd64 and
 # linux/arm64 - the Pi 4 is a first-class target, and a pre-built image should
 # not be amd64-only when the project's whole pitch includes Raspberry Pi.
 #
-# Gated to tag pushes (plus manual dispatch), NOT every push to main: unlike
-# arm64.yml, this one does not skip earshot. QEMU-emulating its ffmpeg-from-
-# source compile for arm64 cost 1h27m cold on 2026-08-21, and that cost is
-# deliberately paid here, on a release cadence, rather than on every commit.
+# Each architecture is built natively, on its own GitHub-hosted runner. Until
+# 2026-10 the arm64 half was emulated with QEMU on an amd64 runner: earshot's
+# FFmpeg compile took 64 to 78 minutes that way, against 2 to 4 natively (134 s
+# on the arm64 runner, 264 s on amd64), and in the v1.3.9 publish an emulated
+# yarn died with SIGILL and held the job until its six-hour limit. Both runners
+# use the same Ubuntu release, so architecture is the only difference.
 #
-# Tags and OCI labels come from docker/metadata-action rather than hand-rolled
-# bash, specifically to avoid inventing tag logic that quietly drifts from the
-# well-tested standard. Version tags and `latest` move only on an actual tag
-# PUSH event: a manual dispatch publishes under `manual-<sha>` alone, even
-# when dispatched against a tag ref (which is why the conditions key off
-# event_name, not ref_type - ref_type reads 'tag' for both).
+# The jobs run in stages, and each stage starts only when every job of the
+# stage before it has passed:
+#
+#   plan    what this run publishes: the image list, the tag and the labels;
+#           for a tag push, also that the tree says the same version and that
+#           no image is already out under that tag from another commit
+#   build   one job per image and architecture: build, load, check, and only
+#           then push that image, by digest and under no tag
+#   verify  one job per architecture: a fresh install on exactly those images
+#           must come up healthy, then pass the RTMP and the SRT end-to-end
+#           tests
+#   tag     one job: waits for the commit's own CI, on the tag and on main,
+#           to pass, then puts the release tag on every image, and `latest` on
+#           every image if this is the newest release
+#   pin     moves scripts/setup.sh's PIN_TAG to that newest release
+#
+# So nothing is reachable under a name until every image has been built,
+# checked and run on both architectures. Until 2026-10 each image published on
+# its own, and v1.3.9's stuck earshot build left `latest` on four v1.3.9 images
+# and a v1.3.8 earshot. A release tag, once on an image, is never moved, and a
+# bad release is fixed by the next patch release. "Re-run failed jobs" is the
+# way to finish a failed run: it reuses the images the passed legs pushed, the
+# tag job decides `latest` again whenever it runs, and pin, which follows that
+# decision, never moves PIN_TAG backwards. "Re-run all jobs" rebuilds every
+# image, so on a release that is already partly tagged the tag job refuses to
+# finish it: the published images and the rebuilt ones never ran together, and
+# the next patch release is the way on.
+#
+# A run at a commit older than this version of the file follows that commit's
+# copy of it. Re-running an older release's tag push re-pushes its version tag
+# and `latest`, and from v1.2.0 on moves PIN_TAG back to it; dispatching against
+# v1.2.0 to v1.3.9 moves PIN_TAG back, and any older dispatch publishes
+# manual-<sha> into the main packages. Do neither. A tag pushed on a branch that
+# predates this file runs the old rules too, so a fix to an older line is
+# released from a branch that first takes main's .github/workflows and
+# .github/scripts, or as the next patch release from main.
+#
+# Releases build without a cache. GitHub lets a tag's run read caches written
+# for that tag or for main, never for another tag, so a cache a release wrote
+# was only ever read back by that same run. Building from nothing also means
+# every release starts from current base images and re-runs their package
+# upgrades, which a cached RUN layer would skip (security.yml builds without a
+# cache for the same reason).
+#
+# OCI labels come from docker/metadata-action. The run's tag is set in plan
+# (the pushed tag, or manual-<sha> for a dispatch), checked there against the
+# version metadata-action derives, and applied by the tag job with imagetools;
+# whether a release is the newest, and so moves `latest`, is
+# .github/scripts/newest-release.sh. Version tags and `latest` are applied only
+# on an actual tag PUSH event. A manual dispatch publishes under manual-<sha>
+# alone, and into separate packages, ghcr.io/<owner>/ambisonic-box/ci/<image>,
+# so a test build never shows up on the package pages people pull from.
 #
 # Package visibility: the five packages were created PUBLIC on first push
 # (2026-08-21), inheriting the repo's visibility. If GHCR ever creates a
 # new one private instead - documented behaviour for some account types -
-# the flip to Public is manual, in that package's own Settings; this
-# workflow goes green either way while an anonymous `docker pull` would
-# get an auth error.
+# the flip to Public is manual, in that package's own Settings. The tag job
+# checks that every image pulls anonymously before it moves `latest`, and pin
+# checks again before PIN_TAG, so a private package stops the release there.
 
 on:
   push:
-    tags: ['v*']
+    # v[0-9]*, not v*, so the vod-clips release tag can never start a publish
+    tags: ['v[0-9]*']
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
+# Every job states the permissions it needs; none are granted by default.
+permissions: {}
+
+# One publish at a time, queued rather than cancelled, so tags pushed close
+# together all publish. `queue: max` keeps up to 100 runs waiting, first in
+# first out; without it GitHub keeps one pending run per group and a third
+# arrival cancels it. Tag pushes and manual runs queue separately, so a test
+# run never holds up a release.
+concurrency:
+  group: ghcr-publish-${{ github.event_name }}
+  cancel-in-progress: false
+  queue: max
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/ambisonic-box
+  # what a fresh install pulls; docker-compose.pull.yml names these images
+  CONSUMER_BASE: ghcr.io/${{ github.repository_owner }}/ambisonic-box
 
 jobs:
-  publish:
-    name: publish (${{ matrix.service }})
-    runs-on: ubuntu-latest
-    # 360 IS the hosted-runner hard ceiling, not a margin under it. Measured
-    # 2026-08-21, cold cache: the dual-arch earshot job took 1h27m, about a
-    # quarter of the cap. If that ever drifts near the ceiling, the options
-    # are a native arm64 runner or splitting the platform legs into
-    # separate jobs.
-    timeout-minutes: ${{ matrix.service == 'earshot' && 360 || 90 }}
-    # Queue rather than cancel: two tags pushed close together must both
-    # publish, in order, not race each other on one cache scope - and a
-    # half-done publish should never be killed by the next one starting.
-    concurrency:
-      group: ghcr-publish-${{ matrix.service }}
-      cancel-in-progress: false
+  plan:
+    name: decide what this run publishes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    # bake and compose interpolate docker-compose.yml, whose two publish
+    # credentials are mandatory (`:?`). This job has no .env, so throwaway
+    # values let it parse; nothing here starts a service.
+    env:
+      RTMP_OWNER_KEY: ci-interpolation-only-never-served
+      LOOP_SOURCE_KEY: ci-interpolation-only-never-served
+    outputs:
+      images: ${{ steps.images.outputs.images }}
+      image_base: ${{ steps.kind.outputs.image_base }}
+      tag: ${{ steps.kind.outputs.tag }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # reads packages that may be private, such as a new one GHCR made so
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: which images a fresh install pulls
+        id: images
+        run: |
+          set -euo pipefail
+          # Read from docker-compose.pull.yml, so the published set and the
+          # pulled set cannot differ. Add an image there in the release commit
+          # that first publishes it: from that push until the pin lands, a
+          # fresh install from main asks for it at the previous PIN_TAG, which
+          # does not have it. Each must also be a bake target, which is what
+          # the build jobs build.
+          images=$(docker compose -f docker-compose.yml -f docker-compose.pull.yml config --format json \
+                     | jq -c --arg b "$CONSUMER_BASE/" '[.services[].image // empty
+                         | select(startswith($b)) | ltrimstr($b) | sub(":.*$"; "")] | unique')
+          targets=$(docker buildx bake -f docker-compose.yml --print 2>/dev/null | jq -c '.target | keys')
+          missing=$(jq -nc --argjson i "$images" --argjson t "$targets" '$i - $t')
+          [ "$images" != "[]" ] || { echo "::error::docker-compose.pull.yml names no image under $CONSUMER_BASE"; exit 1; }
+          [ "$missing" = "[]" ] || { echo "::error::no bake target in docker-compose.yml builds $missing"; exit 1; }
+          echo "  publishing $images"
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+
+      - name: a release, or a test build
+        id: kind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGES: ${{ steps.images.outputs.images }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            # The tree must say what the tag says. hygiene's version gate checks
+            # the same on the tag, but nothing waits for it, and v1.0.1 and
+            # v1.3.4 were both first tagged on a -dev tree and published.
+            version=$(tr -d ' \t\r\n' < telemetry/VERSION)
+            if [ "v$version" != "$TAG" ]; then
+              echo "::error::the tag is $TAG but telemetry/VERSION says $version; not publishing"; exit 1
+            fi
+            case "$version" in
+              *-dev*) echo "::error::$version is a development version; not publishing"; exit 1 ;;
+            esac
+            # A tag moved while this run waited in the queue is published by
+            # the run for its new commit, not by this one.
+            now=$(.github/scripts/tag-commit.sh "$TAG")
+            if [ "$now" != "$GITHUB_SHA" ]; then
+              echo "::error::$TAG now names $now, not this run's $GITHUB_SHA; the run for that commit publishes it"; exit 1
+            fi
+            # And a tag moved after its images were published publishes
+            # nothing: the images under it stay what they were, so stop here,
+            # before anything is built.
+            for image in $(jq -r '.[]' <<< "$IMAGES"); do
+              rev=$(.github/scripts/published-revision.sh "$CONSUMER_BASE/$image:$TAG")
+              if [ -n "$rev" ] && [ "$rev" != "$GITHUB_SHA" ]; then
+                echo "::error::$image:$TAG is already published from $rev; a published release is never re-tagged, so cut the next patch release"; exit 1
+              fi
+            done
+            { echo "image_base=$CONSUMER_BASE"; echo "tag=$TAG"; } >> "$GITHUB_OUTPUT"
+          else
+            { echo "image_base=$CONSUMER_BASE/ci"; echo "tag=manual-${GITHUB_SHA:0:7}"; } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.kind.outputs.image_base }}
+          # Labels only: the tag job applies the tags. These rules give the
+          # version label the run's tag, as before.
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag,enable=${{ github.event_name == 'push' }}
+            type=sha,prefix=manual-,enable=${{ github.event_name != 'push' }}
+
+      - name: the run's tag is the one metadata-action computed
+        env:
+          TAG: ${{ steps.kind.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          [ "$TAG" = "$VERSION" ] || { echo "::error::plan tags $TAG but metadata-action computed $VERSION"; exit 1; }
+
+  build:
+    name: build (${{ matrix.image }}, ${{ matrix.arch }})
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    # earshot, the slowest, builds natively in about six minutes, so an hour
+    # means it has hung. Until 2026-10 a hang ran on to the six-hour ceiling.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    # the same throwaway values as plan's, for the same reason
+    env:
+      RTMP_OWNER_KEY: ci-interpolation-only-never-served
+      LOOP_SOURCE_KEY: ci-interpolation-only-never-served
     strategy:
+      # The other legs carry on when one fails, so a re-run repeats only it.
       fail-fast: false
       matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+        arch: [amd64, arm64]
         include:
-          - service: rtmp-ingest
-            context: ./services/rtmp-ingest
-          - service: telemetry
-            context: ./telemetry
-          - service: srt-gateway
-            context: ./services/srt-gateway
-          - service: hoast-player
-            context: .
-            dockerfile: services/hoast-player/Dockerfile
-          - service: earshot
-            context: ./services/earshot/src
-            # Redistributable by default, same as docker-compose.yml's own
-            # default (ENABLE_NONFREE=0) - a published image is public, so
-            # this is not optional here the way a local build's choice is.
-            build-args: |
-              ENABLE_NONFREE=0
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v7
         with:
           # hoast-player's context is the repo root and needs the patched
-          # player, which is a submodule
+          # player, and earshot's context is the Earshot fork: both submodules
           submodules: recursive
-
-      - name: reclaim runner disk
-        if: matrix.service == 'earshot'
-        # A dual-arch from-source ffmpeg build with mode=max caching is a
-        # known way to fill the ~14 GB a hosted runner has free; these
-        # preinstalled toolchains are ~25 GB this job will never touch.
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-
-      - uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
 
       - uses: docker/setup-buildx-action@v4
 
@@ -98,84 +242,365 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: docker metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_BASE }}/${{ matrix.service }}
-          tags: |
-            type=ref,event=tag,enable=${{ github.event_name == 'push' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
-            type=sha,prefix=manual-,enable=${{ github.event_name != 'push' }}
-
-      - name: build both platforms (no push)
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile || format('{0}/Dockerfile', matrix.context) }}
-          platforms: linux/amd64,linux/arm64
-          push: false
-          build-args: ${{ matrix.build-args || '' }}
-          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=ghcr-${{ matrix.service }}
-
-      # Two gaps the next three steps close: a plain
-      # pull-and-run on an amd64 runner silently checks only the amd64 leg of
-      # a multi-arch manifest, and checking after `push: true` means a
-      # failing image had already been public for the whole gap. So: load
-      # each platform's image out of the build cache (cache hit, near-free;
-      # the loads stay inside the action because a raw `docker buildx build
-      # --cache-from type=gha` in a run step has no runtime token and cannot
-      # reach the cache), run each actual ffmpeg binary - the arm64 one under
-      # the same QEMU that built it - and only push once both pass.
-      - name: load amd64 image for verification
-        if: matrix.service == 'earshot'
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ format('{0}/Dockerfile', matrix.context) }}
-          platforms: linux/amd64
-          load: true
-          tags: verify-amd64
-          build-args: ${{ matrix.build-args }}
-          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
-
-      - name: load arm64 image for verification
-        if: matrix.service == 'earshot'
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ format('{0}/Dockerfile', matrix.context) }}
-          platforms: linux/arm64
-          load: true
-          tags: verify-arm64
-          build-args: ${{ matrix.build-args }}
-          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
-
-      - name: earshot is a redistributable build, BOTH architectures, BEFORE anything is published
-        if: matrix.service == 'earshot'
+      # Context, Dockerfile and build args come from docker-compose.yml, the
+      # same definition build.yml and every local build use, so a published
+      # image cannot be built differently from the one that was tested.
+      - name: the build docker-compose.yml defines
+        id: def
+        env:
+          IMAGE: ${{ matrix.image }}
         run: |
-          for platform in linux/amd64 linux/arm64; do
-            tag="verify-${platform##*/}"
-            if docker run --rm --platform "$platform" --entrypoint sh "$tag" -c \
-                 'ffmpeg -hide_banner -buildconf 2>&1 | grep -q -- --enable-nonfree'; then
-              echo "::error::earshot ($platform) was built with --enable-nonfree; not publishing"
-              exit 1
-            fi
-            echo "earshot ($platform) ffmpeg is nonfree-free"
+          set -euo pipefail
+          t=$(docker buildx bake -f docker-compose.yml --print "$IMAGE" 2>/dev/null | jq -c --arg i "$IMAGE" '.target[$i]')
+          [ "$t" != null ] || { echo "::error::docker-compose.yml has no bake target $IMAGE"; exit 1; }
+          context=$(jq -r '.context // "."' <<< "$t")
+          file=$(jq -r '.dockerfile // "Dockerfile"' <<< "$t")
+          case "$file" in /*) ;; *) file="$context/$file" ;; esac
+          {
+            echo "context=$context"
+            echo "file=$file"
+            echo "target=$(jq -r '.target // ""' <<< "$t")"
+            # ENABLE_NONFREE=0 on every image, whatever docker-compose.yml
+            # passes: a published image is public, so it has to be
+            # redistributable, and a build arg a Dockerfile does not declare is
+            # ignored. The earshot check below is the backstop.
+            echo 'args<<EOF'
+            jq -r '(.args // {}) | .ENABLE_NONFREE = "0" | to_entries[] | "\(.key)=\(.value)"' <<< "$t"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # Built twice in this job, on purpose. This build only loads the image
+      # into the runner's docker, where the checks below run it; the push after
+      # them rebuilds from this builder's cache, and the step after the push
+      # proves its layers are the ones that were checked. A single building push
+      # would upload the image before anything had looked at it, and a nonfree
+      # earshot must never reach a public registry, tagged or not.
+      - name: build for linux/${{ matrix.arch }}
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ steps.def.outputs.context }}
+          file: ${{ steps.def.outputs.file }}
+          target: ${{ steps.def.outputs.target }}
+          build-args: ${{ steps.def.outputs.args }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ needs.plan.outputs.labels }}
+          load: true
+          tags: checked:${{ matrix.image }}
+
+      - name: the image runs natively as ${{ matrix.arch }}
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE: checked:${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          got=$(docker image inspect --format '{{.Architecture}}' "$IMAGE")
+          ran=$(docker run --rm --entrypoint uname "$IMAGE" -m)
+          case "$ARCH/$got/$ran" in
+            amd64/amd64/x86_64|arm64/arm64/aarch64) echo "  $IMAGE is $got and runs here as $ran" ;;
+            *) echo "::error::$IMAGE should be $ARCH but is $got and runs as $ran"; exit 1 ;;
+          esac
+
+      - name: earshot is a redistributable build
+        if: matrix.image == 'earshot'
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE: checked:${{ matrix.image }}
+        run: |
+          # Read the configuration before judging it, so an ffmpeg that does not
+          # run at all fails here instead of passing as nonfree-free.
+          conf=$(docker run --rm --entrypoint ffmpeg "$IMAGE" -hide_banner -buildconf 2>&1) || true
+          if ! grep -q -- '--enable-gpl' <<< "$conf"; then
+            echo "::error::earshot ($ARCH): no build configuration from ffmpeg"
+            printf '%s\n' "$conf" | head -n 20
+            exit 1
+          fi
+          if grep -q -- '--enable-nonfree' <<< "$conf"; then
+            echo "::error::earshot ($ARCH) was built with --enable-nonfree; not publishing"
+            exit 1
+          fi
+          echo "earshot ($ARCH) ffmpeg is nonfree-free"
+
+      - name: push for linux/${{ matrix.arch }}, by digest and under no tag
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ steps.def.outputs.context }}
+          file: ${{ steps.def.outputs.file }}
+          target: ${{ steps.def.outputs.target }}
+          build-args: ${{ steps.def.outputs.args }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ needs.plan.outputs.labels }}
+          outputs: type=image,name=${{ needs.plan.outputs.image_base }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: what was pushed is what was checked
+        env:
+          IMAGE: checked:${{ matrix.image }}
+          PUSHED: ${{ needs.plan.outputs.image_base }}/${{ matrix.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          checked=$(docker image inspect --format '{{json .RootFS.Layers}}' "$IMAGE" | jq -c .)
+          pushed=$(docker buildx imagetools inspect "$PUSHED" --format '{{json .Image}}' \
+                     | jq -c 'if has("rootfs") then .rootfs.diff_ids else [.[]][0].rootfs.diff_ids end')
+          if [ "$checked" != "$pushed" ]; then
+            # Nothing is tagged, so this stops the release before it is visible.
+            # The usual cause is a base image tag re-pushed upstream between the
+            # two builds, which makes the second rebuild from the new base:
+            # re-run this job.
+            echo "::error::the pushed image's layers differ from the checked image's (a base image tag probably moved between the two builds: re-run this job)"
+            echo "checked: $checked"
+            echo "pushed:  $pushed"
+            exit 1
+          fi
+          echo "  $PUSHED: $(jq length <<< "$pushed") layers, the same as the checked image"
+
+      - name: hand the digest to the jobs that use it
+        env:
+          NAME: ${{ matrix.image }}-${{ matrix.arch }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digest"
+          printf '%s\n' "$DIGEST" > "$RUNNER_TEMP/digest/$NAME"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digest/${{ matrix.image }}-${{ matrix.arch }}
+          if-no-files-found: error
+          # as long as GitHub allows a re-run, so "Re-run failed jobs" still
+          # finds the digests of the legs that passed
+          retention-days: 30
+          # a re-run's digest replaces the earlier attempt's; without this the
+          # upload fails on the name the first attempt already used
+          overwrite: true
+
+  verify:
+    name: run the stack (${{ matrix.arch }})
+    needs: [plan, build]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: digest-*-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digest
+          merge-multiple: true
+
+      # The by-digest images get the names a fresh install pulls
+      # (AMBI_BOX_TAG=release-candidate), and earshot and srt-gateway also the
+      # local names the test scripts run directly. These names exist only on
+      # this runner.
+      - name: this run's images, under the names the stack uses
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGES: ${{ needs.plan.outputs.images }}
+          IMAGE_BASE: ${{ needs.plan.outputs.image_base }}
+        run: |
+          set -euo pipefail
+          for image in $(jq -r '.[]' <<< "$IMAGES"); do
+            f="$RUNNER_TEMP/digest/$image-$ARCH"
+            [ -s "$f" ] || { echo "::error::no $ARCH digest for $image"; exit 1; }
+            src="$IMAGE_BASE/$image@$(cat "$f")"
+            docker pull -q "$src"
+            docker tag "$src" "$CONSUMER_BASE/$image:release-candidate"
+          done
+          docker tag "$CONSUMER_BASE/earshot:release-candidate" ambi-box-earshot:local
+          docker tag "$CONSUMER_BASE/srt-gateway:release-candidate" ambi-box-srt-gateway:local
+
+      - name: a fresh install, on those images
+        run: |
+          # setup.sh writes what a first-time user gets: the published images
+          # at PIN_TAG, and real generated keys. Only the tag changes, to the
+          # images under test.
+          ./scripts/setup.sh
+          sed -i 's/^AMBI_BOX_TAG=.*/AMBI_BOX_TAG=release-candidate/' .env
+          grep -E '^(COMPOSE_FILE|AMBI_BOX_TAG)=' .env
+
+      - name: synthesise demo content
+        run: ./scripts/make-demo-loop.sh
+
+      # Every default service has a healthcheck, so --wait fails if any of them
+      # does not come up, the two SRT gateways included, which the pipeline
+      # test below never pushes to.
+      - name: the whole stack comes up healthy and reports the tree's version
+        run: |
+          docker compose up -d --wait --wait-timeout 180
+          docker compose ps
+          v=$(curl -sf --max-time 5 http://127.0.0.1:8090/api/live \
+                | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)
+          want=$(tr -d ' \t\r\n' < telemetry/VERSION)
+          if [ "$v" != "$want" ]; then
+            echo "::error::/api/live reports '$v' but telemetry/VERSION says '$want'"; exit 1
+          fi
+          echo "the stack reports $v"
+          docker compose down
+
+      - name: test-pipeline.sh (RTMP, end to end)
+        run: ./scripts/test-pipeline.sh
+
+      # the recommended contribution route: both suites drive the guest
+      # gateway, so the guest route is on, as in integration's srt job
+      - name: test-direct-session.sh and test-srt-ingest.sh (SRT, end to end)
+        env:
+          GUEST_ENABLED: '1'
+          SRT_ENABLED: '1'
+        run: |
+          docker compose up -d --wait --wait-timeout 180
+          ./scripts/test-direct-session.sh
+          ./scripts/test-srt-ingest.sh
+
+      - name: diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          for s in rtmp-ingest earshot telemetry loop-source srt-gateway srt-gateway-owner; do
+            echo "::group::$s"
+            docker compose logs --tail 80 "$s" || true
+            echo "::endgroup::"
           done
 
-      - name: push
-        uses: docker/build-push-action@v7
+  tag:
+    name: tag the images
+    needs: [plan, build, verify]
+    runs-on: ubuntu-26.04
+    # most of it is waiting for the release commit's CI, if it is still running
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    outputs:
+      latest: ${{ steps.latest.outputs.latest }}
+    env:
+      IMAGES: ${{ needs.plan.outputs.images }}
+      IMAGE_BASE: ${{ needs.plan.outputs.image_base }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A release publishes only a commit whose own CI passed: build and
+      # integration run on the tag push too, and this waits for those runs, and
+      # for the commit's runs on main, rather than for someone to notice a red
+      # one in time to cancel.
+      - name: the release commit passed its CI
+        if: github.event_name == 'push'
+        run: .github/scripts/wait-for-ci.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" 35
+
+      - uses: actions/download-artifact@v8
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile || format('{0}/Dockerfile', matrix.context) }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: ${{ matrix.build-args || '' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=ghcr-${{ matrix.service }}
+          pattern: digest-*
+          path: ${{ runner.temp }}/digest
+          merge-multiple: true
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Everything that can fail on bad input fails here, before any tag moves.
+      - name: every image is complete, and not already out from another build
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            now=$(.github/scripts/tag-commit.sh "$TAG")
+            [ "$now" = "$GITHUB_SHA" ] || { echo "::error::$TAG now names $now, not this run's $GITHUB_SHA; not tagging"; exit 1; }
+          fi
+          linux() { jq -r '[.manifests[] | select(.platform.os == "linux") | "\(.platform.architecture)=\(.digest)"] | sort | join(" ")'; }
+          for image in $(jq -r '.[]' <<< "$IMAGES"); do
+            refs=()
+            for arch in amd64 arm64; do
+              f="$RUNNER_TEMP/digest/$image-$arch"
+              [ -s "$f" ] || { echo "::error::no $arch digest for $image: its artifact is missing; use Re-run all jobs"; exit 1; }
+              refs+=("$IMAGE_BASE/$image@$(cat "$f")")
+            done
+            new=$(docker buildx imagetools create --dry-run -t "$IMAGE_BASE/$image:$TAG" "${refs[@]}" | linux)
+            case "$new" in
+              amd64=*" "arm64=*) ;;
+              *) echo "::error::$image would carry [$new], not amd64 and arm64"; exit 1 ;;
+            esac
+            # A release tag already on this image (an earlier attempt of this
+            # run got that far) must hold this run's own images: if a re-run
+            # rebuilt them, the published ones and these never ran together.
+            if [ "$GITHUB_EVENT_NAME" = push ]; then
+              if out=$(docker buildx imagetools inspect --raw "$IMAGE_BASE/$image:$TAG" 2>&1); then
+                old=$(linux <<< "$out")
+                if [ "$old" != "$new" ]; then
+                  echo "::error::$image:$TAG is already published from an earlier build of this commit, and this run has rebuilt it, so the two sets never ran together and this run cannot finish the release; if another run of this commit did the tagging, finish that one with Re-run failed jobs, otherwise cut the next patch release"
+                  exit 1
+                fi
+              elif ! grep -qi 'not found' <<< "$out"; then
+                echo "::error::could not tell whether $image:$TAG exists: $out"; exit 1
+              fi
+            fi
+            echo "  $image: $new"
+          done
+
+      - name: the release tag, on every image
+        run: |
+          set -euo pipefail
+          retry() { for i in 1 2 3; do "$@" && return 0; [ "$i" = 3 ] || sleep $((10 * i)); done; return 1; }
+          for image in $(jq -r '.[]' <<< "$IMAGES"); do
+            if [ "$GITHUB_EVENT_NAME" = push ] && docker buildx imagetools inspect "$IMAGE_BASE/$image:$TAG" >/dev/null 2>&1; then
+              echo "  $image:$TAG is already published with these images; a release tag is never moved, so it stays"
+              continue
+            fi
+            retry docker buildx imagetools create -t "$IMAGE_BASE/$image:$TAG" \
+              "$IMAGE_BASE/$image@$(cat "$RUNNER_TEMP/digest/$image-amd64")" \
+              "$IMAGE_BASE/$image@$(cat "$RUNNER_TEMP/digest/$image-arm64")"
+            echo "$IMAGE_BASE/$image:$TAG" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+      # Decided here, when it takes effect, rather than once in plan: a re-run
+      # of this job after a newer release has published must not move `latest`
+      # back. It is retagged from the release tag just set, so `latest` is
+      # always exactly a published release, and only once every image of it
+      # pulls anonymously, the way a fresh install pulls it.
+      - name: latest, if this is the newest release
+        id: latest
+        run: |
+          set -euo pipefail
+          retry() { for i in 1 2 3; do "$@" && return 0; [ "$i" = 3 ] || sleep $((10 * i)); done; return 1; }
+          latest=false
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            set +e; .github/scripts/newest-release.sh "$TAG"; rc=$?; set -e
+            case "$rc" in
+              0) latest=true ;;
+              1) ;;
+              *) echo "::error::could not tell whether $TAG is the newest release"; exit 1 ;;
+            esac
+          fi
+          if [ "$latest" = true ]; then
+            for image in $(jq -r '.[]' <<< "$IMAGES"); do
+              .github/scripts/anonymous-pull.sh "$IMAGE_BASE/$image" "$TAG"
+            done
+            for image in $(jq -r '.[]' <<< "$IMAGES"); do
+              retry docker buildx imagetools create -t "$IMAGE_BASE/$image:latest" "$IMAGE_BASE/$image:$TAG"
+              echo "$IMAGE_BASE/$image:latest -> $TAG" | tee -a "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
   # WHY THIS RUNS HERE AND NOT IN set-version.sh. PIN_TAG is the image tag a
   # fresh `scripts/setup.sh` install pulls, so it must never name a tag that has
@@ -186,73 +611,72 @@ jobs:
   # invariant true at every commit rather than eventually.
   pin-published-tag:
     name: point a fresh install at the images just published
-    needs: publish
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    needs: [plan, tag]
+    # follows the tag job's decision, even on a re-run of this job alone; the
+    # version check below is what keeps a stale decision from moving it back
+    if: needs.tag.outputs.latest == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 0
-      - name: bump PIN_TAG to ${{ github.ref_name }}
+
+      - name: every image is there for a fresh install, on both architectures
+        env:
+          IMAGES: ${{ needs.plan.outputs.images }}
+          TAG: ${{ github.ref_name }}
         run: |
-          TAG='${{ github.ref_name }}'
-          # Releases only. A pre-release or -dev style tag must not become the
-          # thing a first-time install pulls.
-          # v1.1.1-rc1, v1.1.1-dev and v1.2.3-beta.1 all match the plain glob,
-          # so a hyphen has to be rejected before it is applied, and so does a
-          # fourth component like v1.1.0.1.
-          case "$TAG" in
-            *-*)                       TAG_OK=0 ;;
-            v[0-9]*.[0-9]*.[0-9]*.*)   TAG_OK=0 ;;
-            v[0-9]*.[0-9]*.[0-9]*)     TAG_OK=1 ;;
-            *)                         TAG_OK=0 ;;
-          esac
-          if [ "$TAG_OK" = 0 ]; then
-            echo "  $TAG is not a plain release tag; leaving PIN_TAG alone"; exit 0
-          fi
-          cur=$(sed -n 's|^PIN_TAG="\(v.*\)"|\1|p' scripts/setup.sh)
-          if [ "$cur" = "$TAG" ]; then echo "  PIN_TAG is already $TAG"; exit 0; fi
-          sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
-          grep -q "^PIN_TAG=\"$TAG\"" scripts/setup.sh || { echo "::error::PIN_TAG rewrite did not take"; exit 1; }
+          set -euo pipefail
+          for image in $(jq -r '.[]' <<< "$IMAGES"); do
+            .github/scripts/anonymous-pull.sh "$CONSUMER_BASE/$image" "$TAG"
+          done
+
+      - name: bump PIN_TAG to ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
           # COMMITTED THROUGH THE API, NOT `git push`. main is protected with
           # "commits must have verified signatures", and a runner's git commit is
           # unsigned, so every push was rejected with GH006 and the retry loop
-          # below treated a permanent refusal as a race and hammered it three
-          # times (v1.1.0: all five images published, pointer left at v1.0.2).
-          # GitHub signs commits it creates through the contents API with its own
-          # web-flow key, so they are Verified and the rule accepts them. That
-          # keeps the bump behind `needs: publish`, which is the whole point of
-          # this job: PIN_TAG must never name a tag whose images do not exist.
+          # treated a permanent refusal as a race and hammered it three times
+          # (v1.1.0: all five images published, pointer left at v1.0.2). GitHub
+          # signs commits it creates through the contents API with its own
+          # web-flow key, so they are Verified and the rule accepts them.
+          #
+          # The file and its blob sha come from the same read, so a commit to
+          # setup.sh that lands meanwhile makes the write fail with a 409
+          # instead of being silently reverted.
           for i in 1 2 3; do
             # -X GET is load-bearing: `gh api` switches to POST the moment any
             # -f is passed, and the contents endpoint routes GET, PUT and DELETE
-            # only, so the read 404s and takes the whole step with it before the
-            # PUT below is ever reached. That is what the v1.1.0 rewrite left
-            # behind: a different error, the same stale pointer.
-            SHA=$(gh api -X GET "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
-                    --jq .sha -f ref=main) || exit 1
+            # only, so the read would 404 and take the whole step with it.
+            resp=$(gh api -X GET "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" -f ref=main)
+            sha=$(jq -r .sha <<< "$resp")
+            jq -r .content <<< "$resp" | base64 -d > "$RUNNER_TEMP/setup.sh"
+            cur=$(sed -n 's|^PIN_TAG="\(v.*\)"|\1|p' "$RUNNER_TEMP/setup.sh")
+            if [ "$cur" = "$TAG" ]; then echo "  PIN_TAG is already $TAG"; exit 0; fi
+            # Never backwards, whatever re-ran: a fresh install should not get an
+            # older release than it got yesterday.
+            if [ "$(printf '%s\n' "$cur" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]; then
+              echo "  PIN_TAG is $cur, newer than $TAG; leaving it"; exit 0
+            fi
+            sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" "$RUNNER_TEMP/setup.sh"
+            grep -q "^PIN_TAG=\"$TAG\"" "$RUNNER_TEMP/setup.sh" || { echo "::error::PIN_TAG rewrite did not take"; exit 1; }
             if err=$(gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/scripts/setup.sh" \
                  -f message="Pin a fresh install to $TAG, now that its images exist" \
-                 -f content="$(base64 -w0 < scripts/setup.sh)" \
-                 -f sha="$SHA" -f branch=main 2>&1 >/dev/null); then
+                 -f content="$(base64 -w0 < "$RUNNER_TEMP/setup.sh")" \
+                 -f sha="$sha" -f branch=main 2>&1 >/dev/null); then
               echo "  pinned $cur -> $TAG"; exit 0
             fi
-            # A 409 means main moved while the images built: re-read and retry.
-            # Anything else is not a race and will not fix itself, so print what
-            # the API actually said and stop. The comment used to claim this
-            # distinction while the loop retried everything three times, which is
-            # how a permanent refusal read as a flaky one in the v1.1.0 run.
+            # A 409 means setup.sh changed on main between the read and the
+            # write: read it again and retry. Anything else is not a race and
+            # will not fix itself, so print what the API said and stop.
             case "$err" in
-              *409*|*"does not match"*|*"but expected"*) : ;;
+              *409*|*"does not match"*|*"but expected"*) echo "  setup.sh changed on main meanwhile, retrying ($i)" ;;
               *) echo "::error::PIN_TAG bump refused, and not by a race: $err"; exit 1 ;;
             esac
-            echo "  main moved while the images built, retrying ($i)"
-            git fetch -q origin main && git checkout -q origin/main -- scripts/setup.sh
-            sed -i "s|^PIN_TAG=\"v.*\"|PIN_TAG=\"$TAG\"|" scripts/setup.sh
           done
           echo "::error::could not commit the PIN_TAG bump"; exit 1
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

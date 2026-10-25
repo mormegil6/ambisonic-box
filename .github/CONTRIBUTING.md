@@ -46,10 +46,10 @@ Five workflows, described in [docs/CI.md](../docs/CI.md). The ones most likely t
 - **shell, python and yaml must parse**, and `shellcheck` must be clean at error level.
 - **Retired identifiers must not come back.** A rename in 2026 left stragglers behind three manual sweeps, so a gate now refuses them. It matches uses rather than mentions, so writing about an old name in a comment is fine.
 - **The docs must agree with the code.** `docker-compose.yml`'s `FFMPEG_FLAGS` fallback is the single source of truth for video codec policy; README and `.env.example` must not contradict it. They drifted apart once and the shipped stack failed its own test as a result.
-- **Base images must publish `linux/arm64`.** A Raspberry Pi 4 is a supported target, and an amd64-only base breaks it somewhere nobody would notice until the device.
+- **Every image must build on `linux/arm64`.** A Raspberry Pi 4 is a supported target, so `build` builds every image natively on arm64 as well as amd64, and an amd64-only base image or package fails the pull request that brings it in.
 - **Version metadata must agree.** `telemetry/VERSION` is what a running stack reports on `/api/live`, and `CITATION.cff` must say the same thing. Do not edit either by hand: `./scripts/set-version.sh` writes both, and the gate fails a push where they have drifted.
 
-A docs-only change skips the expensive workflows.
+A docs-only push skips the expensive workflows; a pull request runs them whatever it changes.
 
 ## Things that are not ours to change
 
