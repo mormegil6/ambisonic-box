@@ -51,7 +51,7 @@
 #
 # Usage: scripts/make-directions-clip.sh SOURCE.mov BED_16CH.wav [OUT] [CARD] [W] [H]
 #   env: BED_FIT=tempo|trim|native  LOOP_PERIOD=<s>  TOTAL=120  OFFSET=1.0
-#        BED_GAIN=<linear>  VOICE_GAIN=<linear>  KEY_THRESH/KEY_TOL/KEY_SOFT
+#        BED_GAIN=<linear>  VOICE_GAIN=<linear>  MIX_GAIN=<linear>  KEY_THRESH/KEY_TOL/KEY_SOFT
 #        FPS=24  (the frame grid the period is quantised to)
 # AV1 (SVT-AV1), matching the delivery ladder rather than introducing a second
 # codec: the ladder re-encodes from this file, so a VP9 master would add a
@@ -64,7 +64,7 @@
 set -euo pipefail
 
 SOURCE="${1:?directions source asset: energy-map video + 16-ch voice audio}"
-BED="${2:?16-channel ACN/SN3D musical bed, or the literal `fetch` (defines the loop period)}"
+BED="${2:?16-channel ACN/SN3D musical bed, or the word fetch (defines the loop period)}"
 
 # `fetch` pulls the bed from Earshot's repository rather than from this
 # project's release, which deliberately no longer carries it (see INPUTS).
@@ -103,6 +103,14 @@ FPS="${FPS:-24}"
 # (the new voice peaks at -2.1 dB; +5.4 dB would overshoot 0 dBFS).
 BED_GAIN="${BED_GAIN:-0.537}"       # -5.4 dB
 VOICE_GAIN="${VOICE_GAIN:-1.0}"
+# The level that clips is the headphone output, not any one channel. The
+# 2026-08-08 master peaked at -1.8 dBFS in W, yet the player's binaural decoder
+# took the spoken words to +5.3 dBFS (scripts/binaural-peak.sh, worst of eight
+# headings), and the browser clipped them. MIX_GAIN lowers the whole mix after
+# the voice and bed are summed, so their ratio stays as above; 6.5 dB down put
+# the 2026-10-26 render at -1.4 dBFS on headphones. The script measures that
+# peak again at the end; rerun with a lower MIX_GAIN if it reports clipping.
+MIX_GAIN="${MIX_GAIN:-0.473}"       # -6.5 dB
 KEY_THRESH="${KEY_THRESH:-0.10}"; KEY_TOL="${KEY_TOL:-0.30}"; KEY_SOFT="${KEY_SOFT:-0.18}"
 
 for f in "$SOURCE" "$BED" "$CARD"; do
@@ -155,7 +163,7 @@ ffmpeg -y -hide_banner \
 [1:v]scale=${W}:${H},format=rgba,\
 lumakey=threshold=${KEY_THRESH}:tolerance=${KEY_TOL}:softness=${KEY_SOFT}[key];\
 [bg][key]overlay=format=auto,format=yuv420p[v];\
-[2:a][3:a]amix=inputs=2:normalize=0:duration=longest[a]" \
+[2:a][3:a]amix=inputs=2:normalize=0:duration=longest,volume=${MIX_GAIN}[a]" \
     -map "[v]" -map "[a]" -t "$TOTAL" -r "$FPS" \
     -c:v libsvtav1 -crf "${AV1_CRF:-28}" -preset "${AV1_PRESET:-5}" \
     -svtav1-params "tune=0" -g "$((FPS*2))" -pix_fmt yuv420p -color_range tv \
@@ -165,6 +173,5 @@ lumakey=threshold=${KEY_THRESH}:tolerance=${KEY_TOL}:softness=${KEY_SOFT}[key];\
 echo "[directions] wrote $OUT"
 ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,channels \
         -show_entries format=duration -of default=noprint_wrappers=1 "$OUT"
-peak=$(ffmpeg -hide_banner -nostats -i "$OUT" -af "pan=mono|c0=c0,volumedetect" -f null - 2>&1 \
-       | grep max_volume | grep -oE '\-?[0-9.]+$' | tail -1)
-echo "[directions] W-channel peak: ${peak} dBFS (negative = headroom)"
+echo "[directions] headphone peak through the player's decoder:"
+"$(dirname "$0")/binaural-peak.sh" "$OUT"
