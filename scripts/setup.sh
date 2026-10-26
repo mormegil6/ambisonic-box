@@ -44,7 +44,7 @@ OVR_FILE="docker-compose.override.yml"
 # never moves back to an older release. set-version.sh
 # deliberately does NOT touch it, and says so, for that same reason: this file
 # previously claimed the opposite.
-PIN_TAG="v1.3.9"
+PIN_TAG="v1.3.10"
 OWNER_PORT=8891
 
 say()  { printf '%s\n' "$*"; }
