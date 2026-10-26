@@ -6,9 +6,9 @@ Reported upstream as [shaka-packager#1627](https://github.com/shaka-project/shak
 
 ## Build
 
-    docker build -t shaka-packager:dops-fix .
+    docker compose --profile tools build shaka
 
-Roughly 20 minutes. `scripts/package-vod-dash.sh` in the public repo expects that image tag.
+Roughly 20 minutes. It builds the image `ambi-box-shaka:local`, which `scripts/package-vod-dash.sh` runs.
 
 ## What the patch does
 
@@ -18,7 +18,7 @@ The patch byte-swaps those three fields on write and reverses the same conversio
 
 ## Verifying a build
 
-    docker run --rm -v "$PWD":/w -w /w shaka-packager:dops-fix \
+    docker run --rm -v "$PWD":/w -w /w ambi-box-shaka:local \
       packager 'in=some-opus.webm,stream=audio,output=out.mp4'
 
 Read the `dOps` payload of `out.mp4`. For a 48 kHz source it must contain `01 38` (PreSkip 312) and `00 00 bb 80` (48000). A stock build gives `38 01` and `80 bb 00 00`.
@@ -29,4 +29,4 @@ Packaging an existing Opus **MP4** comes out correct even on a stock build, beca
 
 ## Deleting this
 
-The moment an upstream release carries the fix. Pin `scripts/package-vod-dash.sh` back to `google/shaka-packager:<version>`, rebuild the clips, and remove this directory. Carrying a private build of someone else's tool is a cost worth ending as soon as it can be.
+The moment an upstream release carries the fix. Point the `shaka` service in `docker-compose.yml` and `scripts/package-vod-dash.sh` at `google/shaka-packager:<version>`, rebuild the clips, and remove this directory. Carrying a private build of someone else's tool is a cost worth ending as soon as it can be.

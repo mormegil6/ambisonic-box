@@ -55,7 +55,8 @@ name: ghcr-publish
 # upgrades, which a cached RUN layer would skip (security.yml builds without a
 # cache for the same reason).
 #
-# OCI labels come from docker/metadata-action. The run's tag is set in plan
+# OCI labels come from docker/metadata-action, except the licence, which the
+# build job sets per image (see its "labels" step). The run's tag is set in plan
 # (the pushed tag, or manual-<sha> for a dispatch), checked there against the
 # version metadata-action derives, and applied by the tag job with imagetools;
 # whether a release is the newest, and so moves `latest`, is
@@ -269,6 +270,41 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # The licence label, per image. metadata-action stamps the repository's
+      # licence on every image, and this repository's own files are Apache-2.0,
+      # but each image also ships the programs it exists to run, under their own
+      # licences (README.md, "License"), and the label has to say so: an image
+      # that runs FFmpeg is not Apache-2.0 only. Base-image runtimes and system
+      # libraries keep their own licences and are not listed. An image added to
+      # docker-compose.pull.yml without a line here fails the build.
+      - name: labels
+        id: labels
+        env:
+          IMAGE: ${{ matrix.image }}
+          PLAN_LABELS: ${{ needs.plan.outputs.labels }}
+        run: |
+          set -euo pipefail
+          case "$IMAGE" in
+            # Earshot (GPL-2.0, no later-version clause), FFmpeg 7.1 built
+            # --enable-gpl --enable-version3, nginx with nginx-rtmp-module
+            earshot)      lic='Apache-2.0 AND BSD-2-Clause AND GPL-2.0-only AND GPL-3.0-or-later' ;;
+            # the HOAST360 player, served by nginx
+            hoast-player) lic='Apache-2.0 AND BSD-2-Clause AND GPL-3.0-or-later' ;;
+            # nginx with nginx-rtmp-module
+            rtmp-ingest)  lic='Apache-2.0 AND BSD-2-Clause' ;;
+            # Debian's FFmpeg, GStreamer and libsrt
+            srt-gateway)  lic='Apache-2.0 AND GPL-2.0-or-later AND LGPL-2.0-or-later AND MPL-2.0' ;;
+            telemetry)    lic='Apache-2.0' ;;
+            *) echo "::error::no licence expression for $IMAGE; add one to this step"; exit 1 ;;
+          esac
+          {
+            echo 'labels<<LABELS'
+            printf '%s\n' "$PLAN_LABELS" | grep -v '^org.opencontainers.image.licenses=' || true
+            echo "org.opencontainers.image.licenses=$lic"
+            echo 'LABELS'
+          } >> "$GITHUB_OUTPUT"
+          echo "  $IMAGE: $lic"
+
       # Built twice in this job, on purpose. This build only loads the image
       # into the runner's docker, where the checks below run it; the push after
       # them rebuilds from this builder's cache, and the step after the push
@@ -283,7 +319,7 @@ jobs:
           target: ${{ steps.def.outputs.target }}
           build-args: ${{ steps.def.outputs.args }}
           platforms: linux/${{ matrix.arch }}
-          labels: ${{ needs.plan.outputs.labels }}
+          labels: ${{ steps.labels.outputs.labels }}
           load: true
           tags: checked:${{ matrix.image }}
 
@@ -329,7 +365,7 @@ jobs:
           target: ${{ steps.def.outputs.target }}
           build-args: ${{ steps.def.outputs.args }}
           platforms: linux/${{ matrix.arch }}
-          labels: ${{ needs.plan.outputs.labels }}
+          labels: ${{ steps.labels.outputs.labels }}
           outputs: type=image,name=${{ needs.plan.outputs.image_base }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
 
       - name: what was pushed is what was checked
