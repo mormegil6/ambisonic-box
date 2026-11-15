@@ -6,7 +6,7 @@ Containerised toolchain for live streaming 360 video with Higher-Order Ambisonic
 
 *Why "Ambisonic Box"? It ships as a Docker container (a box) - which was built and tested on a 2012 Mac Mini (a small box) and a Raspberry Pi 4 (a smaller box). Ambisonic audio, in a box, in a box, in a box. It's boxes all the way down.*
 
-**Live demo:** <https://stream.bmroz.eu/> · **Project page:** <https://bmroz.eu/projects/360-livestream/>
+**Live demo:** <https://stream.bmroz.eu/> · **Project page:** <https://bmroz.eu/projects/ambisonic-box/>
 
 ## Quick start
 

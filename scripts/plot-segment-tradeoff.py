@@ -9,7 +9,7 @@ plot was drawn). Pass it explicitly:
 
 The date is part of the filename so a re-measurement lands beside its
 predecessor instead of overwriting it: the figures are cited from RESULTS.md and
-from the project page at https://bmroz.eu/projects/360-livestream/, and a
+from the project page at https://bmroz.eu/projects/ambisonic-box/, and a
 silently-replaced figure would leave those captions describing data that is no
 longer in the image.
 
@@ -41,7 +41,7 @@ if len(sys.argv) != 2 or not re.fullmatch(r"\d{4}-\d{2}", sys.argv[1]):
         "\n"
         "  The date is in the filename so a re-measurement lands beside its\n"
         "  predecessor rather than overwriting it. These figures are cited from\n"
-        "  RESULTS.md and from https://bmroz.eu/projects/360-livestream/, and a\n"
+        "  RESULTS.md and from https://bmroz.eu/projects/ambisonic-box/, and a\n"
         "  silently-replaced figure would leave both captions describing data\n"
         "  that is no longer in the image."
     )
