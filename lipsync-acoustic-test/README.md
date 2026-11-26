@@ -36,6 +36,7 @@ A single run by hand: `node measure.cjs <tag> "<browser executable>" <clip>` for
 | `page-probes.cjs` | the two page-side probes: frame luma, and the calibration clicks |
 | `cap.swift` | the CoreAudio recorder (build it to `cap`; not committed) |
 | `analyze.py` | pairs beeps with flashes and prints one result line |
+| `analyze-mediatime.py` | a second reading of a run that times the flash from the frames' media time, for a browser whose frame callback skips frames (Firefox) |
 | `run-matrix.sh` | all engines and clips in one go |
 | `results.tsv` | the raw lines behind [RESULTS.md](RESULTS.md) |
 | `plot-offsets.py` | draws `offsets.png` and `offsets.svg` from `results.tsv` (needs matplotlib) |

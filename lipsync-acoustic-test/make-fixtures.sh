@@ -7,7 +7,9 @@
 #   ctrl   x264 default (B-frames): ffmpeg writes a 67 ms trimming edit, as it does on every live stream.
 #   trim   one 0.5 s trimming edit and no empty edit (the shape the 1.3.13 player mishandled). The flash is encoded
 #          0.5 s later so that it presents at 2.7 s once the trim is applied.
-#   live   the live stream's list: an empty edit of 53 ms, then the 67 ms trim. The flash is encoded 14 ms later.
+#   live   the live stream's list: an empty edit of 53 ms, then the 67 ms trim. The flash is asked for 14 ms later
+#          (2.714 s), which is not on the 30 fps grid: it starts on the next frame, 2.733 s, and so presents at
+#          2.719 s, 19 ms after the beep. Read this clip against -19 ms.
 #   elst   a 1.7 s empty edit, then the 67 ms trim. The flash is encoded 1.7 s earlier.
 #
 # Needs ffmpeg with libx264 and libopus, and python3. Edit lists are written with set-elst.py (durations in movie
