@@ -8,7 +8,7 @@ const out = path.join(__dirname, '../runs');
   const srv = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' }); r.end(fs.readFileSync(path.join(__dirname, 'www/diag.html'))); }).listen(8771, '127.0.0.1');
   const rec = spawn('ssh', [PI, `arecord -q -D ${CARD} -c 4 -r 48000 -f S16_LE -d 55 /tmp/${tag}.wav`], { stdio: 'inherit' }); const done = new Promise(r => rec.on('close', r));
   await new Promise(r => setTimeout(r, 1500));
-  const b = await chromium.launch({ executablePath: exe, headless: false, args: ['--window-position=80,60', '--autoplay-policy=no-user-gesture-required'] });
+  const b = await chromium.launch({ executablePath: exe, headless: false, args: ['--window-position=' + (process.env.WIN || '80,60'), '--autoplay-policy=no-user-gesture-required'] });
   const p = await (await b.newContext({ viewport: { width: 1100, height: 700 } })).newPage(); await p.bringToFront();
   await p.goto(`http://127.0.0.1:8771/diag.html?mode=${mode}`); await p.waitForTimeout(1000);
   await p.mouse.click(500, 400);

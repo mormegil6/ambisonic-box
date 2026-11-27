@@ -9,7 +9,7 @@ const exe = process.env.EXE || '/Applications/Google Chrome.app/Contents/MacOS/G
     const buf = fs.readFileSync(f); r.writeHead(200, { 'Content-Type': f.endsWith('.mp4') ? 'video/mp4' : 'text/html', 'Content-Length': buf.length }); r.end(buf); }).listen(8771, '127.0.0.1');
   const rec = spawn('ssh', [PI, `arecord -q -D ${CARD} -c 4 -r 48000 -f S16_LE -d 55 /tmp/${tag}.wav`], { stdio: 'inherit' }); const done = new Promise(r => rec.on('close', r));
   await new Promise(r => setTimeout(r, 1500));
-  const b = await chromium.launch({ executablePath: exe, headless: false, args: ['--window-position=80,60', '--autoplay-policy=no-user-gesture-required'] });
+  const b = await chromium.launch({ executablePath: exe, headless: false, args: ['--window-position=' + (process.env.WIN || '80,60'), '--autoplay-policy=no-user-gesture-required'] });
   const p = await (await b.newContext({ viewport: { width: 1100, height: 700 } })).newPage(); await p.bringToFront();
   await p.goto('http://127.0.0.1:8771/native.html'); await p.waitForTimeout(1500);
   console.log(tag, await p.evaluate(() => document.querySelector('video').play().then(() => 'playing', e => 'play failed ' + e)));
