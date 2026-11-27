@@ -9,34 +9,31 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 here = os.path.dirname(os.path.abspath(__file__))
-OLD, NEW = '1.3.13 (deployed)', '1.3.14 (deployed)'
+OLD, NEW = '1.3.13 (bundle from the release tag)', '1.3.14 (deployed)'
 CLIPS = [('nob', 'nob'), ('ctrl', 'ctrl'), ('trim', 'trim'), ('live', 'live'), ('elst', 'elst')]
-ENGINES = [('chrome157', 'Chrome 157'), ('canary', 'Canary 160'), ('canaryKS', 'Canary 160, edit skipped'),
+ENGINES = [('chrome', 'Chrome 157'), ('canary', 'Canary 160'), ('canaryKS', 'Canary 160, edit skipped'),
            ('safari', 'Safari 27.2'), ('firefox', 'Firefox 161 Beta'), ('firefoxNightly', 'Firefox 163 Nightly')]
-# One run per cell. The first v1.3.14 Chrome 157 elst run recorded one beep of ten and is replaced by its repeat.
-SKIP = {'dep-chrome157-elst'}
 
 def parse():
     rows = {}
     for line in open(os.path.join(here, 'results.tsv')):
         f = line.rstrip('\n').split('\t')
-        if len(f) < 6 or f[0] == 'tag' or f[3] not in (OLD, NEW) or f[0] in SKIP or f[0].startswith('rep-'):
+        if len(f) < 6 or f[0] == 'tag' or f[3] not in (OLD, NEW):
             continue
         m = re.search(r'mean=(-?[\d.]+) sd=([\d.]+)', f[5])
         if not m:
             continue
-        tag = f[0].replace('dep-', '').replace('-r2', '')
-        engine = tag.split('-')[0]
+        engine = f[0].split('-')[1]
         rows[(f[3], engine, f[2])] = (float(m.group(1)), float(m.group(2)))
     return rows
 
-SHAPES = {'chrome157': 'o', 'canaryKS': 'D', 'canary': '^', 'safari': 's', 'firefox': 'P', 'firefoxNightly': 'X'}
+SHAPES = {'chrome': 'o', 'canaryKS': 'D', 'canary': '^', 'safari': 's', 'firefox': 'P', 'firefoxNightly': 'X'}
 
 def main():
     data = parse()
     surface, ink, ink2, grid = '#fcfcfb', '#0b0b0b', '#52514e', '#e3e2de'
     c_old, c_new = '#eb6834', '#2a78d6'
-    # Colour is the build, shape is the browser. The axis is broken between 110 and 480 ms so that the dots near 0 stay
+    # Colour is the build, shape is the browser. The axis is broken between 110 and 450 ms so that the dots near 0 stay
     # legible next to the three near 500.
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.4, 3.7), sharey=True, facecolor=surface,
                                  gridspec_kw={'width_ratios': [9, 1.4], 'wspace': 0.1})
@@ -58,14 +55,14 @@ def main():
         for sp in a_.spines.values():
             sp.set_visible(False)
     bx.set_facecolor('#f1f0ec')   # a different scale: tint the far panel
-    ax.set_xlim(-50, 110)
-    ax.set_xticks([-40, -20, 0, 20, 40, 60, 80, 100])
+    ax.set_xlim(-110, 110)
+    ax.set_xticks([-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100])
     ax.axvline(0, color=ink2, lw=0.9, zorder=1)
-    bx.set_xlim(480, 515)
-    bx.set_xticks([500])
+    bx.set_xlim(450, 520)
+    bx.set_xticks([460, 500])
     ax.set_yticks(range(n))
     ax.set_yticklabels([t for _, t in reversed(CLIPS)], fontsize=8, color=ink2)
-    fig.supxlabel('audio offset in ms (positive: the sound is late); the axis is broken between 110 and 480 ms',
+    fig.supxlabel('audio offset in ms (positive: the sound is late); the axis is broken between 110 and 450 ms',
                   fontsize=7.5, color=ink2, y=0.01)
     builds = [Line2D([], [], marker='o', ls='none', ms=6.5, color=c, mec=surface, label=l) for c, l in ((c_old, 'v1.3.13'), (c_new, 'v1.3.14'))]
     browsers = [Line2D([], [], marker=SHAPES[e], ls='none', ms=6.5 if SHAPES[e] != 'P' else 7.5, color=ink2, mec=surface, label=l) for e, l in ENGINES]
