@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path');
 const [, , tag, exe, clip] = process.argv;
 const extraArgs = (process.env.ARGS || '').split(',').filter(Boolean);
+if (process.env.WINDOW_POS) extraArgs.push('--window-position=' + process.env.WINDOW_POS);   // x,y: rig/mac-run.sh places every window alike
 const bundle = process.env.BUNDLE || '';
 const dur = +(process.env.DUR || 40);
 const BASE = process.env.BASE || 'https://stream.bmroz.eu', DEVICE = process.env.DEVICE || 'BlackHole 2ch';

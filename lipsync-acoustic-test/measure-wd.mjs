@@ -1,4 +1,4 @@
-// WebDriver variant for Firefox and Safari. usage: node measure-wd.mjs <tag> <firefox|safari> <nob|ctrl|trim|live|elst>   env: BUNDLE=/path DUR=40 BASE=https://stream.bmroz.eu DEVICE='BlackHole 2ch' FIREFOX_BIN=/path/to/firefox (default: the installed Firefox)
+// WebDriver variant for Firefox and Safari. usage: node measure-wd.mjs <tag> <firefox|safari> <nob|ctrl|trim|live|elst>   env: BUNDLE=/path DUR=40 BASE=https://stream.bmroz.eu DEVICE='BlackHole 2ch' FIREFOX_BIN=/path/to/firefox (default: the installed Firefox) WINDOW_RECT=x,y,w,h
 import { spawn } from 'child_process'; import fs from 'fs'; import path from 'path'; import { createRequire } from 'module';
 import { startProxy } from './proxy.mjs';
 const require = createRequire(import.meta.url); const { CLICKS } = require('./page-probes.cjs');
@@ -29,8 +29,22 @@ async function call(method, p, body) {
   const execAsync = (script, args = []) => call('POST', `/session/${id}/execute/async`, { script, args });
   const errs = [];
   try {
+    if (process.env.WINDOW_RECT) {   // x,y,width,height: rig/mac-run.sh puts every browser's window in the same place
+      const [x, y, width, height] = process.env.WINDOW_RECT.split(',').map(Number);
+      await call('POST', `/session/${id}/window/rect`, { x, y, width, height });
+    }
     await call('POST', `/session/${id}/url`, { url: `http://127.0.0.1:${PROXY}/vod/?clip=colortones` });
     for (let i = 0; i < 120; i++) { let ok = false; try { ok = await exec('return !!document.querySelector("video")'); } catch (e) { /* page still loading */ } if (ok) break; await sleep(250); }
+    if (process.env.BOX_AT) {   // x,y on screen where the video box's top-left must land (the photodiode rig's sensor)
+      const [bx, by] = process.env.BOX_AT.split(',').map(Number);
+      for (let k = 0; k < 2; k++) {
+        const g = await exec(`const v = document.querySelector('.video-js') || document.querySelector('canvas'); const r = v.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, sx: window.screenX, sy: window.screenY, top: window.outerHeight - window.innerHeight, side: window.outerWidth - window.innerWidth }`);
+        const rect = await call('GET', `/session/${id}/window/rect`);
+        await call('POST', `/session/${id}/window/rect`, { x: Math.round(bx - g.x - g.side / 2), y: Math.round(by - g.y - g.top), width: rect.width, height: rect.height });
+        await sleep(800);
+      }
+    }
     await sleep(6000);
     const clicks = await execAsync(`const done = arguments[arguments.length - 1]; ${CLICKS}.then(done, e => done({ error: String(e) }));`);
     if (clicks.error) errs.push('clicks: ' + clicks.error);
