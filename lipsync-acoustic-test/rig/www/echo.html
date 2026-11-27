@@ -1,0 +1,14 @@
+<!doctype html><title>echo</title><style>html,body{height:100%;margin:0;background:#000;color:#888;font:20px sans-serif}</style><body>tap
+<script>
+// Sends the microphone input straight to the output, with every voice-processing stage off, and reports the latencies
+// Chrome claims for both ends.
+document.addEventListener('click', async () => {
+  const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0, channelCount: 1 } });
+  const c = new AudioContext({ latencyHint: 'interactive' }); await c.resume();
+  c.createMediaStreamSource(st).connect(c.destination);
+  const tr = st.getAudioTracks()[0];
+  await new Promise(r => setTimeout(r, 1500));
+  window.__echo = { label: tr.label, settings: tr.getSettings(), outputLatency: c.outputLatency, baseLatency: c.baseLatency, sampleRate: c.sampleRate };
+  document.body.textContent = JSON.stringify(window.__echo);
+}, { once: true });
+</script>

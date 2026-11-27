@@ -69,6 +69,23 @@ The engines that skip an empty edit still apply a trim, and the feed took the tr
 - Safari's offset is fixed for the length of a playback (the ten pairs of a run agree to within a few ms) but can change between playbacks. In the daytime 27 of 29 runs on v1.3.14 read -4 to -17 ms, and two `ctrl` runs read -56 and -64 ms, each steady for the whole playback. Both came from runs without a screen recording (2 of 15); 14 runs with a screen recording, eight of them `ctrl`, had none, and read -5 to 7 ms on screen. Whether the screen recording prevents the odd state or the difference is chance, and whether a viewer would see it, is not known: the only check that would answer it is a camera filming the screen while the sound plays from the speakers. Runs made overnight, with nobody at the Mac and the display probably asleep, read -18 to -98 ms on every clip in both builds; they are in `results.tsv`, marked overnight, and are not in the tables.
 - This measurement found the defect; the earlier checks had passed. The v1.3.13 probe tested the empty edit only, and the page's clocks agreed with each other, so both passed while the sound was late at the output.
 
+## On a phone: the photodiode rig
+
+Everything above times the picture by the browser's report or by a screen recording on the same Mac. A phone needs a check that does not trust the device at all, so on 2026-11-27 a photodiode was taped over the video on a Samsung Galaxy S25 (Android 17, Chrome 158, v1.3.14), and a Raspberry Pi recorded it together with the phone's sound output on one sound card (an ESI Maya44 USB). Light and sound then share one sample clock, and the offset comes from the recording alone. How the rig is built and run is in [README.md](README.md#the-photodiode-rig).
+
+| Run | Offset (ms) |
+|---|---|
+| `nob`, three runs | -65, -57, -64 |
+| A page-painted white flash and a Web Audio beep, due together by Chrome's clocks (mapped as the player does, and by `getOutputTimestamp`) | -50, -49 |
+
+- The sound comes about 60 ms before the picture on this phone, on the clip without an edit list, so it is not the edit list. That is past the detectability limit of BT.1359 (45 ms early) and inside its acceptability limit (90 ms early).
+- It is not the player's latency arithmetic. A bare page that paints and beeps at the same moment by Chrome's own clocks reads -50 ms too; the video element adds about 10 to 15 ms on top.
+- The picture is late, not the sound early. Chrome reports 16 to 24 ms of output latency, and the player shifts the sound by that. If the real output latency were zero, a wrong report could explain at most 24 ms, so at least about 25 ms of the page's 50, and about 35 to 40 of the video's 60, is between the page and the light. An audio round trip (the Pi clicks into the phone's microphone input and the page echoes it out) took 146 ms against the 61 ms Chrome reports for input plus output, so if anything the audio is under-reported, which would make the display delay larger still.
+- The page cannot correct for it: on this phone the frame callback's `expectedDisplayTime` equals its callback time, so Chrome gives no prediction of when the frame is shown. On the Mac the same field does.
+- Earlier runs that day are not used: the sensor module's indicator LED switched on during each flash, next to the photodiode, and moved the measured edge by 15 to 20 ms. It is taped over now. One of those runs (`ctrl`) played with no sound at all: the player's audio feed stayed in "underrun" for the whole playback. It did not recur in eight later runs.
+
+Raw rows: `rig-results.tsv`.
+
 ## Against the broadcast recommendation
 
 Recommendation ITU-R BT.1359-1 [1] puts the detectability thresholds for sound relative to picture at about +45 ms to -125 ms, and the acceptability thresholds at about +90 ms to -185 ms, on the average, where a positive value means the sound is advanced. This page counts the other way (positive means the sound is late), so in this page's sign the detectability window is -45 ms to +125 ms and the acceptability window is -90 ms to +185 ms.
@@ -93,6 +110,7 @@ The thresholds come from subjective tests on television material (a newsreader, 
 - `offsets.png`, `offsets.svg`, `plot-offsets.py`: the figure above and the script that draws it.
 - `results.tsv`: one line per run, the raw record behind the tables above. The `player` column says which build was tested.
 - `results-first-clips.tsv`: the first round, measured with the flawed clips and timed by the first callback.
+- `rig-results.tsv`: the photodiode rig's runs on the Galaxy S25.
 - How to run it: [README.md](README.md).
 
 ## References

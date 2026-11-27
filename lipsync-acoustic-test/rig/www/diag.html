@@ -1,0 +1,27 @@
+<!doctype html><title>diag</title>
+<style>html,body{height:100%;margin:0;background:#000}</style><body>
+<script>
+// Every 4 s: a 0.5 s 1 kHz beep scheduled on Web Audio, and a 0.5 s white page painted so that it is due on screen at the
+// moment the beep is due at the speakers. MODE=ts maps the beep with getOutputTimestamp; MODE=ol as the player does,
+// now + (T - currentTime) + outputLatency.
+const MODE = new URLSearchParams(location.search).get('mode') || 'ol';
+window.__log = [];
+document.addEventListener('click', async () => {
+  const c = new AudioContext(); await c.resume();
+  const sr = c.sampleRate, n = Math.round(sr * 0.5), buf = c.createBuffer(1, n, sr), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = 0.5 * Math.sin(2 * Math.PI * 1000 * i / sr);
+  await new Promise(r => setTimeout(r, 1000));
+  for (let k = 0; k < 10; k++) {
+    const T = c.currentTime + 1.0;
+    const s = c.createBufferSource(); s.buffer = buf; s.connect(c.destination); s.start(T);
+    let due;
+    if (MODE === 'ts') { const ts = c.getOutputTimestamp(); due = ts.performanceTime + (T - ts.contextTime) * 1000; }
+    else { due = performance.now() + (T - c.currentTime) * 1000 + (c.outputLatency || c.baseLatency || 0) * 1000; }
+    await new Promise(res => { const f = t => { if (t >= due - 4) { document.body.style.background = '#fff'; window.__log.push({ due, rafT: t, ol: c.outputLatency, bl: c.baseLatency }); res(); } else requestAnimationFrame(f); }; requestAnimationFrame(f); });
+    await new Promise(r => setTimeout(r, 500)); document.body.style.background = '#000';
+    await new Promise(r => setTimeout(r, 3500 - 1000));
+    while (c.currentTime < T + 3.0) await new Promise(r => setTimeout(r, 20));
+  }
+  window.__done = true;
+}, { once: true });
+</script>

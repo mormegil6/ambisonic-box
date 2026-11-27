@@ -1,0 +1,7 @@
+tag	browser	clip	player	pairs	offset_ms	right_vs_left	feed_shift
+a6-s25-nob	Chrome/158.0.0.0	nob	deployed	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-65.0 sd=8.1 min=-72 max=-47	right_vs_left_dB=-0.1	feed_shift=0
+a7-s25-nob	Chrome/158.0.0.0	nob	deployed	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-56.8 sd=6.5 min=-66 max=-45	right_vs_left_dB=-0.1	feed_shift=0
+a8-s25-nob	Chrome/158.0.0.0	nob	deployed	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-64.1 sd=2.9 min=-67 max=-56	right_vs_left_dB=-0.1	feed_shift=0
+dg1-s25-ol	diag-ol	diag		rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-50.2 sd=24.3 min=-87 max=-17	right_vs_left_dB=-0.1	feed_shift=None
+dg1-s25-ts	diag-ts	diag		rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-49.2 sd=24.1 min=-79 max=-16	right_vs_left_dB=-0.1	feed_shift=None
+ec2-s25	Chrome/158.0.0.0	round trip	-	clicks=10	round_trip_ms mean=146.1 sd=2.8 min=142 max=150 (reported input 40 + output 21 = 61)	-	-
