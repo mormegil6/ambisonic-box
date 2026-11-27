@@ -46,6 +46,14 @@ A single run by hand: `node measure.cjs <tag> "<browser executable>" <clip>` for
 
 Times a real device's screen and sound with nothing from the device itself: a photodiode on the screen and the device's sound output, recorded together by one sound card on a Raspberry Pi. Used for an Android phone (results in [RESULTS.md](RESULTS.md#on-a-phone-the-photodiode-rig)).
 
+![The rig on a desk: Raspberry Pi 4, breadboard with the divider, ESI Maya44 USB, and the phone under a cloth](rig/rig-overview.jpg)
+
+*The rig as used on 2026-11-27. Left to right: the Raspberry Pi 4 (red case), the breadboard with the 10 kΩ / 10 kΩ divider, the Maya44 USB with the RCA leads, and the Galaxy S25 under a cloth, its sound taken from a USB-C audio adapter through a headphone and microphone splitter.*
+
+![Close-up: the sensor module taped over the video area of the player page](rig/rig-phone.jpg)
+
+*The sensor module taped over the player's video area. The board's own green power LED still shows here; the indicator LED next to the photodiode was taped over after this photo, as described below. The page is in light mode in this photo; dark mode keeps the screen around the video dark.*
+
 - **Light:** an LM393 light sensor module, powered from the Pi's 3.3 V. Its analog output (AO) goes through a 10 kΩ / 10 kΩ divider into a line input. Tape over its indicator LED, which otherwise shines on the photodiode during each flash, and tape the module over the video, covered from room light. The input blocks steady voltage, so each change of light shows as a spike, one polarity for white and the other for black.
 - **Sound:** the phone's USB-C audio adapter, its headphone side into two line inputs. On the setup used: Maya44 USB input 1 = phone right, 2 = phone left, 3 = photodiode. Phone media volume 10 of 15 (15 clips the input).
 - **Phone control:** Chrome on the phone over its DevTools socket, through wireless debugging (the USB port carries the audio adapter): `adb pair`/`adb connect` (the pairing port shows in `adb mdns services`), then `adb forward tcp:9222 localabstract:chrome_devtools_remote`. The page is served by the same proxy as the Mac runs, reached from the phone through `adb reverse`. Playback starts with a real touch (`Input.dispatchTouchEvent`), which unmuted Web Audio needs. Set the phone's screen timeout longer than a run.
