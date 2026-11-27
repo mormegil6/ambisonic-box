@@ -54,7 +54,7 @@ Times a real device's screen and sound with nothing from the device itself: a ph
 
 *The sensor module taped over the player's video area. The board's own green power LED still shows here; the indicator LED next to the photodiode was taped over after this photo, as described below. The page is in light mode in this photo; dark mode keeps the screen around the video dark.*
 
-- **Light:** an LM393 light sensor module, powered from the Pi's 3.3 V. Its analog output (AO) goes through a 10 kΩ / 10 kΩ divider into a line input. Tape over its indicator LED, which otherwise shines on the photodiode during each flash, and tape the module over the video, covered from room light. The input blocks steady voltage, so each change of light shows as a spike, one polarity for white and the other for black.
+- **Light:** an LM393 light sensor module, powered from the Pi's 3.3 V (physical pin 1) and ground (pin 9 on the rig used; pin 6 was taken by the case fan). Its analog output (AO) goes through a 10 kΩ / 10 kΩ divider into a line input. Tape over its indicator LED, which otherwise shines on the photodiode during each flash, and tape the module over the video, covered from room light. The input blocks steady voltage, so each change of light shows as a spike, one polarity for white and the other for black.
 - **Sound:** the phone's USB-C audio adapter, its headphone side into two line inputs. On the setup used: Maya44 USB input 1 = phone right, 2 = phone left, 3 = photodiode. Phone media volume 10 of 15 (15 clips the input).
 - **Phone control:** Chrome on the phone over its DevTools socket, through wireless debugging (the USB port carries the audio adapter): `adb pair`/`adb connect` (the pairing port shows in `adb mdns services`), then `adb forward tcp:9222 localabstract:chrome_devtools_remote`. The page is served by the same proxy as the Mac runs, reached from the phone through `adb reverse`. Playback starts with a real touch (`Input.dispatchTouchEvent`), which unmuted Web Audio needs. Set the phone's screen timeout longer than a run.
 
@@ -65,4 +65,6 @@ Times a real device's screen and sound with nothing from the device itself: a ph
 | `rig/diag.cjs`, `rig/www/diag.html` | a Web Audio beep and a page-painted flash due together by Chrome's clocks, to separate the display path from the video element |
 | `rig/echo.cjs`, `rig/www/echo.html` | audio round trip: the Pi clicks into the phone's microphone input (Maya out 1/2) and into input 4 as a reference (out 4 to in 4), and the page echoes the microphone to the output |
 | `rig-results.tsv` | the runs behind the phone results |
+
+**Checking the rig's own timing.** Drive an LED from a Pi GPIO pin (GPIO17, physical pin 11, through 330 Ω to the LED and on to ground) and feed the same pin through a second 10 kΩ / 10 kΩ divider into input 4 as the electrical reference, with the photodiode facing the LED and both covered. Switch the pin with `pinctrl set 17 op dh` / `op dl` while the Pi records: on the rig used, the light's edge came 0.6 ms after the electrical one, so the rig adds nothing that matters at this scale.
 
