@@ -73,6 +73,10 @@ The engines that skip an empty edit still apply a trim, and the feed took the tr
 
 Everything above times the picture by the browser's report or by a screen recording on the same Mac. A phone needs a check that does not trust the device at all, so on 2026-11-27 a photodiode was taped over the video on a Samsung Galaxy S25 (Android 17, Chrome 158, v1.3.14), and a Raspberry Pi recorded it together with the phone's sound output on one sound card (an ESI Maya44 USB). Light and sound then share one sample clock, and the offset comes from the recording alone. How the rig is built and run is in [README.md](README.md#the-photodiode-rig).
 
+![The photodiode rig: Raspberry Pi 4, breadboard divider, Maya44 USB, and the phone under a cloth](rig/rig-overview.jpg)
+
+*The rig on 2026-11-27: the Raspberry Pi 4, the divider on a breadboard, the Maya44 USB, and the Galaxy S25 under a cloth with the sensor taped over the player's video area (a close-up is in [README.md](README.md#the-photodiode-rig)).*
+
 | Run | Offset (ms) |
 |---|---|
 | `nob`, three runs | -65, -57, -64 |
