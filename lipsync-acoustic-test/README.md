@@ -34,8 +34,9 @@ A single run by hand: `node measure.cjs <tag> "<browser executable>" <clip>` for
 | `measure.cjs` | one run in a Chromium browser (Playwright) |
 | `measure-wd.mjs`, `proxy.mjs` | one run in Safari or Firefox (WebDriver), and the local proxy that serves the clips |
 | `page-probes.cjs` | the two page-side probes: frame luma, and the calibration clicks |
-| `cap.swift` | the CoreAudio recorder (build it to `cap`; not committed) |
+| `cap.swift` | the CoreAudio recorder (build it to `cap`; not committed; `screencap` likewise) |
 | `analyze.py` | pairs beeps with flashes, timing each flash from the frames' media time, and prints one result line |
+| `screencap.swift`, `screen-check.sh`, `analyze-screen.py` | a check that does not ask the browser: records the screen and the system audio with ScreenCaptureKit while the usual runs play, and times the flash from the captured picture. Needs Screen Recording permission for the terminal app that runs it |
 | `run-matrix.sh` | all engines and clips in one go |
 | `results.tsv` | the raw lines behind [RESULTS.md](RESULTS.md) |
 | `results-first-clips.tsv` | the first round, superseded: its clips were flawed (see Limits in RESULTS.md) |

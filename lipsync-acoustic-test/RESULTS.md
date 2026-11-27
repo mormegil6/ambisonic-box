@@ -1,6 +1,6 @@
 # Audible A/V offset of the player, measured at the system output
 
-**Date:** 2026-11-27 (the numbers on this page), after a first round on 2026-11-21 and 22 whose test clips were flawed · **Host:** a Mac with the sound output set to BlackHole 2ch · **Player:** the production on-demand page, `stream.bmroz.eu/vod/?clip=colortones`, with the clip replaced by the test clips below · **Result:** v1.3.13 played the sound about 60 ms late against video with an ordinary trimming edit list, and about 500 ms late against a 0.5 s trim, in the browsers that skip an empty edit. v1.3.14 is within about 20 ms of sync on every clip in Chrome 157, Chrome Canary 160 and Firefox. Safari 27.2 reads 20 to 50 ms early on every clip, in both builds.
+**Date:** 2026-11-27 (the numbers on this page; Safari measured again in the daytime, see Limits), after a first round on 2026-11-21 and 22 whose test clips were flawed · **Host:** a Mac with the sound output set to BlackHole 2ch · **Player:** the production on-demand page, `stream.bmroz.eu/vod/?clip=colortones`, with the clip replaced by the test clips below · **Result:** v1.3.13 played the sound about 60 ms late against video with an ordinary trimming edit list, and about 500 ms late against a 0.5 s trim, in the browsers that skip an empty edit. v1.3.14 is within about 20 ms of sync on every clip in Chrome 157, Chrome Canary 160, Safari 27.2 and Firefox, with one Safari run at 56 ms early. A screen recording, which times the picture without asking the browser, agrees.
 
 ## The question
 
@@ -37,7 +37,7 @@ Offset in the tables = time of the beep at the system output minus time of the f
 | Chrome 157 | -10 | **62** | **506** | -7 | -10 |
 | Canary 160 | -10 | -9 | -7 | 8 | -11 |
 | Canary 160, empty edit skipped | 10 | **60** | **494** | 8 | -10 |
-| Safari 27.2 | -40 | **61** | **462** | -40 | -30 |
+| Safari 27.2 | -6 | **50** | **493** | -5 | -6 |
 | Firefox 161 Beta | -14 | -5 | -6 | -14 | -2 |
 | Firefox 163 Nightly | -1 | -6 | -15 | -15 | -7 |
 
@@ -50,8 +50,8 @@ The engines that skip an empty edit still apply a trim, and the feed took the tr
 | Chrome 157 | -9 | 7 | -10 | -11 | -6 |
 | Canary 160 | -7 | -4 | -5 | 18 | -6 |
 | Canary 160, empty edit skipped | -6 | -4 | 21 | -11 | -10 |
-| Safari 27.2 | -26 | -46 | -42 | -98 | -40 |
-| Safari 27.2, repeated | -18 | -50 | -43 | -41 | -47 |
+| Safari 27.2 | -13 | -56 | -14 | -17 | -7 |
+| Safari 27.2, repeated | -9 | -9 | -16 | | |
 | Firefox 161 Beta | -9 | -6 | -5 | -5 | -4 |
 | Firefox 163 Nightly | -8 | -5 | -4 | -4 | 0 |
 
@@ -59,31 +59,31 @@ The engines that skip an empty edit still apply a trim, and the feed took the tr
 
 ![Audio offset at the sound output for each clip and browser, v1.3.13 and v1.3.14](offsets.png)
 
-*Colour is the build and shape is the browser; each dot is one run of ten pairs. Clips are as in the table under Method ([`plot-offsets.py`](plot-offsets.py) draws it from `results.tsv`, as PNG and SVG; the repeated Safari row is not drawn). The three dots on the right are the `trim` clip in the engines that skip an empty edit (Chrome 157, Canary with the empty edit skipped, Safari); the axis is broken between 110 and 450 ms so that the rest stay readable.*
+*Colour is the build and shape is the browser; each dot is one run of ten pairs. Clips are as in the table under Method ([`plot-offsets.py`](plot-offsets.py) draws it from `results.tsv`, as PNG and SVG; the repeated Safari row and the overnight Safari runs are not drawn). The three dots on the right are the `trim` clip in the engines that skip an empty edit (Chrome 157, Canary with the empty edit skipped, Safari); the axis is broken between 110 and 450 ms so that the rest stay readable.*
 
 ## Reading
 
-- v1.3.14 removes the trim-only defect. In the three engines that skip the empty edit, `trim` went from 462 to 506 ms to between -43 and 21 ms, and `ctrl` from about 60 ms to between -50 and 7 ms. In each engine both clips now read like that engine's reference clip.
-- Nothing that was right in v1.3.13 got worse. `nob`, `elst` and `live` read alike in the two builds, except the one Safari `live` run at -98 ms, which the repeat (-41 ms) did not reproduce.
-- Safari reads 18 to 50 ms early on every clip, the reference clip included, and it did so with v1.3.13 as well. So this is not the edit list, and v1.3.14 did not introduce it. Whether Safari presents the sound early or reports its frames late was not established: its frame time here is the callback time, because its `expectedDisplayTime` is on another clock.
+- v1.3.14 removes the trim-only defect. In the three engines that skip the empty edit, `trim` went from 493 to 506 ms to between -16 and 21 ms, and `ctrl` from 50 to 62 ms to between -56 and 7 ms. In each engine both clips now read like that engine's reference clip, apart from one Safari `ctrl` run (below).
+- Nothing that was right in v1.3.13 got worse. `nob`, `elst` and `live` read alike in the two builds.
 - Firefox, which plays the audio natively, reads 0 to 15 ms early, like Chrome. By the first-callback time it would read 18 to 31 ms early, because its frame callback skipped the first bright frame in 1 to 7 flashes of 10.
+- Safari's offset is fixed for the length of a playback (the ten pairs of a run agree to within a few ms) but can change between playbacks. In the daytime 12 of 13 runs on v1.3.14 read -7 to -17 ms and one read -56 ms (`ctrl`; two other `ctrl` runs read -9 and -14). Runs made overnight, with nobody at the Mac and the display probably asleep, read -18 to -98 ms on every clip in both builds; they are in `results.tsv`, marked overnight, and are not in the tables.
 - This measurement found the defect; the earlier checks had passed. The v1.3.13 probe tested the empty edit only, and the page's clocks agreed with each other, so both passed while the sound was late at the output.
 
 ## Against the broadcast recommendation
 
 Recommendation ITU-R BT.1359-1 [1] puts the detectability thresholds for sound relative to picture at about +45 ms to -125 ms, and the acceptability thresholds at about +90 ms to -185 ms, on the average, where a positive value means the sound is advanced. This page counts the other way (positive means the sound is late), so in this page's sign the detectability window is -45 ms to +125 ms and the acceptability window is -90 ms to +185 ms.
 
-- Every v1.3.14 cell in Chrome, Canary and Firefox (-11 to 21 ms) is inside the detectability window.
-- Safari's cells (-18 to -50 ms) sit at the early edge of the detectability window, some just outside it, and inside the acceptability window. The single `live` run at -98 ms is outside both.
-- The ordinary 67 ms trim in v1.3.13 (60 to 62 ms late) was inside the detectability window. The defect was real and measurable, but by this recommendation an average viewer would not have noticed it.
-- The 0.5 s trim in v1.3.13 (462 to 506 ms late) is far outside the acceptability limit.
+- Every v1.3.14 cell (-17 to 21 ms) is inside the detectability window, except the one Safari `ctrl` run at -56 ms, which is just outside it and inside the acceptability window.
+- The ordinary 67 ms trim in v1.3.13 (50 to 62 ms late) was inside the detectability window. The defect was real and measurable, but by this recommendation an average viewer would not have noticed it.
+- The 0.5 s trim in v1.3.13 (493 to 506 ms late) is far outside the acceptability limit.
 
 The thresholds come from subjective tests on television material (a newsreader, Appendix 2 of the recommendation), so they are a scale for the numbers here, not a listening test of this player.
 
 ## Limits
 
-- **Spread between runs.** Within a run the ten pairs agree to about 2 ms in Chrome and Firefox (standard deviation 0 to 2 ms) and less well in Safari (up to 9 ms). Between runs they do not: there is one run per cell, and single cells sit 20 to 30 ms from their neighbours for no reason this harness can name (Canary `live` at 18 ms, Canary with the empty edit skipped `trim` at 21 ms, Safari `live` at -98 and then -41 ms). Differences under about 30 ms between cells are not results.
-- **Absolute accuracy.** The picture time is the browser's own report of when a frame is displayed, and the sound time is the recording corrected by the click calibration. Neither was checked with a camera and a microphone in a room. The constant of about 8 ms early that Chrome and Firefox share, and Safari's larger one, could each be in the browser or in these reports.
+- **Spread between runs.** Within a run the ten pairs agree to about 2 ms in Chrome and Firefox (standard deviation 0 to 2 ms) and less well in Safari (up to 9 ms). Between runs they do not: there is one run per cell, and single cells sit 20 to 30 ms from their neighbours for no reason this harness can name (Canary `live` at 18 ms, Canary with the empty edit skipped `trim` at 21 ms, Safari `ctrl` at -56 ms). Differences under about 30 ms between cells are not results.
+- **Absolute accuracy.** The picture time is the browser's own report of when a frame is displayed, and the sound time is the recording corrected by the click calibration. One check of that does not use the browser's report: [`screen-check.sh`](screen-check.sh) records the screen and the system audio together with ScreenCaptureKit (`screencap.swift`), on the host clock, and [`analyze-screen.py`](analyze-screen.py) times the flash from the captured picture. Over all five clips in Chrome 157 and Safari 27.2 (2026-11-27, v1.3.14) it read 2 to 13 ms later than the harness in the same runs, by about the same amount in both browsers, and Safari -3 to 3 ms. Neither method was checked with a camera and a microphone in a room.
+- **Overnight Safari runs.** The first Safari runs of 2026-11-27 were made between midnight and 6:00 with nobody at the Mac and read -18 to -98 ms on every clip in both builds. With the display kept awake the same day they read as in the tables. That the sleeping display caused it is likely but was not tested; run with the display awake.
 - **The first round's clips were flawed.** On 2026-11-21 and 22 the beeps started 9 and 20 ms late in alternate slots (the tone was switched on per 1024-sample frame), the third flash of every clip started one frame late (a floating-point miss in the flash expression), and the `live` flash was 19 ms late (2.714 s is not on the 30 fps frame grid). Those numbers read about 15 ms too late and are kept only in `results-first-clips.tsv`. They showed the same defect and the same fix.
 - **On-demand clips, not the live stream.** The live path serves the same player and the same feed, but this harness plays DASH files it controls. The live list is covered by the `live` clip.
 - **Firefox and Safari run through WebDriver**, Chromium through Playwright. The page and the recording are the same.

@@ -22,6 +22,7 @@ const { INSTRUMENT, CLICKS } = require('./page-probes.cjs');
   const b = await chromium.launch({ executablePath: exe, headless: false, args: ['--autoplay-policy=no-user-gesture-required', ...extraArgs] });
   const ctx = await b.newContext({ viewport: { width: 1100, height: 700 } });
   const p = await ctx.newPage();
+  await p.bringToFront();   // screen-check.sh records the screen, so the window must be in front
   const errs = []; p.on('pageerror', e => errs.push(e.message.slice(0, 160)));
   await p.addInitScript(INSTRUMENT);
   let served = 0;
