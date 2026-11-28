@@ -44,7 +44,7 @@ A single run by hand: `node measure.cjs <tag> "<browser executable>" <clip>` for
 
 ## The photodiode rig
 
-Times a real device's screen and sound with nothing from the device itself: a photodiode on the screen and the device's sound output, recorded together by one sound card on a Raspberry Pi. Used for an Android phone (results in [RESULTS.md](RESULTS.md#on-a-phone-the-photodiode-rig)).
+Times a real device's screen and sound with nothing from the device itself: a photodiode on the screen and the device's sound output, recorded together by one sound card on a Raspberry Pi. Used on an Android phone, on this Mac's built-in display and on an external monitor (results in [RESULTS.md](RESULTS.md#part-2-at-the-screen-by-the-photodiode-rig)).
 
 ![The rig on a desk: Raspberry Pi 4, breadboard with the divider, ESI Maya44 USB, and the phone under a cloth](rig/rig-overview.jpg)
 
@@ -64,7 +64,10 @@ Times a real device's screen and sound with nothing from the device itself: a ph
 | `analyze-rig.py` | offset from the photodiode and the left channel; prints one line |
 | `rig/diag.cjs`, `rig/www/diag.html` | a Web Audio beep and a page-painted flash due together by Chrome's clocks, to separate the display path from the video element |
 | `rig/echo.cjs`, `rig/www/echo.html` | audio round trip: the Pi clicks into the phone's microphone input (Maya out 1/2) and into input 4 as a reference (out 4 to in 4), and the page echoes the microphone to the output |
-| `rig-results.tsv` | the runs behind the phone results |
+| `rig/mac-run.sh` | one run of the player on a Mac: `rig/mac-run.sh <tag> <chrome\|canary\|safari\|firefox> <clip>`; `WIN` places the window so that the video box covers the sensor |
+| `rig/mac-native.cjs`, `rig/mac-native-wd.mjs`, `rig/www/native.html` | the browser's own playback of a plain MP4 (`rig/www/native.mp4`), in Chromium and through WebDriver, for comparison with the player |
+| `rig/mac-diag.cjs` | the bare flash-and-beep page on a Mac |
+| `rig-results.tsv` | every rig run behind the results, with the LED check |
 
 **Checking the rig's own timing.** Drive an LED from a Pi GPIO pin (GPIO17, physical pin 11, through 330 Ω to the LED and on to ground) and feed the same pin through a second 10 kΩ / 10 kΩ divider into input 4 as the electrical reference, with the photodiode facing the LED and both covered. Switch the pin with `pinctrl set 17 op dh` / `op dl` while the Pi records: on the rig used, the light's edge came 0.6 ms after the electrical one, so the rig adds nothing that matters at this scale.
 

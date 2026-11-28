@@ -5,3 +5,20 @@ a8-s25-nob	Chrome/158.0.0.0	nob	deployed	rig pairs=10(beeps=10,flashes=10)	offse
 dg1-s25-ol	diag-ol	diag		rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-50.2 sd=24.3 min=-87 max=-17	right_vs_left_dB=-0.1	feed_shift=None
 dg1-s25-ts	diag-ts	diag		rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-49.2 sd=24.1 min=-79 max=-16	right_vs_left_dB=-0.1	feed_shift=None
 ec2-s25	Chrome/158.0.0.0	round trip	-	clicks=10	round_trip_ms mean=146.1 sd=2.8 min=142 max=150 (reported input 40 + output 21 = 61)	-	-
+m1-chrome-nob	Chrome/157.0.8103.81	nob	deployed; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=11)	offset_ms mean=-61.4 sd=3.9 min=-70 max=-52	right_vs_left_dB=0.0	feed_shift=0
+m2-chrome-nob	Chrome/157.0.8103.81	nob	deployed; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-63.0 sd=3.7 min=-72 max=-55	right_vs_left_dB=0.0	feed_shift=0
+m3-safari-nob	Safari/27.2	nob	deployed; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-46.6 sd=8.3 min=-70 max=-36	right_vs_left_dB=0.0	feed_shift=0
+m3-firefox-nob	Firefox/161.0	nob	deployed; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-61.1 sd=11.7 min=-78 max=-45	right_vs_left_dB=0.0	feed_shift=None
+mn1-chrome	Chrome/157.0.8103.81	native.mp4	browser's own playback; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=11,flashes=10)	offset_ms mean=-40.5 sd=15.5 min=-60 max=-12	right_vs_left_dB=0.1	feed_shift=None
+mn2-chrome	Chrome/157.0.8103.81	native.mp4	browser's own playback; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=11,flashes=10)	offset_ms mean=-36.4 sd=31.6 min=-64 max=54	right_vs_left_dB=0.1	feed_shift=None
+mn1-safari	Safari/27.2	native.mp4	browser's own playback; MacBook Pro built-in 120 Hz	rig pairs=11(beeps=11,flashes=11)	offset_ms mean=-60.9 sd=5.0 min=-63 max=-45	right_vs_left_dB=0.1	feed_shift=None
+md1-chrome-ol	Chrome/157.0.8103.81 diag-ol	diag	bare page; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-62.3 sd=14.0 min=-83 max=-45	right_vs_left_dB=0.1	feed_shift=None
+md1-chrome-ts	Chrome/157.0.8103.81 diag-ts	diag	bare page; MacBook Pro built-in 120 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-57.8 sd=13.7 min=-82 max=-28	right_vs_left_dB=0.1	feed_shift=None
+as-native-chrome	Chrome/157.0.8103.81	native.mp4	browser's own playback; ASUS VA24EQSB 75 Hz	rig pairs=10(beeps=11,flashes=10)	offset_ms mean=-16.8 sd=4.2 min=-23 max=-10	right_vs_left_dB=-0.1	feed_shift=None
+as-native-safari	Safari/27.2	native.mp4	browser's own playback; ASUS VA24EQSB 75 Hz	rig pairs=11(beeps=11,flashes=11)	offset_ms mean=-22.0 sd=4.3 min=-29 max=-16	right_vs_left_dB=-0.1	feed_shift=None
+as-player-chrome	Chrome/157.0.8103.81	nob	deployed; ASUS VA24EQSB 75 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-68.9 sd=14.0 min=-83 max=-45	right_vs_left_dB=-0.1	feed_shift=0
+as-player-chrome2	Chrome/157.0.8103.81	nob	deployed; ASUS VA24EQSB 75 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-80.0 sd=9.8 min=-90 max=-59	right_vs_left_dB=-0.1	feed_shift=0
+as-player-safari2	Safari/27.2	nob	deployed; ASUS VA24EQSB 75 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-36.5 sd=8.6 min=-49 max=-24	right_vs_left_dB=-0.1	feed_shift=0
+as-diag-ts	Chrome/157.0.8103.81 diag-ts	diag	bare page; ASUS VA24EQSB 75 Hz	rig pairs=10(beeps=10,flashes=10)	offset_ms mean=-36.6 sd=4.2 min=-41 max=-29	right_vs_left_dB=-0.1	feed_shift=None
+led1	-	LED check	-	edges=20	light_after_electrical_ms mean=0.57 min=0.45 max=0.68	-	-
+led2	-	LED check	-	edges=20	light_after_electrical_ms mean=0.62 min=0.55 max=0.69	-	-
