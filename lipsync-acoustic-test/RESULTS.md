@@ -113,6 +113,10 @@ The rig's own delay is 0.6 ms. An LED switched by a Pi GPIO pin faced the photod
 
 ### Results
 
+![Audio offset at the screen for each screen and browser: the browser's own playback, this player and a bare page](rig-offsets.png)
+
+*Each dot is one run of ten pairs. The dashed lines are the BT.1359 limits for sound ahead of picture (see Against the broadcast recommendation). [`plot-rig.py`](plot-rig.py) draws it from `rig-results.tsv`, as PNG and SVG.*
+
 Each number is one run of ten pairs, in ms. All of them are negative: the sound came first.
 
 | Screen | Browser | Browser's own playback | This player | Bare page |
@@ -161,6 +165,7 @@ The thresholds come from subjective tests on television material (a newsreader, 
 - `offsets.png`, `offsets.svg`, `plot-offsets.py`: the figure above and the script that draws it.
 - `results.tsv`: one line per run by the browser's timing, the raw record behind Part 1. The `player` column says which build was tested.
 - `results-first-clips.tsv`: the first round, measured with the flawed clips and timed by the first callback.
+- `rig-offsets.png`, `rig-offsets.svg`, `plot-rig.py`: the Part 2 figure and the script that draws it.
 - `rig-results.tsv`: the photodiode rig's runs, the raw record behind Part 2, with the LED check.
 - How to run it: [README.md](README.md).
 
